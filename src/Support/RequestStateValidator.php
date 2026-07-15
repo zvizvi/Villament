@@ -143,13 +143,13 @@ final class RequestStateValidator
 
     private function validatePage(Request $request): int
     {
-        $page = $request->query('page', '1');
+        $page = filter_var($request->query('page', 1), FILTER_VALIDATE_INT);
 
-        if (! is_string($page) || ! ctype_digit($page) || (int) $page < 1) {
+        if ($page === false || $page < 1) {
             $this->reject('page', 'The page parameter must be a positive integer.');
         }
 
-        return (int) $page;
+        return $page;
     }
 
     private function validatePerPage(Request $request, Table $table): int|string|null
@@ -166,11 +166,13 @@ final class RequestStateValidator
             return 'all';
         }
 
-        if (is_string($perPage) && ctype_digit($perPage) && in_array((int) $perPage, $options, true)) {
-            return (int) $perPage;
+        $perPage = filter_var($perPage, FILTER_VALIDATE_INT);
+
+        if ($perPage !== false && in_array($perPage, $options, true)) {
+            return $perPage;
         }
 
-        $this->reject('perPage', "The perPage value [{$perPage}] is not one of the allowed pagination options.");
+        $this->reject('perPage', 'The perPage value is not one of the allowed pagination options.');
     }
 
     private function reject(string $key, string $message): never
