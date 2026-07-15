@@ -133,6 +133,11 @@ trait HasVueTable
                 'filters' => $this->tableFilters ?? [],
                 'page' => $this->getTablePage(),
                 'perPage' => $this->getTableRecordsPerPage(),
+                // Column manager state (session-hydrated by Filament itself);
+                // the island renders its column manager from this and applies
+                // changes via $wire.applyTableColumnManager(), so persistence
+                // and the data endpoint (same session) stay in sync for free.
+                'columns' => $this->tableColumns,
             ],
         ];
     }

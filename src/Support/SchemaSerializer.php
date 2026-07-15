@@ -88,6 +88,7 @@ final class SchemaSerializer
                 'pageOptions' => $table->getPaginationPageOptions(),
                 'defaultPerPage' => $table->getDefaultPaginationPageOption(),
             ],
+            'actions' => (new ActionSerializer)->serializeStructure($table),
             'strings' => $this->strings($table),
             'icons' => $this->icons($table),
         ];
@@ -115,6 +116,7 @@ final class SchemaSerializer
             'previous' => $this->iconHtml($isRtl ? Heroicon::ChevronRight : Heroicon::ChevronLeft),
             'next' => $this->iconHtml($isRtl ? Heroicon::ChevronLeft : Heroicon::ChevronRight),
             'empty' => $this->iconHtml($table->getEmptyStateIcon(), size: IconSize::Large),
+            'columnManager' => $this->iconHtml(Heroicon::ViewColumns, TablesIconAlias::ACTIONS_COLUMN_MANAGER),
         ];
     }
 
@@ -149,6 +151,13 @@ final class SchemaSerializer
             'perPageAll' => __('filament::components/pagination.fields.records_per_page.options.all'),
             'previousLabel' => __('filament::components/pagination.actions.previous.label'),
             'nextLabel' => __('filament::components/pagination.actions.next.label'),
+            'columnManagerHeading' => __('filament-tables::table.column_manager.heading'),
+            'columnManagerReset' => __('filament-tables::table.column_manager.actions.reset.label'),
+            'bulkSelectPage' => __('filament-tables::table.fields.bulk_select_page.label'),
+            'bulkSelectRecord' => __('filament-tables::table.fields.bulk_select_record.label'),
+            'selectedCount' => __('filament-tables::table.selection_indicator.selected_count'),
+            'selectAll' => __('filament-tables::table.selection_indicator.actions.select_all.label'),
+            'deselectAll' => __('filament-tables::table.selection_indicator.actions.deselect_all.label'),
         ];
     }
 

@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Zvizvi\FilamentVueTable\Support;
 
 use Filament\Panel;
+use Filament\Resources\Pages\ListRecords;
 use Filament\Resources\Resource;
+use Zvizvi\FilamentVueTable\Concerns\HasVueTable;
 
 /**
  * Resolves a panel resource class from its URL slug. Only resources actually
@@ -26,5 +28,35 @@ final class ResourceRegistry
         }
 
         return null;
+    }
+
+    /**
+     * The List page class the harness should drive. Prefers the page carrying
+     * HasVueTable over the plain `index` page: Filament keys its session
+     * persistence (column manager, etc.) by component class, so the harness
+     * must be the SAME class as the island's host page to read that state —
+     * and it also inherits any page-level `table()` customizations.
+     *
+     * @param  class-string<\Filament\Resources\Resource>  $resourceClass
+     * @return class-string<ListRecords>|null
+     */
+    public function resolveListPage(string $resourceClass): ?string
+    {
+        $pages = $resourceClass::getPages();
+
+        foreach ($pages as $registration) {
+            $pageClass = $registration->getPage();
+
+            if (
+                is_subclass_of($pageClass, ListRecords::class)
+                && in_array(HasVueTable::class, class_uses_recursive($pageClass), true)
+            ) {
+                return $pageClass;
+            }
+        }
+
+        $indexPage = isset($pages['index']) ? $pages['index']->getPage() : null;
+
+        return ($indexPage !== null && is_subclass_of($indexPage, ListRecords::class)) ? $indexPage : null;
     }
 }

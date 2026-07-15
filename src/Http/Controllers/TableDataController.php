@@ -35,11 +35,11 @@ final class TableDataController
 
         abort_unless($resourceClass::canViewAny(), 403);
 
-        $pages = $resourceClass::getPages();
-        abort_unless(isset($pages['index']), 404);
+        $pageClass = $this->registry->resolveListPage($resourceClass);
+        abort_if($pageClass === null, 404);
 
         $this->harness
-            ->forPage($pages['index']->getPage())
+            ->forPage($pageClass)
             ->boot();
 
         $table = $this->harness->getTable();

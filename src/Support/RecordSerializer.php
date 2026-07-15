@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Zvizvi\FilamentVueTable\Support;
 
+use Filament\Resources\Resource;
 use Filament\Tables\Columns\Column;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Contracts\HasTable;
+use Filament\Tables\Table;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Contracts\Pagination\Paginator;
 use Illuminate\Contracts\Support\Htmlable;
@@ -46,6 +48,7 @@ final class RecordSerializer
             $payload[] = [
                 'key' => $livewire->getTableRecordKey($record),
                 'cells' => $cells,
+                'actions' => $this->serializeRecordActions($table, $record),
                 'can' => $record instanceof Model ? [
                     'view' => $resourceClass::canView($record),
                     'edit' => $resourceClass::canEdit($record),
@@ -95,6 +98,41 @@ final class RecordSerializer
             'from' => $count > 0 ? 1 : null,
             'to' => $count > 0 ? $count : null,
         ];
+    }
+
+    /**
+     * Evaluates every record action against this row: visibility (including
+     * resource authorization), label/color/icon/url closures. The client only
+     * renders what arrives here — a hidden action simply doesn't exist for it.
+     *
+     * @param  Model|array<string, mixed>  $record
+     * @return array<string, array<string, mixed>>
+     */
+    private function serializeRecordActions(Table $table, Model|array $record): array
+    {
+        $actions = [];
+
+        foreach ($table->getFlatRecordActions() as $action) {
+            $action->record($record);
+
+            if (! $action->isVisible()) {
+                continue;
+            }
+
+            $color = $action->getColor();
+            $url = $action->getUrl();
+
+            $actions[$action->getName()] = [
+                'label' => $this->stringable($action->getLabel()),
+                'color' => is_string($color) ? $color : null,
+                'iconHtml' => $this->iconHtml($action->getIcon()),
+                'disabled' => $action->isDisabled(),
+                'url' => $url,
+                'newTab' => filled($url) && $action->shouldOpenUrlInNewTab(),
+            ];
+        }
+
+        return $actions;
     }
 
     /**

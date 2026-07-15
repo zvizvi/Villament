@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Panel;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Resources\Pages\PageRegistration;
@@ -65,6 +67,18 @@ $methodContract = [
     [ImageColumn::class, 'getImageUrl'],
     [ImageColumn::class, 'isCircular'],
     [ImageColumn::class, 'getImageHeight'],
+    [ListRecords::class, 'mountAction'],
+    [ListRecords::class, 'applyTableColumnManager'],
+    [ListRecords::class, 'resetTableColumnManager'],
+    [ListRecords::class, 'getDefaultTableColumnState'],
+    [Table::class, 'getRecordActions'],
+    [Table::class, 'getFlatRecordActions'],
+    [Table::class, 'getToolbarActions'],
+    [ActionGroup::class, 'getFlatActions'],
+    [Action::class, 'record'],
+    [Action::class, 'isVisible'],
+    [Action::class, 'getUrl'],
+    [Action::class, 'isDisabled'],
     [LivewireManager::class, 'new'],
     [Resource::class, 'canViewAny'],
     [Resource::class, 'canView'],
@@ -85,6 +99,10 @@ $propertyContract = [
     [ListRecords::class, 'tableFilters'],
     [ListRecords::class, 'tableDeferredFilters'],
     [ListRecords::class, 'tableRecordsPerPage'],
+    [ListRecords::class, 'tableColumns'],
+    [ListRecords::class, 'selectedTableRecords'],
+    [ListRecords::class, 'deselectedTableRecords'],
+    [ListRecords::class, 'isTrackingDeselectedTableRecords'],
 ];
 
 it('still finds every Filament method the package calls', function (string $class, string $method): void {

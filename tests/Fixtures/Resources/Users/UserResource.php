@@ -66,6 +66,10 @@ class UserResource extends Resource
                     ->circular(),
                 ViewColumn::make('email')
                     ->view('fixtures.columns.user-email'),
+                TextColumn::make('created_at')
+                    ->dateTime()
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->defaultSort('name')
             ->filters([
