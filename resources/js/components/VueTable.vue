@@ -3,8 +3,13 @@ import { computed, onBeforeUnmount } from 'vue'
 import { getCoreRowModel, useVueTable } from '@tanstack/vue-table'
 import { useTableState } from '../composables/useTableState.js'
 import { useTableData } from '../composables/useTableData.js'
+import { useLivewireBridge } from '../composables/useLivewireBridge.js'
+import { resolveStrings } from '../support/strings.js'
+import TrustedIcon from './TrustedIcon.vue'
 import TableHeader from './TableHeader.vue'
 import TableSearch from './TableSearch.vue'
+import TableFilters from './TableFilters.vue'
+import TableFilterIndicators from './TableFilterIndicators.vue'
 import TablePagination from './TablePagination.vue'
 import TextCell from './cells/TextCell.vue'
 import BadgeCell from './cells/BadgeCell.vue'
@@ -21,13 +26,33 @@ const props = defineProps({
         type: Object,
         required: true,
     },
+    /**
+     * The `[data-vue-table]` island element (passed by the bootstrapper).
+     * Used by the Livewire bridge to locate the hidden fallback filter form
+     * rendered as a sibling inside the same `.fi-vue-table` wrapper.
+     */
+    rootElement: {
+        type: Object,
+        default: null,
+    },
 })
 
 const schema = props.config.schema
 
+const strings = resolveStrings(schema.strings)
+
+/**
+ * Server-rendered icon HTML map (`schema.icons`) — generated with the exact
+ * Heroicon + alias pairs Filament's own blades use. A missing key renders
+ * nothing (never a broken glyph).
+ */
+const icons = schema.icons ?? {}
+
+const filterSchemas = computed(() => schema.filters ?? [])
+
 const state = useTableState(props.config.state ?? {})
 
-const { records, meta, isLoading, error, retry, destroy: destroyData } = useTableData(
+const { records, meta, indicators, isLoading, error, retry, destroy: destroyData } = useTableData(
     props.config.endpoint,
     state,
     {
@@ -36,7 +61,21 @@ const { records, meta, isLoading, error, retry, destroy: destroyData } = useTabl
     },
 )
 
+const bridge = useLivewireBridge({
+    livewireId: props.config.livewireId,
+    islandElement: props.rootElement,
+    initialFilters: props.config.state?.filters ?? {},
+    onFiltersChanged: (filters) => {
+        // Livewire owns this change (fallback filter form commit); merge it
+        // into the Vue state WITHOUT pushing it back — the bridge snapshot
+        // already covers it. The filters watcher refetches immediately, which
+        // also refreshes the server-computed indicators.
+        state.filters.value = { ...state.filters.value, ...filters }
+    },
+})
+
 onBeforeUnmount(() => {
+    bridge.destroy()
     destroyData()
     state.destroy()
 })
@@ -99,6 +138,10 @@ const hasColumnSearches = computed(
     () => visibleColumns.value.some((column) => column.individuallySearchable),
 )
 
+const hasHeaderToolbar = computed(
+    () => Boolean(schema.globallySearchable) || filterSchemas.value.length > 0,
+)
+
 /**
  * Toggles a column's sort: asc → desc → none.
  *
@@ -128,6 +171,96 @@ function onColumnSearch(columnKey, value) {
 }
 
 /**
+ * Applies a Vue-owned filter change (select / ternary controls): updates the
+ * reactive state (immediate refetch + page reset happen in `useTableData`)
+ * and silently mirrors it into the Livewire component so the hidden fallback
+ * form and future bridged actions stay consistent.
+ *
+ * @param {string} filterName
+ * @param {*} filterState Exact Filament form state shape, e.g. `{ value: 'active' }`.
+ * @returns {void}
+ */
+function onFilterChange(filterName, filterState) {
+    bridge.pushFilterToLivewire(filterName, filterState)
+
+    state.filters.value = {
+        ...state.filters.value,
+        [filterName]: filterState,
+    }
+}
+
+/**
+ * @param {object} filterSchema Serialized filter schema.
+ * @param {*} currentState Current state of the filter (may be undefined).
+ * @returns {*} The cleared Filament form state shape for the filter.
+ */
+function clearedFilterState(filterSchema, currentState) {
+    if (! filterSchema || filterSchema.type === 'livewire-fallback') {
+        // Opaque Livewire-owned state: null out its own fields, mirroring
+        // Filament's `removeTableFilter()` behavior.
+        const cleared = {}
+
+        for (const key of Object.keys(currentState ?? {})) {
+            cleared[key] = null
+        }
+
+        return cleared
+    }
+
+    if (filterSchema.type === 'select' && filterSchema.multiple) {
+        return { values: [] }
+    }
+
+    return { value: '' }
+}
+
+/**
+ * Clears one active filter via its indicator chip.
+ *
+ * @param {import('../composables/useTableData.js').FilterIndicator} indicator
+ * @returns {void}
+ */
+function onRemoveIndicator(indicator) {
+    const filterSchema = filterSchemas.value.find((filter) => filter.key === indicator.filter)
+    const currentState = state.filters.value[indicator.filter]
+
+    let cleared
+
+    if (indicator.field && (! filterSchema || filterSchema.type === 'livewire-fallback')) {
+        // Indicator scoped to a single form field of a fallback filter.
+        cleared = { ...(currentState ?? {}), [indicator.field]: null }
+    } else {
+        cleared = clearedFilterState(filterSchema, currentState)
+    }
+
+    onFilterChange(indicator.filter, cleared)
+}
+
+/**
+ * Clears every filter ("remove all" on the indicators bar / panel reset).
+ *
+ * @returns {void}
+ */
+function onRemoveAllFilters() {
+    /** @type {Object<string, *>} */
+    const cleared = {}
+
+    const filterNames = new Set([
+        ...filterSchemas.value.map((filter) => filter.key),
+        ...Object.keys(state.filters.value ?? {}),
+    ])
+
+    for (const filterName of filterNames) {
+        const filterSchema = filterSchemas.value.find((filter) => filter.key === filterName)
+        cleared[filterName] = clearedFilterState(filterSchema, state.filters.value[filterName])
+
+        bridge.pushFilterToLivewire(filterName, cleared[filterName])
+    }
+
+    state.filters.value = cleared
+}
+
+/**
  * @param {string} key
  * @returns {string} Column key as a kebab-case class suffix.
  */
@@ -154,153 +287,179 @@ function recordCellClasses(column) {
 </script>
 
 <template>
-    <div
-        class="fi-ta fi-vue-ta"
-        :class="{ 'fi-vue-ta-loading': isLoading }"
-    >
+    <div class="fi-ta fi-vue-ta">
         <div
             class="fi-ta-ctn fi-ta-ctn-with-footer"
-            :class="{ 'fi-ta-ctn-with-header': schema.globallySearchable }"
+            :class="{
+                'fi-ta-ctn-with-header': hasHeaderToolbar,
+                'fi-loading': isLoading,
+            }"
         >
-            <div
-                v-if="schema.globallySearchable"
-                class="fi-ta-header-toolbar"
-            >
-                <div class="fi-ta-actions fi-align-start fi-wrapped" />
-
-                <div>
-                    <TableSearch
-                        :model-value="state.search.value"
-                        @update:model-value="state.search.value = $event"
-                    />
-                </div>
-            </div>
-
-            <div
-                v-if="error"
-                class="fi-vue-ta-error"
-            >
-                <p class="fi-vue-ta-error-message">
-                    Something went wrong while loading the table.
-                </p>
-
-                <button
-                    type="button"
-                    class="fi-btn fi-size-md"
-                    @click="retry"
-                >
-                    Retry
-                </button>
-            </div>
-
-            <template v-else>
+            <div class="fi-ta-main">
                 <div
-                    v-if="hasRecords || hasColumnSearches"
-                    class="fi-ta-content-ctn fi-fixed-positioning-context"
+                    v-if="hasHeaderToolbar"
+                    class="fi-ta-header-ctn"
                 >
-                    <table class="fi-ta-table">
-                        <TableHeader
-                            :columns="visibleColumns"
-                            :sort="state.sort.value"
-                            @sort="onSort"
-                        />
+                    <div class="fi-ta-header-toolbar">
+                        <div class="fi-ta-actions fi-align-start fi-wrapped" />
 
-                        <tbody>
-                            <tr
-                                v-if="hasColumnSearches"
-                                class="fi-ta-row fi-ta-row-not-reorderable"
-                            >
-                                <td
-                                    v-for="column in visibleColumns"
-                                    :key="column.key"
-                                    class="fi-ta-cell"
-                                    :class="
-                                        column.individuallySearchable
-                                            ? ['fi-ta-individual-search-cell', `fi-ta-individual-search-cell-${kebab(column.key)}`]
-                                            : []
-                                    "
-                                >
-                                    <TableSearch
-                                        v-if="column.individuallySearchable"
-                                        :model-value="state.columnSearches.value[column.key] ?? ''"
-                                        :label="`Search ${column.label}`"
-                                        @update:model-value="onColumnSearch(column.key, $event)"
-                                    />
-                                </td>
-                            </tr>
+                        <div>
+                            <TableSearch
+                                v-if="schema.globallySearchable"
+                                :model-value="state.search.value"
+                                :placeholder="strings.searchPlaceholder"
+                                :label="strings.searchLabel"
+                                :icon="icons.search"
+                                @update:model-value="state.search.value = $event"
+                            />
 
-                            <tr
-                                v-for="row in table.getRowModel().rows"
-                                :key="row.id"
-                                class="fi-ta-row"
-                            >
-                                <td
-                                    v-for="cell in row.getVisibleCells()"
-                                    :key="cell.id"
-                                    :class="recordCellClasses(cell.column.columnDef.meta.schema)"
-                                >
-                                    <component
-                                        :is="cell.getValue()?.url ? 'a' : 'div'"
-                                        class="fi-ta-col"
-                                        :class="{ 'fi-ta-col-has-column-url': Boolean(cell.getValue()?.url) }"
-                                        :href="cell.getValue()?.url || undefined"
-                                        :target="cell.getValue()?.url && cell.getValue()?.newTab ? '_blank' : undefined"
-                                        :rel="cell.getValue()?.url && cell.getValue()?.newTab ? 'noopener noreferrer' : undefined"
-                                    >
-                                        <component
-                                            :is="cellComponents[cell.getValue()?.type] ?? TextCell"
-                                            v-if="cell.getValue()"
-                                            :cell="cell.getValue()"
-                                        />
-                                    </component>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-
-                <div
-                    v-if="! hasRecords"
-                    class="fi-ta-empty-state"
-                >
-                    <div class="fi-ta-empty-state-content">
-                        <div class="fi-ta-empty-state-icon-bg">
-                            <svg
-                                class="fi-icon fi-size-lg"
-                                xmlns="http://www.w3.org/2000/svg"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke-width="1.5"
-                                stroke="currentColor"
-                                aria-hidden="true"
-                            >
-                                <path
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                    d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"
-                                />
-                            </svg>
-                        </div>
-
-                        <div class="fi-ta-empty-state-text-ctn">
-                            <h4 class="fi-ta-empty-state-heading">
-                                No records found
-                            </h4>
+                            <TableFilters
+                                v-if="filterSchemas.length > 0"
+                                :filters="filterSchemas"
+                                :values="state.filters.value"
+                                :active-count="indicators.length"
+                                :strings="strings"
+                                :icons="icons"
+                                @update:filter="onFilterChange"
+                                @reset="onRemoveAllFilters"
+                                @toggle-fallback="bridge.toggleFallbackForm()"
+                            />
                         </div>
                     </div>
                 </div>
 
-                <TablePagination
-                    v-if="meta && hasRecords"
-                    :meta="meta"
-                    :page="state.page.value"
-                    :per-page="state.perPage.value"
-                    :page-options="schema.pagination?.pageOptions ?? []"
-                    :records-count="records.length"
-                    @update:page="state.page.value = $event"
-                    @update:per-page="state.perPage.value = $event"
+                <TableFilterIndicators
+                    v-if="indicators.length > 0"
+                    :indicators="indicators"
+                    :strings="strings"
+                    :icons="icons"
+                    @remove="onRemoveIndicator"
+                    @remove-all="onRemoveAllFilters"
                 />
-            </template>
+
+                <!-- Error state reuses Filament's own empty-state styling. -->
+                <div
+                    v-if="error"
+                    class="fi-ta-empty-state fi-vue-ta-error"
+                >
+                    <div class="fi-ta-empty-state-content">
+                        <h4 class="fi-ta-empty-state-heading">
+                            Something went wrong while loading the table.
+                        </h4>
+
+                        <div class="fi-ta-actions fi-align-center fi-wrapped">
+                            <button
+                                type="button"
+                                class="fi-btn fi-size-md"
+                                @click="retry"
+                            >
+                                Retry
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <template v-else>
+                    <div
+                        v-if="hasRecords || hasColumnSearches"
+                        class="fi-ta-content-ctn fi-fixed-positioning-context"
+                    >
+                        <table class="fi-ta-table">
+                            <TableHeader
+                                :columns="visibleColumns"
+                                :sort="state.sort.value"
+                                :icons="icons"
+                                @sort="onSort"
+                            />
+
+                            <tbody>
+                                <tr
+                                    v-if="hasColumnSearches"
+                                    class="fi-ta-row fi-ta-row-not-reorderable"
+                                >
+                                    <td
+                                        v-for="column in visibleColumns"
+                                        :key="column.key"
+                                        class="fi-ta-cell"
+                                        :class="
+                                            column.individuallySearchable
+                                                ? ['fi-ta-individual-search-cell', `fi-ta-individual-search-cell-${kebab(column.key)}`]
+                                                : []
+                                        "
+                                    >
+                                        <TableSearch
+                                            v-if="column.individuallySearchable"
+                                            :model-value="state.columnSearches.value[column.key] ?? ''"
+                                            :label="`${strings.searchLabel}: ${column.label}`"
+                                            :placeholder="strings.searchPlaceholder"
+                                            :icon="icons.search"
+                                            @update:model-value="onColumnSearch(column.key, $event)"
+                                        />
+                                    </td>
+                                </tr>
+
+                                <tr
+                                    v-for="row in table.getRowModel().rows"
+                                    :key="row.id"
+                                    class="fi-ta-row"
+                                >
+                                    <td
+                                        v-for="cell in row.getVisibleCells()"
+                                        :key="cell.id"
+                                        :class="recordCellClasses(cell.column.columnDef.meta.schema)"
+                                    >
+                                        <component
+                                            :is="cell.getValue()?.url ? 'a' : 'div'"
+                                            class="fi-ta-col"
+                                            :class="{ 'fi-ta-col-has-column-url': Boolean(cell.getValue()?.url) }"
+                                            :href="cell.getValue()?.url || undefined"
+                                            :target="cell.getValue()?.url && cell.getValue()?.newTab ? '_blank' : undefined"
+                                            :rel="cell.getValue()?.url && cell.getValue()?.newTab ? 'noopener noreferrer' : undefined"
+                                        >
+                                            <component
+                                                :is="cellComponents[cell.getValue()?.type] ?? TextCell"
+                                                v-if="cell.getValue()"
+                                                :cell="cell.getValue()"
+                                            />
+                                        </component>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div
+                        v-if="! hasRecords"
+                        class="fi-ta-empty-state"
+                    >
+                        <div class="fi-ta-empty-state-content">
+                            <div
+                                v-if="icons.empty"
+                                class="fi-ta-empty-state-icon-bg"
+                            >
+                                <TrustedIcon :html="icons.empty" />
+                            </div>
+
+                            <h4 class="fi-ta-empty-state-heading">
+                                {{ strings.emptyHeading }}
+                            </h4>
+                        </div>
+                    </div>
+
+                    <TablePagination
+                        v-if="meta && hasRecords"
+                        :meta="meta"
+                        :page="state.page.value"
+                        :per-page="state.perPage.value"
+                        :page-options="schema.pagination?.pageOptions ?? []"
+                        :records-count="records.length"
+                        :strings="strings"
+                        :icons="icons"
+                        @update:page="state.page.value = $event"
+                        @update:per-page="state.perPage.value = $event"
+                    />
+                </template>
+            </div>
         </div>
     </div>
 </template>

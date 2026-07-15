@@ -1,5 +1,7 @@
 <script setup>
 import { computed } from 'vue'
+import { formatPaginationOverview } from '../support/strings.js'
+import TrustedIcon from './TrustedIcon.vue'
 
 const props = defineProps({
     /**
@@ -16,7 +18,7 @@ const props = defineProps({
         required: true,
     },
     perPage: {
-        type: Number,
+        type: [Number, String],
         default: null,
     },
     pageOptions: {
@@ -26,6 +28,22 @@ const props = defineProps({
     recordsCount: {
         type: Number,
         default: 0,
+    },
+    /**
+     * Localized UI strings (already resolved with English fallbacks).
+     */
+    strings: {
+        type: Object,
+        required: true,
+    },
+    /**
+     * Server-rendered icon HTML map (`schema.icons`): `previous` / `next`
+     * are used here. Direction (RTL) is already resolved server-side —
+     * never flip these client-side.
+     */
+    icons: {
+        type: Object,
+        default: () => ({}),
     },
 })
 
@@ -111,14 +129,30 @@ function goToPage(page) {
  * @returns {void}
  */
 function onPerPageChange(event) {
-    emit('update:perPage', Number.parseInt(event.target.value, 10))
+    const value = event.target.value
+
+    emit('update:perPage', value === 'all' ? 'all' : Number.parseInt(value, 10))
 }
+
+/**
+ * @param {number|string} option
+ * @returns {string} The localized option label (`'all'` → `strings.perPageAll`).
+ */
+function perPageOptionLabel(option) {
+    return option === 'all' ? props.strings.perPageAll : String(option)
+}
+
+const overview = computed(() => formatPaginationOverview(props.strings.paginationOverview, {
+    first: props.meta.from,
+    last: props.meta.to,
+    total: props.meta.total ?? 0,
+}))
 </script>
 
 <template>
     <nav
         role="navigation"
-        aria-label="Pagination"
+        :aria-label="strings.paginationLabel"
         class="fi-pagination"
         :class="{ 'fi-simple': isSimple }"
     >
@@ -129,14 +163,14 @@ function onPerPageChange(event) {
             class="fi-btn fi-size-md fi-pagination-previous-btn"
             @click="goToPage(page - 1)"
         >
-            Previous
+            {{ strings.previousLabel }}
         </button>
 
         <span
             v-if="! isSimple"
             class="fi-pagination-overview"
         >
-            Showing {{ meta.from ?? 0 }} to {{ meta.to ?? 0 }} of {{ meta.total }} results
+            {{ overview }}
         </span>
 
         <div
@@ -155,18 +189,18 @@ function onPerPageChange(event) {
                             :key="option"
                             :value="option"
                         >
-                            {{ option }}
+                            {{ perPageOptionLabel(option) }}
                         </option>
                     </select>
                 </div>
 
-                <span class="fi-sr-only">Per page</span>
+                <span class="fi-sr-only">{{ strings.perPageLabel }}</span>
             </label>
 
             <label class="fi-pagination-records-per-page-select">
                 <div class="fi-input-wrp">
                     <div class="fi-input-wrp-prefix fi-input-wrp-prefix-has-content fi-input-wrp-prefix-has-label">
-                        <span class="fi-input-wrp-label">Per page</span>
+                        <span class="fi-input-wrp-label">{{ strings.perPageLabel }}</span>
                     </div>
 
                     <select
@@ -179,7 +213,7 @@ function onPerPageChange(event) {
                             :key="option"
                             :value="option"
                         >
-                            {{ option }}
+                            {{ perPageOptionLabel(option) }}
                         </option>
                     </select>
                 </div>
@@ -193,7 +227,7 @@ function onPerPageChange(event) {
             class="fi-btn fi-size-md fi-pagination-next-btn"
             @click="goToPage(page + 1)"
         >
-            Next
+            {{ strings.nextLabel }}
         </button>
 
         <ol
@@ -207,26 +241,11 @@ function onPerPageChange(event) {
                 <button
                     type="button"
                     rel="prev"
-                    aria-label="Previous"
+                    :aria-label="strings.previousLabel"
                     class="fi-pagination-item-btn"
                     @click="goToPage(page - 1)"
                 >
-                    <!-- Horizontal chevron: flipped in RTL via .fi-vue-ta-directional-icon. -->
-                    <svg
-                        class="fi-icon fi-size-md fi-pagination-item-icon fi-vue-ta-directional-icon"
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke-width="1.5"
-                        stroke="currentColor"
-                        aria-hidden="true"
-                    >
-                        <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            d="M15.75 19.5 8.25 12l7.5-7.5"
-                        />
-                    </svg>
+                    <TrustedIcon :html="icons.previous" />
                 </button>
             </li>
 
@@ -257,25 +276,11 @@ function onPerPageChange(event) {
                 <button
                     type="button"
                     rel="next"
-                    aria-label="Next"
+                    :aria-label="strings.nextLabel"
                     class="fi-pagination-item-btn"
                     @click="goToPage(page + 1)"
                 >
-                    <svg
-                        class="fi-icon fi-size-md fi-pagination-item-icon fi-vue-ta-directional-icon"
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke-width="1.5"
-                        stroke="currentColor"
-                        aria-hidden="true"
-                    >
-                        <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            d="m8.25 4.5 7.5 7.5-7.5 7.5"
-                        />
-                    </svg>
+                    <TrustedIcon :html="icons.next" />
                 </button>
             </li>
         </ol>

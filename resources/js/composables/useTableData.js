@@ -1,4 +1,5 @@
 import { ref, watch } from 'vue'
+import { appendFilterParams } from '../support/filterParams.js'
 
 /**
  * @typedef {object} TableMeta
@@ -18,9 +19,18 @@ import { ref, watch } from 'vue'
  */
 
 /**
+ * @typedef {object} FilterIndicator
+ * @property {string} filter Filter name.
+ * @property {?string} field Form field to clear on removal (fallback filters), or null.
+ * @property {string} label Chip label, e.g. `"Status: Archived"`.
+ * @property {boolean} removable
+ */
+
+/**
  * @typedef {object} TableData
  * @property {import('vue').Ref<TableRecord[]>} records
  * @property {import('vue').Ref<?TableMeta>} meta
+ * @property {import('vue').Ref<FilterIndicator[]>} indicators Active-filter chips, always from the latest server response.
  * @property {import('vue').Ref<boolean>} isLoading
  * @property {import('vue').Ref<?Error>} error
  * @property {() => Promise<void>} retry Re-runs the last request immediately.
@@ -32,15 +42,18 @@ import { ref, watch } from 'vue'
  * Server-driven table data fetching.
  *
  * - Search / per-column search changes are debounced (default 300ms) and reset the page to 1.
+ * - Filter changes reset the page to 1 and fetch immediately (no debounce).
  * - Per-page changes reset the page to 1 and fetch immediately.
  * - Sort / page changes fetch immediately.
+ * - Every request sends the COMPLETE filters map (blank values included), so
+ *   the server's merge-over-defaults semantics clear filters deterministically.
  * - Every request uses a fresh AbortController and aborts the in-flight one.
  * - Current rows stay visible during a fetch; `isLoading` is exposed so the UI can dim them.
  * - A `schemaVersion` mismatch in the response triggers a full page reload (schema drift).
  *
  * @param {string} endpoint Absolute URL of the table data endpoint.
  * @param {import('./useTableState.js').TableState} state Reactive state refs from `useTableState()`.
- * @param {{ initialData?: { records: TableRecord[], meta: TableMeta }, schemaVersion?: string, debounceMs?: number }} [options]
+ * @param {{ initialData?: { records: TableRecord[], meta: TableMeta, indicators?: FilterIndicator[] }, schemaVersion?: string, debounceMs?: number }} [options]
  * @returns {TableData}
  */
 export function useTableData(endpoint, state, options = {}) {
@@ -48,6 +61,7 @@ export function useTableData(endpoint, state, options = {}) {
 
     const records = ref(options.initialData?.records ?? [])
     const meta = ref(options.initialData?.meta ?? null)
+    const indicators = ref(options.initialData?.indicators ?? [])
     const isLoading = ref(false)
     const error = ref(null)
 
@@ -78,6 +92,8 @@ export function useTableData(endpoint, state, options = {}) {
                 params.set(`columnSearches[${key}]`, value)
             }
         }
+
+        appendFilterParams(params, state.filters.value ?? {}, { includeBlank: true })
 
         if (state.page.value && state.page.value !== 1) {
             params.set('page', String(state.page.value))
@@ -137,6 +153,7 @@ export function useTableData(endpoint, state, options = {}) {
 
             records.value = payload.records ?? []
             meta.value = payload.meta ?? null
+            indicators.value = payload.indicators ?? []
             error.value = null
         } catch (caught) {
             if (caught?.name === 'AbortError') {
@@ -197,6 +214,11 @@ export function useTableData(endpoint, state, options = {}) {
             scheduleDebouncedFetch()
         }, { deep: true, flush: 'sync' }),
 
+        watch(state.filters, () => {
+            resetPageSilently()
+            fetchNow()
+        }, { deep: true, flush: 'sync' }),
+
         watch(state.perPage, () => {
             resetPageSilently()
             fetchNow()
@@ -231,6 +253,7 @@ export function useTableData(endpoint, state, options = {}) {
     return {
         records,
         meta,
+        indicators,
         isLoading,
         error,
         retry: fetchNow,

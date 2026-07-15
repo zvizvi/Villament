@@ -1,111 +1,53 @@
 /*
- * filament-vue-table glue styles.
+ * filament-vue-table glue styles — intentionally near-zero.
  *
- * The table itself reuses Filament v5's own `fi-*` classes so the panel theme
- * (light/dark, RTL, custom palettes) applies natively. Everything below is the
- * small delta the Vue island needs on top — colors are exclusively expressed
- * through Filament's CSS custom properties (--gray-*, --color-*, ...).
+ * Every visual (table shell, toolbar, inputs, badges, icons, pagination,
+ * dropdown panels, indicator chips, empty state, buttons, dark mode, RTL)
+ * comes from Filament v5's own `fi-*` classes, applied directly in the Vue
+ * templates. The rules below are ONLY what has no Filament-native
+ * equivalent; colors/sizes are expressed exclusively through Filament's CSS
+ * custom properties and logical properties.
  */
 
-/* ------------------------------------------------------------------ *
- * Loading: keep current rows visible, dimmed, while a fetch runs.
- * ------------------------------------------------------------------ */
-
-.fi-vue-ta .fi-ta-content-ctn {
-    transition: opacity 150ms ease-in-out;
-}
-
-.fi-vue-ta.fi-vue-ta-loading .fi-ta-content-ctn {
-    opacity: 0.5;
-    pointer-events: none;
-}
-
-/* ------------------------------------------------------------------ *
- * Badge text color.
- *
- * Filament's `.fi-badge.fi-color` reads `--text` / `--dark-text`, which its
- * server-rendered markup sets via runtime-generated `fi-text-color-*` shade
- * classes. The client can't compute contrast shades, so map them statically
- * from the palette scale that `.fi-color-{name}` provides.
- * ------------------------------------------------------------------ */
-
-.fi-vue-ta .fi-badge.fi-color {
-    --text: var(--color-700);
-    --dark-text: var(--color-300);
-}
-
-/* ------------------------------------------------------------------ *
- * Server-rendered trusted SVG wrappers (icon cells, badge icons).
- *
- * `display: contents` keeps the wrapper out of layout so Filament's flex
- * rules on `.fi-ta-icon` / `.fi-badge` keep working; `color` still inherits
- * into the SVG (stroke/fill: currentColor).
- * ------------------------------------------------------------------ */
-
+/*
+ * Vue's `v-html` needs a host element, but Filament's icon/badge selectors
+ * (`.fi-ta-icon > .fi-icon`, `.fi-badge` flex gaps) assume the SVG sits
+ * directly in the flex container. `display: contents` removes the host from
+ * layout; Filament ships no utility class for it. Color still inherits, so
+ * the host carries Filament's own `fi-icon` / `fi-color*` / `fi-text-color-*`
+ * classes.
+ */
 .fi-vue-ta .fi-vue-ta-trusted-icon {
     display: contents;
-    color: var(--gray-400);
 }
 
-.dark .fi-vue-ta .fi-vue-ta-trusted-icon {
-    color: var(--gray-500);
+/*
+ * Filament positions `.fi-dropdown-panel` (already `position: absolute` +
+ * surface styling in its own CSS) at runtime with Alpine's floating-ui
+ * plugin, via inline styles. The island has no Alpine, so the panel is
+ * anchored in pure CSS instead: relative wrapper + logical inset (end edge),
+ * which mirrors Filament's `placement="bottom-end"` in both LTR and RTL.
+ */
+.fi-vue-ta .fi-vue-ta-filters {
+    position: relative;
 }
 
-.fi-vue-ta .fi-vue-ta-trusted-icon.fi-color {
-    color: var(--color-500);
+.fi-vue-ta .fi-vue-ta-filters > .fi-dropdown-panel {
+    inset-block-start: calc(100% + 0.5rem);
+    inset-inline-end: 0;
 }
 
-.dark .fi-vue-ta .fi-vue-ta-trusted-icon.fi-color {
-    color: var(--color-400);
+/*
+ * The hidden Livewire fallback filter form opens as a floating panel. Its
+ * surface/z-index/absolute positioning come from Filament's own
+ * `fi-dropdown-panel fi-width-sm fi-ta-filters` classes (added by the bridge
+ * while open); only the anchor point has no native equivalent.
+ */
+.fi-vue-table {
+    position: relative;
 }
 
-/* ------------------------------------------------------------------ *
- * HTML cells (server-rendered body).
- * Padding mirrors Filament's `.fi-ta-text:not(.fi-inline)` cell padding.
- * ------------------------------------------------------------------ */
-
-.fi-vue-ta .fi-vue-ta-html {
-    width: 100%;
-    padding-block: 1rem;
-    padding-inline: 0.75rem;
-    font-size: 0.875rem;
-    line-height: 1.5rem;
-    color: var(--gray-950);
-}
-
-.dark .fi-vue-ta .fi-vue-ta-html {
-    color: var(--gray-200);
-}
-
-/* ------------------------------------------------------------------ *
- * Error state.
- * ------------------------------------------------------------------ */
-
-.fi-vue-ta .fi-vue-ta-error {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.75rem;
-    padding-block: 3rem;
-    padding-inline: 1.5rem;
-    text-align: center;
-}
-
-.fi-vue-ta .fi-vue-ta-error-message {
-    font-size: 0.875rem;
-    line-height: 1.5rem;
-    color: var(--gray-500);
-}
-
-.dark .fi-vue-ta .fi-vue-ta-error-message {
-    color: var(--gray-400);
-}
-
-/* ------------------------------------------------------------------ *
- * RTL: horizontal (directional) chevrons flip; vertical sort chevrons and
- * all box-model rules already use logical properties, so nothing else moves.
- * ------------------------------------------------------------------ */
-
-[dir='rtl'] .fi-vue-ta-directional-icon {
-    transform: scaleX(-1);
+.fi-vue-table > [data-vue-table-fallback-filters].fi-vue-ta-fallback-filters-open {
+    inset-block-start: 4rem;
+    inset-inline-end: 1.5rem;
 }

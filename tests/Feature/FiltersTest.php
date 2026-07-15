@@ -57,6 +57,21 @@ describe('filter schema serialization', function (): void {
             ->and($strings['paginationOverview'])->toContain(':first');
     });
 
+    it('ships server-rendered UI icons matching the stock markup variants', function (): void {
+        $icons = vueTableConfig()['schema']['icons'];
+
+        // Header sort chevrons are the mini (20px, filled) heroicon variant —
+        // exactly what Filament's header-cell blade emits.
+        expect($icons['sort'])->toContain('viewBox="0 0 20 20"')->toContain('fill="currentColor"')
+            ->and($icons['sortAsc'])->toContain('viewBox="0 0 20 20"')
+            ->and($icons['sortDesc'])->toContain('viewBox="0 0 20 20"')
+            ->and($icons['search'])->toContain('<svg')
+            ->and($icons['filters'])->toContain('<svg')
+            ->and($icons['previous'])->toContain('<svg')
+            ->and($icons['next'])->toContain('<svg')
+            ->and($icons['empty'])->toContain('<svg');
+    });
+
     it('renders the hidden Livewire fallback filter form with an apply button', function (): void {
         $html = livewire(VueListUsers::class)->html();
 

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Zvizvi\FilamentVueTable\Support;
 
 use Filament\Support\Enums\Alignment;
+use Filament\Support\Enums\IconSize;
+use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\Column;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\ImageColumn;
@@ -12,6 +14,9 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\ViewColumn;
 use Filament\Tables\Enums\PaginationMode;
 use Filament\Tables\Table;
+use Filament\Tables\View\TablesIconAlias;
+
+use function Filament\Support\generate_icon_html;
 
 /**
  * Serializes a Filament Table definition into the JSON schema payload the Vue
@@ -84,7 +89,38 @@ final class SchemaSerializer
                 'defaultPerPage' => $table->getDefaultPaginationPageOption(),
             ],
             'strings' => $this->strings($table),
+            'icons' => $this->icons($table),
         ];
+    }
+
+    /**
+     * UI icons rendered server-side through `generate_icon_html()` with the
+     * exact same Heroicon + alias pairs Filament's own blades use, so the
+     * markup is byte-identical to stock (mini/outline variants included) and
+     * app-level `FilamentIcon` alias overrides keep working.
+     *
+     * @return array<string, string|null>
+     */
+    private function icons(Table $table): array
+    {
+        $isRtl = __('filament-panels::layout.direction') === 'rtl';
+
+        return [
+            'sort' => $this->iconHtml(Heroicon::ChevronDown, TablesIconAlias::HEADER_CELL_SORT_BUTTON),
+            'sortAsc' => $this->iconHtml(Heroicon::ChevronUp, TablesIconAlias::HEADER_CELL_SORT_ASC_BUTTON),
+            'sortDesc' => $this->iconHtml(Heroicon::ChevronDown, TablesIconAlias::HEADER_CELL_SORT_DESC_BUTTON),
+            'search' => $this->iconHtml(Heroicon::MagnifyingGlass, TablesIconAlias::SEARCH_FIELD),
+            'filters' => $this->iconHtml(Heroicon::Funnel, TablesIconAlias::ACTIONS_FILTER),
+            'removeFilters' => $this->iconHtml(Heroicon::XMark, TablesIconAlias::FILTERS_REMOVE_ALL_BUTTON),
+            'previous' => $this->iconHtml($isRtl ? Heroicon::ChevronRight : Heroicon::ChevronLeft),
+            'next' => $this->iconHtml($isRtl ? Heroicon::ChevronLeft : Heroicon::ChevronRight),
+            'empty' => $this->iconHtml($table->getEmptyStateIcon(), size: IconSize::Large),
+        ];
+    }
+
+    private function iconHtml(string|\BackedEnum $icon, ?string $alias = null, ?IconSize $size = null): ?string
+    {
+        return generate_icon_html($icon, $alias, size: $size)?->toHtml();
     }
 
     /**

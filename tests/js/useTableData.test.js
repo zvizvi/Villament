@@ -96,6 +96,65 @@ describe('useTableData', () => {
         data.destroy()
     })
 
+    it('fetches immediately (no debounce) on filter changes, sending the complete filters map', async () => {
+        fetchMock.mockResolvedValue(jsonResponse())
+
+        const state = makeState()
+        state.page.value = 4
+        state.filters.value = {
+            status: { value: '' },
+            statuses: { values: [] },
+        }
+
+        const data = useTableData(ENDPOINT, state, { schemaVersion: 'v1' })
+
+        state.filters.value = {
+            status: { value: 'archived' },
+            statuses: { values: [] },
+        }
+
+        // No debounce: the fetch happens synchronously with the change.
+        expect(fetchMock).toHaveBeenCalledTimes(1)
+
+        const params = new URL(fetchMock.mock.calls[0][0]).searchParams
+        expect(params.get('filters[status][value]')).toBe('archived')
+
+        // Complete map: the cleared multi-select is sent explicitly.
+        expect(params.get('filters[statuses][values]')).toBe('')
+
+        // Filter changes reset the page to 1.
+        expect(state.page.value).toBe(1)
+        expect(params.has('page')).toBe(false)
+
+        data.destroy()
+    })
+
+    it('exposes indicators from the initial data and every response', async () => {
+        const responseIndicators = [{ filter: 'status', field: null, label: 'Status: Archived', removable: true }]
+        fetchMock.mockResolvedValue(jsonResponse({ indicators: responseIndicators }))
+
+        const state = makeState()
+        const data = useTableData(ENDPOINT, state, {
+            initialData: {
+                records: [],
+                meta: { currentPage: 1, perPage: 10, total: 0, lastPage: 1, from: null, to: null },
+                indicators: [{ filter: 'status', field: null, label: 'Status: Active', removable: true }],
+            },
+            schemaVersion: 'v1',
+        })
+
+        expect(data.indicators.value).toEqual([
+            { filter: 'status', field: null, label: 'Status: Active', removable: true },
+        ])
+
+        state.filters.value = { status: { value: 'archived' } }
+        await vi.runAllTimersAsync()
+
+        expect(data.indicators.value).toEqual(responseIndicators)
+
+        data.destroy()
+    })
+
     it('aborts the in-flight request when a second fetch starts', async () => {
         /** @type {AbortSignal[]} */
         const signals = []

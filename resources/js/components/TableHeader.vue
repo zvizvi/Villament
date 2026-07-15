@@ -1,4 +1,6 @@
 <script setup>
+import TrustedIcon from './TrustedIcon.vue'
+
 const props = defineProps({
     /**
      * Visible column schemas:
@@ -14,6 +16,14 @@ const props = defineProps({
     sort: {
         type: String,
         default: null,
+    },
+    /**
+     * Server-rendered icon HTML map (`schema.icons`): `sort`, `sortAsc`,
+     * `sortDesc` are used here.
+     */
+    icons: {
+        type: Object,
+        default: () => ({}),
     },
 })
 
@@ -35,6 +45,27 @@ function sortDirectionFor(column) {
     }
 
     return sortDirection === 'desc' ? 'desc' : 'asc'
+}
+
+/**
+ * One icon per sortable header, exactly like Filament: `sortAsc` while
+ * actively sorted ascending, `sortDesc` while descending, `sort` otherwise.
+ *
+ * @param {object} column
+ * @returns {?string} Server-rendered icon HTML, or null (renders nothing).
+ */
+function sortIconFor(column) {
+    const direction = sortDirectionFor(column)
+
+    if (direction === 'asc') {
+        return props.icons.sortAsc ?? null
+    }
+
+    if (direction === 'desc') {
+        return props.icons.sortDesc ?? null
+    }
+
+    return props.icons.sort ?? null
 }
 
 /**
@@ -102,33 +133,7 @@ function onSortClick(column) {
                 >
                     {{ column.label }}
 
-                    <!--
-                        Chevron indicator (vertical, so identical in LTR and RTL):
-                        chevron-up while actively sorted ascending, chevron-down otherwise,
-                        exactly like Filament's own header cells.
-                    -->
-                    <svg
-                        class="fi-icon fi-size-md"
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke-width="1.5"
-                        stroke="currentColor"
-                        aria-hidden="true"
-                    >
-                        <path
-                            v-if="sortDirectionFor(column) === 'asc'"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            d="m4.5 15.75 7.5-7.5 7.5 7.5"
-                        />
-                        <path
-                            v-else
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            d="m19.5 8.25-7.5 7.5-7.5-7.5"
-                        />
-                    </svg>
+                    <TrustedIcon :html="sortIconFor(column)" />
                 </span>
 
                 <template v-else>

@@ -1,13 +1,14 @@
 import { ref, watch } from 'vue'
+import { appendFilterParams, deleteFilterParams, readFilterParams } from '../support/filterParams.js'
 
 /**
  * @typedef {object} TableStateInit
  * @property {?string} [sort] Sort expression, e.g. `"name:asc"`.
  * @property {string} [search] Global search term.
  * @property {Object<string, string>} [columnSearches] Per-column search terms, keyed by column key.
- * @property {Object<string, *>} [filters] Filter state (Phase 2 pass-through, not URL-synced).
+ * @property {Object<string, *>} [filters] Filter state map (Filament form state shapes), keyed by filter name.
  * @property {number} [page] Current page (1-based).
- * @property {?number} [perPage] Records per page.
+ * @property {?(number|'all')} [perPage] Records per page.
  */
 
 /**
@@ -17,7 +18,7 @@ import { ref, watch } from 'vue'
  * @property {import('vue').Ref<Object<string, string>>} columnSearches
  * @property {import('vue').Ref<Object<string, *>>} filters
  * @property {import('vue').Ref<number>} page
- * @property {import('vue').Ref<?number>} perPage
+ * @property {import('vue').Ref<?(number|'all')>} perPage
  * @property {() => void} destroy Removes the `popstate` listener and stops URL syncing.
  */
 
@@ -51,10 +52,14 @@ function readStateFromUrl() {
     }
 
     if (params.has('perPage')) {
-        const perPage = Number.parseInt(params.get('perPage'), 10)
+        if (params.get('perPage') === 'all') {
+            state.perPage = 'all'
+        } else {
+            const perPage = Number.parseInt(params.get('perPage'), 10)
 
-        if (Number.isInteger(perPage) && perPage >= 1) {
-            state.perPage = perPage
+            if (Number.isInteger(perPage) && perPage >= 1) {
+                state.perPage = perPage
+            }
         }
     }
 
@@ -67,6 +72,12 @@ function readStateFromUrl() {
 
         state.columnSearches ??= {}
         state.columnSearches[match[1]] = value
+    }
+
+    const filters = readFilterParams(params)
+
+    if (filters !== null) {
+        state.filters = filters
     }
 
     return state
@@ -96,7 +107,13 @@ export function useTableState(initialState = {}, options = {}) {
             ? { ...urlState.columnSearches }
             : { ...(initialState.columnSearches ?? {}) },
     )
-    const filters = ref({ ...(initialState.filters ?? {}) })
+    // JSON round-trip: the config filters come from embedded JSON anyway, and
+    // `structuredClone()` chokes on Vue's reactive proxies.
+    const filters = ref(
+        urlState.filters !== undefined
+            ? urlState.filters
+            : JSON.parse(JSON.stringify(initialState.filters ?? {})),
+    )
     const page = ref(urlState.page ?? initialState.page ?? 1)
     const perPage = ref(urlState.perPage ?? initialState.perPage ?? null)
 
@@ -113,6 +130,8 @@ export function useTableState(initialState = {}, options = {}) {
             }
         }
 
+        deleteFilterParams(params)
+
         if (sort.value) {
             params.set('sort', sort.value)
         }
@@ -126,6 +145,10 @@ export function useTableState(initialState = {}, options = {}) {
                 params.set(`columnSearches[${key}]`, value)
             }
         }
+
+        // Cleared filter values (`''`, `[]`) are omitted: the URL only ever
+        // carries active filter state, unlike the fetch protocol's complete map.
+        appendFilterParams(params, filters.value, { includeBlank: false })
 
         if (page.value && page.value !== 1) {
             params.set('page', String(page.value))
@@ -148,6 +171,7 @@ export function useTableState(initialState = {}, options = {}) {
             sort.value = urlState.sort !== undefined ? urlState.sort : null
             search.value = urlState.search !== undefined ? urlState.search : ''
             columnSearches.value = { ...(urlState.columnSearches ?? {}) }
+            filters.value = urlState.filters ?? {}
             page.value = urlState.page ?? 1
 
             if (urlState.perPage !== undefined) {
@@ -166,7 +190,7 @@ export function useTableState(initialState = {}, options = {}) {
 
     if (urlSync) {
         stopUrlWatcher = watch(
-            () => [sort.value, search.value, page.value, perPage.value, { ...columnSearches.value }],
+            () => [sort.value, search.value, page.value, perPage.value, { ...columnSearches.value }, filters.value],
             () => {
                 if (! isApplyingUrlState) {
                     writeStateToUrl()

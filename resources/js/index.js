@@ -75,7 +75,7 @@ function scan() {
         const mountPoint = document.createElement('div')
         element.appendChild(mountPoint)
 
-        const app = createApp(VueTable, { config })
+        const app = createApp(VueTable, { config, rootElement: element })
         app.mount(mountPoint)
 
         mountedIslands.set(element, app)

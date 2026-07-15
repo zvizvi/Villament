@@ -124,6 +124,56 @@ describe('useTableState', () => {
         expect(state.page.value).toBe(1)
     })
 
+    it('round-trips nested filter state through the URL into a fresh instance', () => {
+        const first = makeState({ filters: {} })
+
+        first.filters.value = {
+            status: { value: 'archived' },
+            statuses: { values: ['active', 'pending'] },
+            is_admin: { value: '0' },
+            cleared: { value: '' },
+        }
+
+        const params = new URLSearchParams(window.location.search)
+        expect(params.get('filters[status][value]')).toBe('archived')
+        expect(params.get('filters[statuses][values][0]')).toBe('active')
+        expect(params.get('filters[statuses][values][1]')).toBe('pending')
+        expect(params.get('filters[is_admin][value]')).toBe('0')
+
+        // Cleared values never pollute the URL.
+        expect(params.has('filters[cleared][value]')).toBe(false)
+
+        first.destroy()
+
+        const second = makeState({
+            filters: { status: { value: 'server-default' } },
+        })
+
+        expect(second.filters.value).toEqual({
+            status: { value: 'archived' },
+            statuses: { values: ['active', 'pending'] },
+            is_admin: { value: '0' },
+        })
+    })
+
+    it('falls back to the config filters when the URL has none', () => {
+        const state = makeState({
+            filters: { status: { value: 'active' } },
+        })
+
+        expect(state.filters.value).toEqual({ status: { value: 'active' } })
+    })
+
+    it('hydrates arbitrarily nested livewire-fallback filter params from the URL', () => {
+        setUrl('/admin/users?filters[custom][range][from]=2026-01-01&filters[custom][flags][0]=1')
+
+        const state = makeState({ filters: {} })
+
+        expect(state.filters.value).toEqual({
+            custom: { range: { from: '2026-01-01' }, flags: ['1'] },
+        })
+    })
+
     it('updates state on popstate (back/forward navigation)', () => {
         const state = makeState({ sort: null, search: '', page: 1, perPage: 10 })
 
