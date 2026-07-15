@@ -7,6 +7,7 @@ namespace Zvizvi\FilamentVueTable\Http\Controllers;
 use Filament\Facades\Filament;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Zvizvi\FilamentVueTable\Support\FilterIndicatorSerializer;
 use Zvizvi\FilamentVueTable\Support\HeadlessTableHarness;
 use Zvizvi\FilamentVueTable\Support\RecordSerializer;
 use Zvizvi\FilamentVueTable\Support\RequestStateValidator;
@@ -21,6 +22,7 @@ final class TableDataController
         private readonly RequestStateValidator $validator,
         private readonly SchemaSerializer $schemaSerializer,
         private readonly RecordSerializer $recordSerializer,
+        private readonly FilterIndicatorSerializer $indicatorSerializer,
     ) {}
 
     public function __invoke(Request $request, string $resource): JsonResponse
@@ -54,6 +56,7 @@ final class TableDataController
                 $records,
             ),
             'meta' => $this->recordSerializer->meta($records),
+            'indicators' => $this->indicatorSerializer->serialize($table),
             'schemaVersion' => $this->schemaSerializer->version($schema),
         ]);
     }

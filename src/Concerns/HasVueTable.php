@@ -9,6 +9,7 @@ use Filament\Schemas\Components\RenderHook;
 use Filament\Schemas\Schema;
 use Filament\View\PanelsRenderHook;
 use Zvizvi\FilamentVueTable\Schemas\VueTableIsland;
+use Zvizvi\FilamentVueTable\Support\FilterIndicatorSerializer;
 use Zvizvi\FilamentVueTable\Support\RecordSerializer;
 use Zvizvi\FilamentVueTable\Support\SchemaSerializer;
 
@@ -16,18 +17,32 @@ use Zvizvi\FilamentVueTable\Support\SchemaSerializer;
  * Swaps the embedded Livewire table on a ListRecords page for the Vue island
  * mount point. Header actions, widgets, tabs, breadcrumbs and render hooks
  * stay untouched Filament output, and the Livewire page component keeps its
- * full table state (needed for the Phase 3 actions bridge and the filter
- * fallback).
+ * full table state (needed for the actions bridge and the filter fallback).
  */
 trait HasVueTable
 {
     public function content(Schema $schema): Schema
     {
+        $config = $this->getVueTableConfig();
+
+        $hasFallbackFilters = false;
+        $serializedFilters = is_array($config['schema'] ?? null) ? ($config['schema']['filters'] ?? []) : [];
+
+        if (is_array($serializedFilters)) {
+            foreach ($serializedFilters as $filter) {
+                if (is_array($filter) && ($filter['type'] ?? null) === 'livewire-fallback') {
+                    $hasFallbackFilters = true;
+
+                    break;
+                }
+            }
+        }
+
         return $schema
             ->components([
                 $this->getTabsContentComponent(),
                 RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_BEFORE),
-                VueTableIsland::make($this->getVueTableConfig()),
+                VueTableIsland::make($config, withFallbackFilterForm: $hasFallbackFilters),
                 RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_AFTER),
             ]);
     }
@@ -56,6 +71,7 @@ trait HasVueTable
             'initialData' => [
                 'records' => $recordSerializer->serialize($this, $resourceClass, $records),
                 'meta' => $recordSerializer->meta($records),
+                'indicators' => app(FilterIndicatorSerializer::class)->serialize($table),
             ],
             'state' => [
                 'sort' => $this->tableSort,

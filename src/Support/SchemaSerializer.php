@@ -21,6 +21,23 @@ use Filament\Tables\Table;
 final class SchemaSerializer
 {
     /**
+     * @var list<FilterSerializers\FilterSerializer>
+     */
+    private readonly array $filterSerializers;
+
+    /**
+     * @param  list<FilterSerializers\FilterSerializer>|null  $filterSerializers
+     */
+    public function __construct(?array $filterSerializers = null)
+    {
+        $this->filterSerializers = $filterSerializers ?? [
+            new FilterSerializers\TernaryFilterSerializer,
+            new FilterSerializers\SelectFilterSerializer,
+            new FilterSerializers\FallbackFilterSerializer,
+        ];
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function serialize(Table $table): array
@@ -40,11 +57,13 @@ final class SchemaSerializer
         $filters = [];
 
         foreach ($table->getFilters() as $filter) {
-            $filters[] = [
-                'key' => $filter->getName(),
-                'label' => (string) $filter->getLabel(),
-                'type' => 'livewire-fallback',
-            ];
+            foreach ($this->filterSerializers as $serializer) {
+                if ($serializer->canSerialize($filter)) {
+                    $filters[] = $serializer->serialize($filter);
+
+                    break;
+                }
+            }
         }
 
         return [
@@ -64,6 +83,36 @@ final class SchemaSerializer
                 'pageOptions' => $table->getPaginationPageOptions(),
                 'defaultPerPage' => $table->getDefaultPaginationPageOption(),
             ],
+            'strings' => $this->strings($table),
+        ];
+    }
+
+    /**
+     * UI strings resolved through Filament's own translations, so the island
+     * follows the panel locale (including RTL languages) with zero config.
+     *
+     * @return array<string, string>
+     */
+    private function strings(Table $table): array
+    {
+        return [
+            'searchPlaceholder' => __('filament-tables::table.fields.search.placeholder'),
+            'searchLabel' => __('filament-tables::table.fields.search.label'),
+            'filtersHeading' => __('filament-tables::table.filters.heading'),
+            'filtersIndicator' => __('filament-tables::table.filters.indicator'),
+            'filtersApply' => __('filament-tables::table.filters.actions.apply.label'),
+            'filtersRemove' => __('filament-tables::table.filters.actions.remove.label'),
+            'filtersRemoveAll' => __('filament-tables::table.filters.actions.remove_all.label'),
+            'filtersReset' => __('filament-tables::table.filters.actions.reset.label'),
+            'selectPlaceholder' => __('filament-tables::table.filters.select.placeholder'),
+            'multiSelectPlaceholder' => __('filament-tables::table.filters.multi_select.placeholder'),
+            'emptyHeading' => __('filament-tables::table.empty.heading', ['model' => $table->getPluralModelLabel()]),
+            'paginationLabel' => __('filament::components/pagination.label'),
+            'paginationOverview' => __('filament::components/pagination.overview'),
+            'perPageLabel' => __('filament::components/pagination.fields.records_per_page.label'),
+            'perPageAll' => __('filament::components/pagination.fields.records_per_page.options.all'),
+            'previousLabel' => __('filament::components/pagination.actions.previous.label'),
+            'nextLabel' => __('filament::components/pagination.actions.next.label'),
         ];
     }
 

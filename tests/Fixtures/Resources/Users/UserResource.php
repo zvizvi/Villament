@@ -75,6 +75,14 @@ class UserResource extends Resource
                         'pending' => 'Pending',
                         'archived' => 'Archived',
                     ]),
+                SelectFilter::make('statuses')
+                    ->attribute('status')
+                    ->multiple()
+                    ->options([
+                        'active' => 'Active',
+                        'pending' => 'Pending',
+                        'archived' => 'Archived',
+                    ]),
                 TernaryFilter::make('is_admin'),
                 Filter::make('created_from')
                     ->schema([
@@ -83,7 +91,10 @@ class UserResource extends Resource
                     ->query(fn (Builder $query, array $data): Builder => $query->when(
                         $data['created_from'] ?? null,
                         fn (Builder $query, string $date): Builder => $query->whereDate('created_at', '>=', $date),
-                    )),
+                    ))
+                    ->indicateUsing(fn (array $data): ?string => filled($data['created_from'] ?? null)
+                        ? 'Created from '.$data['created_from']
+                        : null),
             ])
             ->recordActions([
                 EditAction::make(),

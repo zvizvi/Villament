@@ -8,7 +8,9 @@ use Filament\Schemas\Components\Component;
 
 /**
  * Schema component rendering the Vue island mount point in place of
- * Filament's EmbeddedTable.
+ * Filament's EmbeddedTable. When the table has livewire-fallback filters, it
+ * also renders the page's original Livewire filter form in a hidden
+ * container that the island toggles.
  */
 final class VueTableIsland extends Component
 {
@@ -17,10 +19,13 @@ final class VueTableIsland extends Component
     /**
      * @param  array<string, mixed>  $config
      */
-    public static function make(array $config): static
+    public static function make(array $config, bool $withFallbackFilterForm = false): static
     {
         $static = app(self::class);
-        $static->viewData(['config' => $config]);
+        $static->viewData([
+            'config' => $config,
+            'withFallbackFilterForm' => $withFallbackFilterForm,
+        ]);
         $static->configure();
 
         return $static;

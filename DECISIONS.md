@@ -45,6 +45,15 @@ Therefore `tests/TestCase.php` registers `SupportServiceProvider` **before** `Li
 
 8. **Filters state injection**: harness `array_replace`s the request's filter state over the booted defaults rather than replacing the whole array, so untouched filters keep their default form state.
 
+## 2026-07-16 — Phase 2 decisions
+
+1. **Filter serializer chain** (§4.4): `TernaryFilterSerializer` must precede `SelectFilterSerializer` (TernaryFilter *extends* SelectFilter). A `SelectFilter` whose `getOptions()` is empty (lazy relationship/searchable options) falls through to `livewire-fallback` rather than shipping an empty select. Date-range convention detection was NOT implemented — schema-based `Filter`s go to the fallback path, which is strictly safer; a dedicated serializer can be added later without breaking anything.
+2. **Indicators are server-computed** on every response (`FilterIndicatorSerializer`), not rebuilt client-side: `BaseFilter::getIndicators()` evaluates `indicateUsing` closures against the injected harness state, so custom labels match stock exactly. Payload: `{filter, field, label, removable}`.
+3. **Complete-map filter protocol**: the client always sends the full `filters[...]` state for every filter it knows; clearing = explicit empty value (`{value: ''}`, `{values: []}`). This makes `array_replace` semantics deterministic and clears defaulted filters correctly.
+4. **Localized UI strings** (`schema.strings`) resolve through Filament's own translation keys (`filament-tables::table.*`, `filament::components/pagination.*`), so the island follows the panel locale — verified live in Hebrew on the host app. Fixes the Phase 1 hardcoded-English gap.
+5. **Fallback form placement**: the page's original Livewire filters form renders inside the island wrapper but OUTSIDE the `wire:ignore` mount element, hidden with `display:none`, plus an explicit `applyTableFilters` button when the table has deferred filters (v5 default). Rendered only when at least one filter serialized as `livewire-fallback`.
+6. **Ternary state over HTTP** is `'1'`/`'0'`/`''` strings (what Filament's own select posts); parity-tested against the boolean state the Livewire testing helper writes.
+
 ## Verified Filament v5 internal API map (§4.1, §4.8)
 
 Verified against **filament/filament v5.6.8** + **livewire/livewire v4.3.3** by reading installed vendor source on 2026-07-15. Paths relative to `vendor/filament/`.
