@@ -78,6 +78,7 @@ final class SchemaSerializer
                 'direction' => $table->getDefaultSortDirection() ?? 'asc',
             ],
             'globallySearchable' => $table->isSearchable(),
+            'striped' => $table->isStriped(),
             'filters' => $filters,
             'pagination' => [
                 'mode' => match ($table->getPaginationMode()) {

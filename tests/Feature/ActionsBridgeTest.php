@@ -54,6 +54,18 @@ describe('per-record action evaluation', function (): void {
             ->and($admin['actions'])->toHaveKey('delete');
     });
 
+    it('serializes the record URL and striped flag like the stock row', function (): void {
+        $user = User::factory()->create(['name' => 'Row Link Target', 'is_admin' => false]);
+
+        $record = getJson(ENDPOINT.'?columnSearches[name]=Row+Link+Target')->assertOk()->json('records.0');
+        $config = vueTableConfig();
+
+        // ListRecords wires recordUrl to the edit/view page by default.
+        expect($record['url'])->toContain("/admin/users/{$user->id}/edit")
+            ->and($record['urlNewTab'])->toBeFalse()
+            ->and($config['schema']['striped'])->toBeTrue();
+    });
+
     it('serializes evaluated action props including the edit URL', function (): void {
         $user = User::factory()->create(['name' => 'Url Target', 'is_admin' => false]);
 

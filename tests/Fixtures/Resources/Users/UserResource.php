@@ -72,6 +72,7 @@ class UserResource extends Resource
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->defaultSort('name')
+            ->striped()
             ->filters([
                 SelectFilter::make('status')
                     ->options([

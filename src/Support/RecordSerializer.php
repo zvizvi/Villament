@@ -45,9 +45,14 @@ final class RecordSerializer
                 $cells[$column->getName()] = $this->serializeCell($column);
             }
 
+            $recordUrl = $table->getRecordUrl($record);
+
             $payload[] = [
                 'key' => $livewire->getTableRecordKey($record),
                 'cells' => $cells,
+                'url' => $recordUrl,
+                'urlNewTab' => filled($recordUrl) && $table->shouldOpenRecordUrlInNewTab($record),
+                'action' => $table->getRecordAction($record),
                 'actions' => $this->serializeRecordActions($table, $record),
                 'can' => $record instanceof Model ? [
                     'view' => $resourceClass::canView($record),
