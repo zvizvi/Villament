@@ -1,0 +1,180 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Zvizvi\FilamentVueTable\Support;
+
+use Filament\Tables\Table;
+use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
+
+/**
+ * Whitelists every request parameter against the table schema before any of
+ * it can touch the query. Violations abort with a 422 — never silently
+ * ignored, so client bugs (or probing) surface immediately.
+ */
+final class RequestStateValidator
+{
+    public function validate(Request $request, Table $table): TableState
+    {
+        return new TableState(
+            sort: $this->validateSort($request, $table),
+            search: $this->validateSearch($request, $table),
+            columnSearches: $this->validateColumnSearches($request, $table),
+            filters: $this->validateFilters($request, $table),
+            page: $this->validatePage($request),
+            perPage: $this->validatePerPage($request, $table),
+        );
+    }
+
+    private function validateSort(Request $request, Table $table): ?string
+    {
+        $sort = $request->query('sort');
+
+        if (blank($sort)) {
+            return null;
+        }
+
+        if (! is_string($sort)) {
+            $this->reject('sort', 'The sort parameter must be a string.');
+        }
+
+        [$column, $direction] = array_pad(explode(':', $sort, 2), 2, 'asc');
+
+        if (! in_array($direction, ['asc', 'desc'], true)) {
+            $this->reject('sort', "The sort direction [{$direction}] is invalid.");
+        }
+
+        $tableColumn = $table->getColumn($column);
+
+        if ($tableColumn === null || ! $tableColumn->isSortable()) {
+            $this->reject('sort', "The column [{$column}] is not sortable.");
+        }
+
+        return "{$column}:{$direction}";
+    }
+
+    private function validateSearch(Request $request, Table $table): string
+    {
+        $search = $request->query('search');
+
+        if (blank($search)) {
+            return '';
+        }
+
+        if (! is_string($search)) {
+            $this->reject('search', 'The search parameter must be a string.');
+        }
+
+        if (! $table->isSearchable()) {
+            $this->reject('search', 'This table is not globally searchable.');
+        }
+
+        return $search;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function validateColumnSearches(Request $request, Table $table): array
+    {
+        $columnSearches = $request->query('columnSearches');
+
+        if (blank($columnSearches)) {
+            return [];
+        }
+
+        if (! is_array($columnSearches)) {
+            $this->reject('columnSearches', 'The columnSearches parameter must be an array.');
+        }
+
+        $validated = [];
+
+        foreach ($columnSearches as $columnName => $search) {
+            $column = $table->getColumn((string) $columnName);
+
+            if ($column === null || ! $column->isIndividuallySearchable()) {
+                $this->reject("columnSearches.{$columnName}", "The column [{$columnName}] is not individually searchable.");
+            }
+
+            if (! is_string($search)) {
+                $this->reject("columnSearches.{$columnName}", 'Column search values must be strings.');
+            }
+
+            if (filled($search)) {
+                $validated[(string) $columnName] = $search;
+            }
+        }
+
+        return $validated;
+    }
+
+    /**
+     * @return array<string, array<string, mixed>>|null
+     */
+    private function validateFilters(Request $request, Table $table): ?array
+    {
+        $filters = $request->query('filters');
+
+        if (blank($filters)) {
+            return null;
+        }
+
+        if (! is_array($filters)) {
+            $this->reject('filters', 'The filters parameter must be an array.');
+        }
+
+        $validated = [];
+
+        foreach ($filters as $filterName => $state) {
+            if ($table->getFilter((string) $filterName) === null) {
+                $this->reject("filters.{$filterName}", "The filter [{$filterName}] does not exist.");
+            }
+
+            if (! is_array($state)) {
+                $this->reject("filters.{$filterName}", 'Filter state must be an array of form values.');
+            }
+
+            $validated[(string) $filterName] = $state;
+        }
+
+        return $validated;
+    }
+
+    private function validatePage(Request $request): int
+    {
+        $page = $request->query('page', '1');
+
+        if (! is_string($page) || ! ctype_digit($page) || (int) $page < 1) {
+            $this->reject('page', 'The page parameter must be a positive integer.');
+        }
+
+        return (int) $page;
+    }
+
+    private function validatePerPage(Request $request, Table $table): int|string|null
+    {
+        $perPage = $request->query('perPage');
+
+        if (blank($perPage)) {
+            return null;
+        }
+
+        $options = $table->getPaginationPageOptions();
+
+        if ($perPage === 'all' && in_array('all', $options, true)) {
+            return 'all';
+        }
+
+        if (is_string($perPage) && ctype_digit($perPage) && in_array((int) $perPage, $options, true)) {
+            return (int) $perPage;
+        }
+
+        $this->reject('perPage', "The perPage value [{$perPage}] is not one of the allowed pagination options.");
+    }
+
+    private function reject(string $key, string $message): never
+    {
+        throw ValidationException::withMessages([$key => $message]);
+    }
+}

@@ -6,6 +6,8 @@ namespace Zvizvi\FilamentVueTable;
 
 use Filament\Contracts\Plugin;
 use Filament\Panel;
+use Illuminate\Support\Facades\Route;
+use Zvizvi\FilamentVueTable\Http\Controllers\TableDataController;
 
 final class FilamentVueTablePlugin implements Plugin
 {
@@ -21,11 +23,14 @@ final class FilamentVueTablePlugin implements Plugin
 
     public function register(Panel $panel): void
     {
-        // Phase 1: register the data endpoint route + assets.
+        // `authenticatedRoutes` places the endpoint inside the panel's full
+        // middleware stack (base + auth), exactly like resource pages.
+        $panel->authenticatedRoutes(function (Panel $panel): void {
+            Route::get('filament-vue-table/{resource}/data', TableDataController::class)
+                ->where('resource', '[^/]+')
+                ->name('filament-vue-table.data');
+        });
     }
 
-    public function boot(Panel $panel): void
-    {
-        // Phase 1: build the resource slug → class registry.
-    }
+    public function boot(Panel $panel): void {}
 }

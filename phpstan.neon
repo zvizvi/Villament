@@ -6,3 +6,5 @@ parameters:
     paths:
         - src
     tmpDir: build/phpstan
+    viewDirectories:
+        - resources/views

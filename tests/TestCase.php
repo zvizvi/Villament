@@ -15,6 +15,7 @@ use Filament\Schemas\SchemasServiceProvider;
 use Filament\Support\SupportServiceProvider;
 use Filament\Tables\TablesServiceProvider;
 use Filament\Widgets\WidgetsServiceProvider;
+use Illuminate\Support\Facades\Gate;
 use Livewire\LivewireServiceProvider;
 use Orchestra\Testbench\TestCase as Orchestra;
 use Zvizvi\FilamentVueTable\FilamentVueTableServiceProvider;
@@ -49,6 +50,13 @@ abstract class TestCase extends Orchestra
             FilamentVueTableServiceProvider::class,
             AdminPanelProvider::class,
         ];
+    }
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        Gate::policy(Fixtures\Models\User::class, Fixtures\Policies\UserPolicy::class);
     }
 
     protected function defineDatabaseMigrations(): void

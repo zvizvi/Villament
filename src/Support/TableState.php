@@ -1,0 +1,25 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Zvizvi\FilamentVueTable\Support;
+
+/**
+ * Validated, whitelisted table interaction state extracted from a request.
+ */
+final readonly class TableState
+{
+    /**
+     * @param  ?string  $sort  Filament v5 sort string in `column:direction` format
+     * @param  array<string, string>  $columnSearches
+     * @param  array<string, array<string, mixed>>|null  $filters  Filament filter form state, keyed by filter name
+     */
+    public function __construct(
+        public ?string $sort = null,
+        public string $search = '',
+        public array $columnSearches = [],
+        public ?array $filters = null,
+        public int $page = 1,
+        public int|string|null $perPage = null,
+    ) {}
+}

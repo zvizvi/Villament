@@ -18,10 +18,40 @@ After the initial page load, all table interactions — sorting, pagination, glo
 ## Roadmap
 
 - [x] **Phase 0 — Skeleton & fixtures**: composer/vite scaffolding, service provider, empty Filament plugin, Testbench test app with a fixture panel + `UserResource` covering every column type (formatted/linked text, badge with closure color, icon, image, view column), a global query scope, three filter types, row & bulk actions, 500 seeded users. The stock Filament table renders and is exercised by tests (render, global-scope security, search, sort, filter).
-- [ ] **Phase 1 — MVP data path**: headless table harness, schema/record serializers, whitelisting request validator, panel-native JSON endpoint, `VueListRecords` page, Vue island (text/badge/icon/image/html cells, search, sort, offset pagination, URL sync).
+- [x] **Phase 1 — MVP data path**: `HeadlessTableHarness` drives the resource's real List page component off-screen; `SchemaSerializer`/`RecordSerializer` turn the `table()` definition and each record into pre-formatted JSON payloads (all closures run server-side); `RequestStateValidator` whitelists every sort/search/filter/pagination parameter (422 otherwise); the data endpoint is registered inside each panel's authenticated middleware stack and enforces `canViewAny()` + the resource's global scope; `VueListRecords` swaps only the embedded table region for a Vue island with inlined schema + first-page data (zero extra requests on first paint); the island does search (global + per-column, debounced + aborted), sorting, offset pagination and URL sync. **Parity tests** assert the endpoint returns byte-identical record keys/order to the stock Livewire table under identical state, and `InternalApiContractTest` pins every internal Filament API touched.
 - [ ] **Phase 2 — Filters** (incl. Livewire fallback for exotic filters).
 - [ ] **Phase 3 — Actions bridge** (row/bulk actions via the existing Livewire page component).
 - [ ] **Phase 4 — Polish** (cursor pagination, column toggling, summaries, export, config).
+
+## Usage
+
+1. Register the plugin on your panel:
+
+```php
+use Zvizvi\FilamentVueTable\FilamentVueTablePlugin;
+
+public function panel(Panel $panel): Panel
+{
+    return $panel
+        // …
+        ->plugin(FilamentVueTablePlugin::make());
+}
+```
+
+2. Swap the parent class of your resource's List page (one line — columns, filters, scoping and authorization all come from your existing `table()` and `getEloquentQuery()`):
+
+```php
+use Zvizvi\FilamentVueTable\Pages\VueListRecords;
+
+class ListUsers extends VueListRecords // ← was ListRecords
+{
+    protected static string $resource = UserResource::class;
+}
+```
+
+Or apply the trait to a customized List page: `use Zvizvi\FilamentVueTable\Concerns\HasVueTable;`.
+
+After the initial paint (schema + first page inlined, no extra requests), sorting, searching and pagination hit a JSON endpoint that runs behind your panel's full middleware stack, checks `canViewAny()`, and whitelists every request parameter against the table schema.
 
 ## Development
 

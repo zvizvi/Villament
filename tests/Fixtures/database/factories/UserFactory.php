@@ -25,7 +25,7 @@ class UserFactory extends Factory
             'password' => 'password',
             'status' => fake()->randomElement(['active', 'pending', 'archived']),
             'is_admin' => fake()->boolean(20),
-            'avatar_url' => '/storage/avatars/'.fake()->uuid().'.jpg',
+            'avatar_url' => 'https://avatars.example.test/'.fake()->uuid().'.jpg',
             'is_banned' => false,
         ];
     }
@@ -38,5 +38,10 @@ class UserFactory extends Factory
     public function banned(): static
     {
         return $this->state(['is_banned' => true]);
+    }
+
+    public function blocked(): static
+    {
+        return $this->state(['status' => 'blocked']);
     }
 }

@@ -25,6 +25,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Zvizvi\FilamentVueTable\Tests\Fixtures\Models\User;
 use Zvizvi\FilamentVueTable\Tests\Fixtures\Resources\Users\Pages\EditUser;
 use Zvizvi\FilamentVueTable\Tests\Fixtures\Resources\Users\Pages\ListUsers;
+use Zvizvi\FilamentVueTable\Tests\Fixtures\Resources\Users\Pages\VueListUsers;
 
 class UserResource extends Resource
 {
@@ -102,6 +103,7 @@ class UserResource extends Resource
     {
         return [
             'index' => ListUsers::route('/'),
+            'vue' => VueListUsers::route('/vue'),
             'edit' => EditUser::route('/{record}/edit'),
         ];
     }
