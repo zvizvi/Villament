@@ -8,9 +8,11 @@ use Filament\Facades\Filament;
 use Filament\Schemas\Components\RenderHook;
 use Filament\Schemas\Schema;
 use Filament\View\PanelsRenderHook;
+use Illuminate\Validation\ValidationException;
 use Zvizvi\FilamentVueTable\Schemas\VueTableIsland;
 use Zvizvi\FilamentVueTable\Support\FilterIndicatorSerializer;
 use Zvizvi\FilamentVueTable\Support\RecordSerializer;
+use Zvizvi\FilamentVueTable\Support\RequestStateValidator;
 use Zvizvi\FilamentVueTable\Support\SchemaSerializer;
 
 /**
@@ -48,10 +50,61 @@ trait HasVueTable
     }
 
     /**
+     * The island reflects its full state (including perPage and per-column
+     * searches) into the query string, but Filament's own `#[Url]` hydration
+     * only covers sort/search/filters. Apply the remaining whitelisted URL
+     * state on full-page loads so the inlined first page matches what the
+     * URL promises — otherwise a reload with `?perPage=5` would paint the
+     * default page size until the first AJAX interaction.
+     */
+    protected function applyVueTableUrlState(): void
+    {
+        $request = request();
+
+        if (! $request->isMethod('GET') || $request->query() === []) {
+            return;
+        }
+
+        try {
+            $state = app(RequestStateValidator::class)->validate($request, $this->getTable());
+        } catch (ValidationException) {
+            // A page load with an invalid/stale query string must render,
+            // not 422 — invalid parameters are simply not applied.
+            return;
+        }
+
+        if ($state->sort !== null) {
+            $this->tableSort = $state->sort;
+        }
+
+        if ($state->search !== '') {
+            $this->tableSearch = $state->search;
+        }
+
+        if ($state->columnSearches !== []) {
+            $this->tableColumnSearches = $state->columnSearches;
+        }
+
+        if ($state->filters !== null) {
+            $this->tableFilters = array_replace($this->tableFilters ?? [], $state->filters);
+        }
+
+        if ($state->perPage !== null) {
+            $this->tableRecordsPerPage = $state->perPage;
+        }
+
+        if ($state->page > 1) {
+            $this->setPage($state->page, $this->getTablePaginationPageName());
+        }
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function getVueTableConfig(): array
     {
+        $this->applyVueTableUrlState();
+
         $schemaSerializer = app(SchemaSerializer::class);
         $recordSerializer = app(RecordSerializer::class);
 
