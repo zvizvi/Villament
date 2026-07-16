@@ -93,6 +93,8 @@ $methodContract = [
     [Panel::class, 'authenticatedRoutes'],
     [Panel::class, 'route'],
     [Panel::class, 'getResources'],
+    [Panel::class, 'hasTenancy'],
+    [Panel::class, 'authenticatedTenantRoutes'],
 ];
 
 $propertyContract = [

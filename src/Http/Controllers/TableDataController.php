@@ -26,10 +26,17 @@ final class TableDataController
         private readonly FilterIndicatorSerializer $indicatorSerializer,
     ) {}
 
-    public function __invoke(Request $request, string $resource): JsonResponse
+    public function __invoke(Request $request): JsonResponse
     {
         $panel = Filament::getCurrentPanel();
         abort_if($panel === null, 404);
+
+        // Read the resource slug from the named route parameter rather than a
+        // method argument: on tenant panels the route also has a `{tenant}`
+        // segment, and positional controller-argument binding can bind the
+        // tenant value to a `$resource` argument.
+        $resource = $request->route('resource');
+        abort_unless(is_string($resource), 404);
 
         $resourceClass = $this->registry->resolve($panel, $resource);
         abort_if($resourceClass === null, 404);

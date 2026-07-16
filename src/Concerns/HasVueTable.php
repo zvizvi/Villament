@@ -115,10 +115,17 @@ trait HasVueTable
         $resourceClass = static::getResource();
         $panel = Filament::getCurrentOrDefaultPanel();
 
+        $endpointParameters = ['resource' => $resourceClass::getSlug($panel)];
+
+        // Tenant panels route the endpoint under `{tenant}` — include the
+        // current tenant so the generated URL resolves (and `IdentifyTenant`
+        // can re-establish it on the AJAX request).
+        if ($panel->hasTenancy()) {
+            $endpointParameters['tenant'] = Filament::getTenant();
+        }
+
         return [
-            'endpoint' => $panel->route('filament-vue-table.data', [
-                'resource' => $resourceClass::getSlug($panel),
-            ]),
+            'endpoint' => $panel->route('filament-vue-table.data', $endpointParameters),
             'livewireId' => $this->getId(),
             'schemaVersion' => $schemaSerializer->version($schema),
             'schema' => $schema,

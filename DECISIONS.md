@@ -75,6 +75,16 @@ Therefore `tests/TestCase.php` registers `SupportServiceProvider` **before** `Li
 5. **Summaries**: `SummarySerializer` renders each summarized column's summarizer VIEWS server-side (labels + formatted state, trusted html) against Filament's own page/all summary queries + selected state; page row only when the paginator has pages. The island renders a stock-markup tfoot with the heading-colspan rule.
 6. **SchemaSerializer/RecordSerializer are container-bound** (non-singleton) so per-test/per-request config changes apply.
 
+## 2026-07-17 — Multi-tenant panels
+
+Reported from a live multi-tenant app: a `recordUrl`/column `getUrl()` closure resolving a tenant-scoped route crashed the endpoint with `Missing parameter: tenant`, and the query wasn't tenant-scoped (cross-tenant leak).
+
+1. **Endpoint registration is tenancy-aware**: `FilamentVueTablePlugin::register()` uses `Panel::authenticatedTenantRoutes()` when `$panel->hasTenancy()` (else `authenticatedRoutes()`). The tenant group carries the `{tenant}` URL segment AND `getTenantMiddleware()` → `IdentifyTenant`, which calls `Filament::setTenant()`. Without it, tenant global scopes never activate (the endpoint would return every tenant's rows) and tenant-scoped `getUrl()` fails.
+2. **Endpoint URL carries the tenant**: `HasVueTable::getVueTableConfig()` adds `'tenant' => Filament::getTenant()` to the route parameters when the panel has tenancy.
+3. **Resource slug read from the route, not a controller argument**: on tenant routes (`{tenant}` + `{resource}`), Laravel's controller-argument binding bound the tenant value to the `$resource` argument. The controller now reads `$request->route('resource')` explicitly — unambiguous regardless of the other route parameters.
+
+Verified with a dedicated tenant fixture panel (`Team` tenant, `ProjectResource` with a tenant-scoped `recordUrl`): endpoint records are tenant-isolated, record URLs resolve with the tenant slug, and the island config inlines a `{tenant}`-scoped endpoint.
+
 ## Verified Filament v5 internal API map (§4.1, §4.8)
 
 Verified against **filament/filament v5.6.8** + **livewire/livewire v4.3.3** by reading installed vendor source on 2026-07-15. Paths relative to `vendor/filament/`.

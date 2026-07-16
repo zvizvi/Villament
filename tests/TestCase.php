@@ -49,6 +49,7 @@ abstract class TestCase extends Orchestra
             NotificationsServiceProvider::class,
             FilamentVueTableServiceProvider::class,
             AdminPanelProvider::class,
+            Fixtures\TenantPanelProvider::class,
         ];
     }
 
