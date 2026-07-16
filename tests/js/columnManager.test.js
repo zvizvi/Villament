@@ -364,7 +364,7 @@ describe('VueTable column manager + post-action refresh', () => {
         expect(headers.length).toBeGreaterThan(0)
     })
 
-    it('drags with a label-only ghost (setDragImage) instead of the full item snapshot', async () => {
+    it('suppresses the native ghost and moves a live full-row preview with the cursor', async () => {
         const wrapper = mountTable()
 
         await wrapper.get('.fi-vue-ta-column-manager .fi-dropdown-trigger button').trigger('click')
@@ -378,13 +378,24 @@ describe('VueTable column manager + post-action refresh', () => {
             clientY: 10,
         })
 
+        // Native ghost replaced with a blank pixel.
         expect(setDragImage).toHaveBeenCalledTimes(1)
+        expect(setDragImage.mock.calls[0][0].tagName).toBe('IMG')
 
-        const ghost = setDragImage.mock.calls[0][0]
-        expect(ghost.classList.contains('fi-ta-col-manager-item')).toBe(true)
-        // Reorder handle travels with the ghost; background transparent, half opacity (stock look).
-        expect(ghost.querySelector('.fi-ta-col-manager-reorder-handle')).not.toBeNull()
-        expect(ghost.style.background).toBe('transparent')
-        expect(ghost.style.opacity).toBe('0.5')
+        // The live preview: manager-context shell, half opacity, row clone
+        // WITH its reorder handle; the source row dims in place.
+        const preview = document.body.querySelector('.fi-vue-ta-drag-preview')
+        expect(preview).not.toBeNull()
+        expect(preview.style.opacity).toBe('0.5')
+        expect(preview.querySelector('.fi-ta-col-manager-item .fi-ta-col-manager-reorder-handle')).not.toBeNull()
+        expect(item.element.style.opacity).toBe('0.4')
+
+        // Cursor tracking via document dragover.
+        document.dispatchEvent(new MouseEvent('dragover', { clientX: 60, clientY: 90 }))
+        expect(preview.style.transform).toContain('translate3d(50px, 80px, 0)')
+
+        await item.trigger('dragend')
+        expect(document.body.querySelector('.fi-vue-ta-drag-preview')).toBeNull()
+        expect(item.element.style.opacity).toBe('')
     })
 })

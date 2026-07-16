@@ -77,6 +77,7 @@ document.addEventListener('keydown', onDocumentKeydown)
 onBeforeUnmount(() => {
     document.removeEventListener('mousedown', onDocumentPointerDown)
     document.removeEventListener('keydown', onDocumentKeydown)
+    destroyDragPreview()
 })
 
 /**
@@ -172,38 +173,102 @@ function onDragStart(scope, entry, event = null) {
 
     // Stock (SortableJS) moves the element itself, semi-transparent, so the
     // checkbox + label + reorder handle travel together without the panel
-    // background. The native HTML5 ghost snapshots the item WITH its
-    // background — override it with an offscreen CLONE of the whole row:
-    // transparent background forced, half opacity like stock, full row
-    // width, and the cursor offset measured against the ROW rect (label-rect
-    // offsets drift in RTL, where the label sits away from the left edge).
+    // background. Native drag-image snapshots proved unreliable (Chrome
+    // clips/collapses offscreen elements, ignores context CSS): instead the
+    // native ghost is suppressed with a blank image and a LIVE clone of the
+    // row follows the cursor — full layout fidelity, forced 0.5 opacity,
+    // and direction-agnostic offset math (RTL included).
     const dataTransfer = event?.dataTransfer
+    const row = event?.currentTarget
 
-    if (dataTransfer) {
+    if (dataTransfer && row) {
         dataTransfer.effectAllowed = 'move'
 
-        const row = event.currentTarget
-
-        if (row && typeof dataTransfer.setDragImage === 'function') {
-            const rowRect = row.getBoundingClientRect()
-
-            const ghost = row.cloneNode(true)
-            ghost.style.position = 'fixed'
-            ghost.style.top = '-1000px'
-            ghost.style.left = '0'
-            ghost.style.width = `${rowRect.width}px`
-            ghost.style.margin = '0'
-            ghost.style.background = 'transparent'
-            ghost.style.border = 'none'
-            ghost.style.boxShadow = 'none'
-            ghost.style.opacity = '0.5'
-            document.body.appendChild(ghost)
-
-            dataTransfer.setDragImage(ghost, event.clientX - rowRect.left, event.clientY - rowRect.top)
-
-            // The browser snapshots synchronously during dragstart.
-            setTimeout(() => ghost.remove())
+        if (typeof dataTransfer.setDragImage === 'function' && typeof Image !== 'undefined') {
+            const blank = new Image()
+            blank.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAAIBRAA7'
+            dataTransfer.setDragImage(blank, 0, 0)
         }
+
+        createDragPreview(row, event)
+    }
+}
+
+/** @type {?HTMLElement} */
+let dragPreview = null
+
+/** @type {?HTMLElement} */
+let dragSourceRow = null
+
+let dragOffsetX = 0
+let dragOffsetY = 0
+
+/**
+ * @param {DragEvent} event
+ * @returns {void}
+ */
+function positionDragPreview(event) {
+    if (dragPreview && (event.clientX || event.clientY)) {
+        dragPreview.style.transform = `translate3d(${event.clientX - dragOffsetX}px, ${event.clientY - dragOffsetY}px, 0)`
+    }
+}
+
+/**
+ * Builds the cursor-following preview: a live clone of the row inside a
+ * detached `.fi-ta-col-manager > .fi-ta-col-manager-items` shell (so the
+ * manager's context CSS applies) appended to <body>, with the source row
+ * dimmed in place like stock's sortable ghost.
+ *
+ * @param {HTMLElement} row
+ * @param {DragEvent} event
+ * @returns {void}
+ */
+function createDragPreview(row, event) {
+    destroyDragPreview()
+
+    const rect = row.getBoundingClientRect()
+    dragOffsetX = event.clientX - rect.left
+    dragOffsetY = event.clientY - rect.top
+
+    const shell = document.createElement('div')
+    shell.className = 'fi-ta-col-manager fi-vue-ta-drag-preview'
+    shell.dir = document.documentElement.dir || 'ltr'
+    shell.style.position = 'fixed'
+    shell.style.top = '0'
+    shell.style.left = '0'
+    shell.style.width = `${rect.width}px`
+    shell.style.margin = '0'
+    shell.style.pointerEvents = 'none'
+    shell.style.zIndex = '9999'
+    shell.style.opacity = '0.5'
+    shell.style.background = 'transparent'
+    shell.style.transform = `translate3d(${rect.left}px, ${rect.top}px, 0)`
+
+    const itemsShell = document.createElement('div')
+    itemsShell.className = 'fi-ta-col-manager-items'
+    itemsShell.style.background = 'transparent'
+    itemsShell.appendChild(row.cloneNode(true))
+    shell.appendChild(itemsShell)
+
+    document.body.appendChild(shell)
+    dragPreview = shell
+
+    dragSourceRow = row
+    row.style.opacity = '0.4'
+
+    document.addEventListener('dragover', positionDragPreview)
+}
+
+/** @returns {void} */
+function destroyDragPreview() {
+    document.removeEventListener('dragover', positionDragPreview)
+
+    dragPreview?.remove()
+    dragPreview = null
+
+    if (dragSourceRow) {
+        dragSourceRow.style.opacity = ''
+        dragSourceRow = null
     }
 }
 
@@ -262,6 +327,8 @@ function onDragOver(scope, entry, event = null) {
 
 /** @returns {void} */
 function onDragEnd() {
+    destroyDragPreview()
+
     if (dragSource.value && hasReordered.value) {
         emit('apply', JSON.parse(JSON.stringify(draft.value)), true)
     }
