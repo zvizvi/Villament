@@ -4,10 +4,11 @@ declare(strict_types=1);
 
 namespace Zvizvi\FilamentVueTable\Support;
 
-use Filament\Tables\Contracts\HasTable;
+use Filament\Resources\Pages\ListRecords;
 use Filament\Tables\Table;
 use Illuminate\Contracts\Pagination\Paginator;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 
 /**
  * Server-computed summary rows (page + all), mirroring the stock summary
@@ -20,7 +21,7 @@ final class SummarySerializer
     /**
      * @return array{page: array<string, mixed>|null, all: array<string, mixed>}|null
      */
-    public function serialize(HasTable $livewire): ?array
+    public function serialize(ListRecords $livewire): ?array
     {
         $table = $livewire->getTable();
         $allQuery = $livewire->getAllTableSummaryQuery();
@@ -49,10 +50,10 @@ final class SummarySerializer
     }
 
     /**
-     * @param  Builder<\Illuminate\Database\Eloquent\Model>|null  $query
+     * @param  Builder<Model>|null  $query
      * @return array{heading: string, cells: array<string, string>}
      */
-    private function row(HasTable $livewire, Table $table, ?Builder $query, string $heading): array
+    private function row(ListRecords $livewire, Table $table, ?Builder $query, string $heading): array
     {
         $cells = [];
 
