@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch, TransitionGroup } from 'vue'
 import TrustedIcon from './TrustedIcon.js'
 
 const props = defineProps({
@@ -159,15 +159,33 @@ const hasReordered = ref(false)
 /**
  * @param {string} scope `'top'` or a group scope key.
  * @param {object} entry The dragged item.
+ * @param {?DragEvent} event
  * @returns {void}
  */
-function onDragStart(scope, entry) {
+function onDragStart(scope, entry, event = null) {
     if (! props.reorderable) {
         return
     }
 
     dragSource.value = { scope, type: entry.type ?? 'column', name: entry.name }
     hasReordered.value = false
+
+    // Stock (SortableJS) moves the element itself, so nothing but the
+    // checkbox + label appears to travel. The native HTML5 ghost snapshots
+    // the WHOLE item (panel background included) — override it with just
+    // the transparent-background label element.
+    const dataTransfer = event?.dataTransfer
+
+    if (dataTransfer) {
+        dataTransfer.effectAllowed = 'move'
+
+        const label = event.currentTarget?.querySelector?.('.fi-ta-col-manager-label')
+
+        if (label && typeof dataTransfer.setDragImage === 'function') {
+            const rect = label.getBoundingClientRect()
+            dataTransfer.setDragImage(label, event.clientX - rect.left, event.clientY - rect.top)
+        }
+    }
 }
 
 /**
@@ -264,16 +282,18 @@ function onReset() {
                     </div>
                 </div>
 
-                <div class="fi-ta-col-manager-items fi-grid fi-grid-direction-col lg:fi-grid-cols">
-                    <template
-                        v-for="(item, index) in items"
-                        :key="item.type === 'group' ? `group-${index}` : item.name"
-                    >
+                <TransitionGroup
+                    tag="div"
+                    class="fi-ta-col-manager-items fi-grid fi-grid-direction-col lg:fi-grid-cols"
+                    move-class="fi-vue-ta-col-manager-move"
+                >
+                    <template v-for="item in items">
                         <div
                             v-if="item.type === 'group'"
+                            :key="`group::${item.name ?? item.label}`"
                             class="fi-ta-col-manager-group"
                             :draggable="reorderable"
-                            @dragstart="onDragStart('top', item)"
+                            @dragstart="onDragStart('top', item, $event)"
                             @dragover.prevent="onDragOver('top', item)"
                             @dragend="onDragEnd"
                             @drop.prevent="onDragEnd"
@@ -292,13 +312,17 @@ function onReset() {
                                 </button>
                             </div>
 
-                            <div class="fi-ta-col-manager-group-items">
+                            <TransitionGroup
+                                tag="div"
+                                class="fi-ta-col-manager-group-items"
+                                move-class="fi-vue-ta-col-manager-move"
+                            >
                                 <div
                                     v-for="column in item.columns"
                                     :key="column.name"
                                     class="fi-ta-col-manager-item"
                                     :draggable="reorderable"
-                                    @dragstart.stop="onDragStart(groupScope(item), column)"
+                                    @dragstart.stop="onDragStart(groupScope(item), column, $event)"
                                     @dragover.prevent.stop="onDragOver(groupScope(item), column)"
                                     @dragend.stop="onDragEnd"
                                     @drop.prevent.stop="onDragEnd"
@@ -325,14 +349,15 @@ function onReset() {
                                         <TrustedIcon :html="icons.reorderHandle" />
                                     </button>
                                 </div>
-                            </div>
+                            </TransitionGroup>
                         </div>
 
                         <div
                             v-else
+                            :key="item.name"
                             class="fi-ta-col-manager-item"
                             :draggable="reorderable"
-                            @dragstart="onDragStart('top', item)"
+                            @dragstart="onDragStart('top', item, $event)"
                             @dragover.prevent="onDragOver('top', item)"
                             @dragend="onDragEnd"
                             @drop.prevent="onDragEnd"
@@ -360,7 +385,7 @@ function onReset() {
                             </button>
                         </div>
                     </template>
-                </div>
+                </TransitionGroup>
             </div>
         </div>
     </div>

@@ -363,4 +363,22 @@ describe('VueTable column manager + post-action refresh', () => {
         const headers = wrapper.findAll('thead th.fi-ta-header-cell')
         expect(headers.length).toBeGreaterThan(0)
     })
+
+    it('drags with a label-only ghost (setDragImage) instead of the full item snapshot', async () => {
+        const wrapper = mountTable()
+
+        await wrapper.get('.fi-vue-ta-column-manager .fi-dropdown-trigger button').trigger('click')
+
+        const item = wrapper.findAll('.fi-ta-col-manager-item')[0]
+        const setDragImage = vi.fn()
+
+        await item.trigger('dragstart', {
+            dataTransfer: { setDragImage, effectAllowed: null },
+            clientX: 10,
+            clientY: 10,
+        })
+
+        expect(setDragImage).toHaveBeenCalledTimes(1)
+        expect(setDragImage.mock.calls[0][0].classList.contains('fi-ta-col-manager-label')).toBe(true)
+    })
 })
