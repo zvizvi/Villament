@@ -153,6 +153,21 @@ describe('column manager server path (DoD)', function (): void {
             ->and($config['schema']['icons']['reorderHandle'])->toContain('<svg');
     });
 
+    it('keeps schemaVersion stable across a reorder — no drift-detector page reload', function (): void {
+        User::factory()->create(['name' => 'Version Target']);
+
+        $versionBefore = getJson(ENDPOINT)->assertOk()->json('schemaVersion');
+
+        $component = livewire(VueListUsers::class);
+        $state = $component->instance()->getDefaultTableColumnState();
+        array_unshift($state, array_pop($state));
+        $component->call('applyTableColumnManager', $state, true);
+
+        $versionAfter = getJson(ENDPOINT)->assertOk()->json('schemaVersion');
+
+        expect($versionAfter)->toBe($versionBefore);
+    });
+
     it('persists a reordered column state through applyTableColumnManager', function (): void {
         User::factory()->create(['name' => 'Reorder Target']);
 

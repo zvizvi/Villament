@@ -167,10 +167,22 @@ final class SchemaSerializer
     }
 
     /**
+     * Drift-detection hash. Column-manager reordering changes the order of
+     * `schema.columns` PER USER SESSION — canonicalize it so the hash only
+     * reacts to real definition changes (deploys), never to user state;
+     * otherwise the island would hard-reload after every drag-reorder.
+     *
      * @param  array<string, mixed>  $schema
      */
     public function version(array $schema): string
     {
+        if (isset($schema['columns']) && is_array($schema['columns'])) {
+            usort(
+                $schema['columns'],
+                fn (array $a, array $b): int => strcmp((string) ($a['key'] ?? ''), (string) ($b['key'] ?? '')),
+            );
+        }
+
         return hash('sha256', json_encode($schema, JSON_THROW_ON_ERROR));
     }
 
