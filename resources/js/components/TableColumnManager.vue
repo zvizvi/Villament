@@ -275,11 +275,25 @@ function createDragPreview(row, event) {
     const itemsShell = document.createElement('div')
     itemsShell.className = 'fi-ta-col-manager-items'
     itemsShell.style.background = 'transparent'
-    itemsShell.appendChild(row.cloneNode(true))
+
+    const clone = row.cloneNode(true)
+    itemsShell.appendChild(clone)
     shell.appendChild(itemsShell)
 
     document.body.appendChild(shell)
     dragPreview = shell
+
+    // Self-calibrate: the shells may carry padding/margins (theme-dependent),
+    // displacing the clone inside the preview. Measure where the clone
+    // actually landed vs the original row and fold the delta into the grab
+    // offset, so the clone sits EXACTLY under the cursor's grab point.
+    const cloneRect = clone.getBoundingClientRect()
+
+    if (cloneRect.width || cloneRect.height) {
+        dragOffsetX += cloneRect.left - rect.left
+        dragOffsetY += cloneRect.top - rect.top
+        shell.style.transform = `translate3d(${event.clientX - dragOffsetX}px, ${event.clientY - dragOffsetY}px, 0)`
+    }
 
     dragSourceRow = row
     row.style.opacity = '0.4'
