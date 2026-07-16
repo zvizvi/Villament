@@ -624,10 +624,12 @@ function recordCellClasses(column) {
                 </div>
 
                 <template v-else>
-                    <div
-                        v-if="hasRecords || hasColumnSearches"
-                        class="fi-ta-content-ctn fi-fixed-positioning-context"
-                    >
+                    <!--
+                        Stock renders the table (thead included) whenever a
+                        records ARRAY exists — even empty, e.g. a search with
+                        no hits — with the empty state below as a sibling.
+                    -->
+                    <div class="fi-ta-content-ctn fi-fixed-positioning-context">
                         <table class="fi-ta-table">
                             <TableHeader
                                 :columns="visibleColumns"
