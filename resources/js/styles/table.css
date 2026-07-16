@@ -28,6 +28,17 @@
 }
 
 /*
+ * `bottom-start` variant: the bulk-actions group trigger sits at the table's
+ * inline-start edge, so its panel must open toward inline-end (right in LTR,
+ * left in RTL) to stay inside the table — mirrors Filament's
+ * `placement="bottom-start"` for that dropdown.
+ */
+.fi-vue-ta .fi-vue-ta-dropdown-start > .fi-dropdown-panel {
+    inset-inline-start: 0;
+    inset-inline-end: auto;
+}
+
+/*
  * The hidden Livewire fallback filter form opens as a floating panel. Its
  * surface/z-index/absolute positioning come from Filament's own
  * `fi-dropdown-panel fi-width-sm fi-ta-filters` classes (added by the bridge
