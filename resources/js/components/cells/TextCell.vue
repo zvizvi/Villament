@@ -11,8 +11,17 @@ defineProps({
 </script>
 
 <template>
+    <!-- Blank state renders no text item — just the optional placeholder (stock). -->
+    <p
+        v-if="cell.empty && cell.placeholder"
+        class="fi-ta-placeholder"
+    >
+        {{ cell.placeholder }}
+    </p>
+
     <!-- Stock: a single wrapper carrying size + item + text classes, raw text inside. -->
     <div
+        v-else-if="! cell.empty"
         class="fi-ta-text-item fi-ta-text"
         :class="[
             `fi-size-${cell.size || 'sm'}`,

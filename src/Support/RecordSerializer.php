@@ -203,6 +203,17 @@ final class RecordSerializer
             }
         }
 
+        // Blank state renders NO badge/text at all in stock — just the
+        // optional placeholder. Icon/color closures are never evaluated.
+        if ($formattedItems === []) {
+            return [
+                'type' => $column->isBadge() ? 'badge' : 'text',
+                'formatted' => null,
+                'empty' => true,
+                'placeholder' => $this->stringable($column->getPlaceholder()),
+            ];
+        }
+
         $formatted = implode(', ', $formattedItems);
 
         if ($containsHtml) {

@@ -105,6 +105,20 @@ describe('cell payloads', function (): void {
             ->and($cell['color'])->toBe('warning');
     });
 
+    it('returns an empty badge cell for blank state without evaluating icon/color closures', function (): void {
+        User::factory()->create(['name' => 'Blank Badge', 'status' => '']);
+
+        $cell = getJson(ENDPOINT.'?columnSearches[name]=Blank+Badge')->assertOk()->json('records.0.cells.status');
+
+        // Stock renders NO badge for blank state (optional placeholder only) —
+        // an empty badge with a fallback icon is a bug.
+        expect($cell['type'])->toBe('badge')
+            ->and($cell['empty'])->toBeTrue()
+            ->and($cell['formatted'])->toBeNull()
+            ->and($cell)->not->toHaveKey('iconHtml')
+            ->and($cell)->not->toHaveKey('colorClasses');
+    });
+
     it('returns icon cells as server-rendered svg html', function (): void {
         User::factory()->admin()->create(['name' => 'Icon Target']);
 

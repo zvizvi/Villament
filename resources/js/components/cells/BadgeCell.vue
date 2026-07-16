@@ -17,7 +17,18 @@ defineProps({
 </script>
 
 <template>
-    <div class="fi-ta-text-item fi-ta-text-has-badges fi-ta-text">
+    <!-- Blank state renders no badge — just the optional placeholder (stock). -->
+    <p
+        v-if="cell.empty && cell.placeholder"
+        class="fi-ta-placeholder"
+    >
+        {{ cell.placeholder }}
+    </p>
+
+    <div
+        v-else-if="! cell.empty"
+        class="fi-ta-text-item fi-ta-text-has-badges fi-ta-text"
+    >
         <span :class="[cell.colorClasses || '', 'fi-badge', `fi-size-${cell.size || 'sm'}`]">
             <TrustedIcon :html="cell.iconHtml" />
             {{ cell.formatted }}
