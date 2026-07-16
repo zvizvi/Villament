@@ -259,6 +259,26 @@ export function useLivewireBridge(options) {
     }
 
     /**
+     * Mounts a TOOLBAR (non-bulk, non-record) table action.
+     *
+     * @param {string} name
+     * @returns {void}
+     */
+    function mountTableAction(name) {
+        const wire = wireFor(livewireId)
+
+        if (! wire) {
+            return
+        }
+
+        try {
+            wire.mountAction(name, {}, { table: true })
+        } catch {
+            // Never break the island on a mid-teardown component.
+        }
+    }
+
+    /**
      * @param {object[]} columns The FULL updated column manager state array.
      * @param {boolean} [wasReordered] Whether the change includes a reorder —
      *     Filament persists the has-reordered flag separately in the session.
@@ -406,6 +426,7 @@ export function useLivewireBridge(options) {
         pushFilterToLivewire,
         mountRecordAction,
         mountBulkAction,
+        mountTableAction,
         applyColumnManager,
         resetColumnManager,
         getTableColumns,

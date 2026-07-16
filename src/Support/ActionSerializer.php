@@ -48,6 +48,7 @@ final class ActionSerializer
         }
 
         $bulk = [];
+        $toolbar = [];
 
         foreach ($table->getToolbarActions() as $item) {
             if ($item instanceof BulkAction) {
@@ -57,32 +58,70 @@ final class ActionSerializer
             }
 
             if (! $item instanceof ActionGroup) {
-                // Non-bulk toolbar actions are out of scope for the island
-                // (they belong to the stock toolbar region) — see DECISIONS.md.
+                if ($item->isVisible()) {
+                    $toolbar[] = ['type' => 'action', ...$this->serializeToolbarAction($item)];
+                }
+
                 continue;
             }
 
+            // Mixed groups split: bulk children join the bulk structure,
+            // the rest render as a regular toolbar group.
             $bulkChildren = [];
+            $toolbarChildren = [];
 
             foreach ($item->getFlatActions() as $action) {
                 if ($action instanceof BulkAction) {
                     $bulkChildren[] = $this->serializeBulkAction($action);
+                } elseif ($action->isVisible()) {
+                    $toolbarChildren[] = $this->serializeToolbarAction($action);
                 }
             }
 
-            if ($bulkChildren === []) {
-                continue;
+            if ($bulkChildren !== []) {
+                $bulk[] = [
+                    'type' => 'group',
+                    'label' => $this->stringable($item->getLabel()),
+                    'iconHtml' => $this->iconHtml($item->getIcon()),
+                    'actions' => $bulkChildren,
+                ];
             }
 
-            $bulk[] = [
-                'type' => 'group',
-                'label' => $this->stringable($item->getLabel()),
-                'iconHtml' => $this->iconHtml($item->getIcon()),
-                'actions' => $bulkChildren,
-            ];
+            if ($toolbarChildren !== []) {
+                $toolbar[] = [
+                    'type' => 'group',
+                    'label' => $this->stringable($item->getLabel()),
+                    'iconHtml' => $this->iconHtml($item->getIcon()),
+                    'actions' => $toolbarChildren,
+                ];
+            }
         }
 
-        return ['record' => $record, 'bulk' => $bulk];
+        return ['record' => $record, 'bulk' => $bulk, 'toolbar' => $toolbar];
+    }
+
+    /**
+     * Toolbar (non-bulk) actions carry no record context — statically
+     * evaluated, like bulk actions, plus their optional URL behavior.
+     *
+     * @return array<string, mixed>
+     */
+    private function serializeToolbarAction(Action $action): array
+    {
+        $color = $action->getColor();
+        $color = is_string($color) ? $color : null;
+        $url = $action->getUrl();
+        $newTab = filled($url) && $action->shouldOpenUrlInNewTab();
+
+        return [
+            'name' => $action->getName(),
+            'label' => $this->stringable($action->getLabel()),
+            'color' => $color,
+            'iconHtml' => $this->iconHtml($action->getIcon(default: $action->getTable() !== null ? $action->getTableIcon() : null)),
+            'disabled' => $action->isDisabled(),
+            'url' => $url,
+            'newTab' => $newTab,
+        ];
     }
 
     /**

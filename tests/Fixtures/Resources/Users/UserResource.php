@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Zvizvi\FilamentVueTable\Tests\Fixtures\Resources\Users;
 
+use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
@@ -107,6 +108,11 @@ class UserResource extends Resource
                 DeleteAction::make(),
             ])
             ->toolbarActions([
+                Action::make('announce')
+                    ->url('https://example.test/announce')
+                    ->openUrlInNewTab(),
+                Action::make('markAllPending')
+                    ->action(fn () => User::query()->update(['status' => 'pending'])),
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
                 ]),

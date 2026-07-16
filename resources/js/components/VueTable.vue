@@ -58,6 +58,7 @@ const filterSchemas = computed(() => schema.filters ?? [])
 
 const recordActionsStructure = computed(() => schema.actions?.record ?? [])
 const bulkActionsStructure = computed(() => schema.actions?.bulk ?? [])
+const toolbarActionsStructure = computed(() => schema.actions?.toolbar ?? [])
 
 const hasRecordActions = computed(() => recordActionsStructure.value.length > 0)
 
@@ -288,7 +289,8 @@ const hasHeaderToolbar = computed(
     () => Boolean(schema.globallySearchable)
         || filterSchemas.value.length > 0
         || hasColumnManager.value
-        || hasBulkActionsBar.value,
+        || hasBulkActionsBar.value
+        || toolbarActionsStructure.value.length > 0,
 )
 
 /**
@@ -560,8 +562,14 @@ function recordCellClasses(column) {
                             @mount="onMountBulkAction"
                         />
 
+                        <BulkActions
+                            v-if="toolbarActionsStructure.length"
+                            :actions="toolbarActionsStructure"
+                            @mount="bridge.mountTableAction($event)"
+                        />
+
                         <div
-                            v-else
+                            v-if="! hasBulkActionsBar && ! toolbarActionsStructure.length"
                             class="fi-ta-actions fi-align-start fi-wrapped"
                         />
 

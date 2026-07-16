@@ -127,8 +127,20 @@ function itemIconClasses(action) {
             v-for="(item, index) in actions"
             :key="item.type === 'group' ? `group-${index}` : item.name"
         >
+            <a
+                v-if="item.type === 'action' && item.url"
+                :class="buttonClasses(item)"
+                :href="item.url"
+                :target="item.newTab ? '_blank' : undefined"
+                :rel="item.newTab ? 'noopener noreferrer' : undefined"
+            >
+                <TrustedIcon :html="item.iconHtml" />
+
+                {{ item.label }}
+            </a>
+
             <button
-                v-if="item.type === 'action'"
+                v-else-if="item.type === 'action'"
                 type="button"
                 :class="buttonClasses(item)"
                 :disabled="isLoading"

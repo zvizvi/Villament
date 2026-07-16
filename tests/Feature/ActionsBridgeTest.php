@@ -40,6 +40,28 @@ describe('action structure serialization', function (): void {
     });
 });
 
+describe('toolbar (non-bulk) actions', function (): void {
+    it('serializes toolbar actions — url actions and mountable actions', function (): void {
+        $toolbar = collect(vueTableConfig()['schema']['actions']['toolbar'])->keyBy('name');
+
+        expect($toolbar->get('announce'))->toMatchArray([
+            'type' => 'action',
+            'url' => 'https://example.test/announce',
+            'newTab' => true,
+        ])
+            ->and($toolbar->get('markAllPending')['url'])->toBeNull();
+    });
+
+    it('runs a mountable toolbar action through the table context on the Vue page', function (): void {
+        User::factory()->count(3)->create(['status' => 'active']);
+
+        livewire(VueListUsers::class)
+            ->callAction(TestAction::make('markAllPending')->table());
+
+        expect(User::query()->where('status', '!=', 'pending')->count())->toBe(0);
+    });
+});
+
 describe('per-record action evaluation', function (): void {
     it('evaluates action visibility per record through resource authorization', function (): void {
         User::factory()->create(['name' => 'Plain Record', 'is_admin' => false]);
