@@ -151,7 +151,14 @@ const columnVisibility = computed(() => {
     return visibility
 })
 
-const visibleColumns = computed(() => schema.columns.filter((column) => {
+/**
+ * Whether a schema column is currently visible, per manager state (falling
+ * back to the schema's own hidden-by-default flag when unmanaged).
+ *
+ * @param {object} column Schema column.
+ * @returns {boolean}
+ */
+function isColumnVisible(column) {
     const managed = columnVisibility.value[column.key]
 
     if (managed !== undefined) {
@@ -159,7 +166,45 @@ const visibleColumns = computed(() => schema.columns.filter((column) => {
     }
 
     return ! (column.toggleable && column.hiddenByDefault)
-}))
+}
+
+/**
+ * Visible columns in COLUMN MANAGER STATE order (reordering support);
+ * columns unknown to the manager state keep their schema position, appended
+ * after the managed ones.
+ */
+const visibleColumns = computed(() => {
+    const bySchemaKey = new Map(schema.columns.map((column) => [column.key, column]))
+    const ordered = []
+    const seen = new Set()
+
+    const push = (name) => {
+        const column = bySchemaKey.get(name)
+
+        if (column && ! seen.has(name)) {
+            seen.add(name)
+            ordered.push(column)
+        }
+    }
+
+    for (const entry of columnsState.value) {
+        if (entry.type === 'group') {
+            for (const groupColumn of entry.columns ?? []) {
+                push(groupColumn.name)
+            }
+
+            continue
+        }
+
+        push(entry.name)
+    }
+
+    for (const column of schema.columns) {
+        push(column.key)
+    }
+
+    return ordered.filter(isColumnVisible)
+})
 
 const cellComponents = {
     text: TextCell,
@@ -268,9 +313,9 @@ function onMountBulkAction(name) {
  * @param {object[]} nextColumns
  * @returns {void}
  */
-function onApplyColumnManager(nextColumns) {
+function onApplyColumnManager(nextColumns, wasReordered = false) {
     columnsState.value = nextColumns
-    bridge.applyColumnManager(nextColumns)
+    bridge.applyColumnManager(nextColumns, wasReordered)
 }
 
 /** @returns {void} */
@@ -528,6 +573,7 @@ function recordCellClasses(column) {
                             <TableColumnManager
                                 v-if="hasColumnManager"
                                 :columns="columnsState"
+                                :reorderable="Boolean(schema.reorderableColumns)"
                                 :strings="strings"
                                 :icons="icons"
                                 @apply="onApplyColumnManager"

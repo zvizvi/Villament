@@ -1,19 +1,26 @@
 <script setup>
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import TrustedIcon from './TrustedIcon.js'
 
 const props = defineProps({
     /**
      * Filament column manager state (`state.columns`, session-hydrated
      * server-side): `{ type: 'column', name, label, isHidden, isToggled,
-     * isToggleable, isToggledHiddenByDefault }`, or `{ type: 'group', label,
-     * columns: [...] }`. This component never mutates it — every change emits
-     * the FULL updated array; the parent owns the state and re-reads the
-     * authoritative copy from Livewire after the commit.
+     * isToggleable, isToggledHiddenByDefault }`, or `{ type: 'group', name,
+     * label, columns: [...] }`. This component edits a local draft; every
+     * change emits the FULL updated array (+ a wasReordered flag) and the
+     * parent re-reads the authoritative copy from Livewire after the commit.
      */
     columns: {
         type: Array,
         required: true,
+    },
+    /**
+     * Whether columns can be drag-reordered (`Table::hasReorderableColumns()`).
+     */
+    reorderable: {
+        type: Boolean,
+        default: false,
     },
     /**
      * Localized UI strings (already resolved with English fallbacks).
@@ -24,7 +31,7 @@ const props = defineProps({
     },
     /**
      * Server-rendered icon HTML map (`schema.icons`): `columnManager`
-     * (trigger button) is used here.
+     * (trigger) and `reorderHandle` are used here.
      */
     icons: {
         type: Object,
@@ -36,6 +43,13 @@ const emit = defineEmits(['apply', 'reset'])
 
 const isOpen = ref(false)
 const root = ref(null)
+
+/** Local editable copy of the manager state (stock's `deferredColumns`). */
+const draft = ref(JSON.parse(JSON.stringify(props.columns)))
+
+watch(() => props.columns, (next) => {
+    draft.value = JSON.parse(JSON.stringify(next))
+}, { deep: true })
 
 /**
  * @param {MouseEvent} event
@@ -77,10 +91,10 @@ function isManageable(entry) {
 }
 
 /**
- * Top-level manager items: all listed columns, plus groups that contain at
- * least one listed column (rendered as labeled sections).
+ * Top-level manager items (from the draft): all listed columns, plus groups
+ * that contain at least one listed column (rendered as labeled sections).
  */
-const items = computed(() => props.columns
+const items = computed(() => draft.value
     .map((entry) => {
         if (entry.type === 'group') {
             const groupColumns = (entry.columns ?? []).filter(isManageable)
@@ -92,8 +106,8 @@ const items = computed(() => props.columns
     })
     .filter((entry) => entry !== null))
 
-/** The trigger only appears when something is actually toggleable. */
-const hasToggleableColumns = computed(() => props.columns.some((entry) => (
+/** The trigger only appears when something is toggleable or reorderable. */
+const hasToggleableColumns = computed(() => props.reorderable || props.columns.some((entry) => (
     entry.type === 'group'
         ? (entry.columns ?? []).some((column) => column.isToggleable !== false)
         : entry.isToggleable !== false
@@ -108,39 +122,98 @@ function checkboxId(column) {
 }
 
 /**
- * Builds the FULL updated state array with one column's `isToggled` flipped,
- * leaving every other entry untouched (Filament's
- * `applyTableColumnManager()` expects the complete state back).
+ * @param {object} entry Group state entry.
+ * @returns {string} Scope key for drag operations inside this group.
+ */
+function groupScope(entry) {
+    return `group::${entry.name ?? entry.label}`
+}
+
+/**
+ * Flips one column's `isToggled` in the draft and applies.
  *
  * @param {string} name
- * @param {?string} groupLabel The containing group's label, or null for top-level columns.
+ * @param {?object} group The containing group item, or null for top-level columns.
  * @returns {void}
  */
-function onToggle(name, groupLabel = null) {
-    const next = props.columns.map((entry) => {
-        if (entry.type === 'group') {
-            if (groupLabel === null || entry.label !== groupLabel) {
-                return { ...entry, columns: (entry.columns ?? []).map((column) => ({ ...column })) }
-            }
+function onToggle(name, group = null) {
+    const scope = group === null ? draft.value : (draft.value.find((entry) => (
+        entry.type === 'group' && (entry.name ?? entry.label) === (group.name ?? group.label)
+    ))?.columns ?? [])
 
-            return {
-                ...entry,
-                columns: (entry.columns ?? []).map((column) => (
-                    column.name === name && column.isToggleable !== false
-                        ? { ...column, isToggled: ! column.isToggled }
-                        : { ...column }
-                )),
-            }
-        }
+    const entry = scope.find((candidate) => candidate.type !== 'group' && candidate.name === name)
 
-        if (groupLabel === null && entry.name === name && entry.isToggleable !== false) {
-            return { ...entry, isToggled: ! entry.isToggled }
-        }
+    if (! entry || entry.isToggleable === false) {
+        return
+    }
 
-        return { ...entry }
-    })
+    entry.isToggled = ! entry.isToggled
 
-    emit('apply', next)
+    emit('apply', JSON.parse(JSON.stringify(draft.value)), false)
+}
+
+/** @type {import('vue').Ref<?{scope: string, type: string, name: string}>} */
+const dragSource = ref(null)
+const hasReordered = ref(false)
+
+/**
+ * @param {string} scope `'top'` or a group scope key.
+ * @param {object} entry The dragged item.
+ * @returns {void}
+ */
+function onDragStart(scope, entry) {
+    if (! props.reorderable) {
+        return
+    }
+
+    dragSource.value = { scope, type: entry.type ?? 'column', name: entry.name }
+    hasReordered.value = false
+}
+
+/**
+ * Live-reorders the draft while dragging over a sibling (same scope).
+ *
+ * @param {string} scope
+ * @param {object} entry The hovered item.
+ * @returns {void}
+ */
+function onDragOver(scope, entry) {
+    const source = dragSource.value
+
+    if (! source || source.scope !== scope || source.name === entry.name) {
+        return
+    }
+
+    const list = scope === 'top'
+        ? draft.value
+        : (draft.value.find((candidate) => (
+            candidate.type === 'group' && groupScope(candidate) === scope
+        ))?.columns ?? [])
+
+    const matches = (candidate, type, name) => (
+        (type === 'group' ? candidate.type === 'group' : candidate.type !== 'group')
+        && candidate.name === name
+    )
+
+    const fromIndex = list.findIndex((candidate) => matches(candidate, source.type, source.name))
+    const toIndex = list.findIndex((candidate) => matches(candidate, entry.type ?? 'column', entry.name))
+
+    if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) {
+        return
+    }
+
+    list.splice(toIndex, 0, ...list.splice(fromIndex, 1))
+    hasReordered.value = true
+}
+
+/** @returns {void} */
+function onDragEnd() {
+    if (dragSource.value && hasReordered.value) {
+        emit('apply', JSON.parse(JSON.stringify(draft.value)), true)
+    }
+
+    dragSource.value = null
+    hasReordered.value = false
 }
 
 /** @returns {void} */
@@ -199,11 +272,24 @@ function onReset() {
                         <div
                             v-if="item.type === 'group'"
                             class="fi-ta-col-manager-group"
+                            :draggable="reorderable"
+                            @dragstart="onDragStart('top', item)"
+                            @dragover.prevent="onDragOver('top', item)"
+                            @dragend="onDragEnd"
+                            @drop.prevent="onDragEnd"
                         >
                             <div class="fi-ta-col-manager-item">
                                 <label class="fi-ta-col-manager-label">
                                     <span>{{ item.label }}</span>
                                 </label>
+
+                                <button
+                                    v-if="reorderable"
+                                    type="button"
+                                    class="fi-ta-col-manager-reorder-handle fi-icon-btn"
+                                >
+                                    <TrustedIcon :html="icons.reorderHandle" />
+                                </button>
                             </div>
 
                             <div class="fi-ta-col-manager-group-items">
@@ -211,6 +297,11 @@ function onReset() {
                                     v-for="column in item.columns"
                                     :key="column.name"
                                     class="fi-ta-col-manager-item"
+                                    :draggable="reorderable"
+                                    @dragstart.stop="onDragStart(groupScope(item), column)"
+                                    @dragover.prevent.stop="onDragOver(groupScope(item), column)"
+                                    @dragend.stop="onDragEnd"
+                                    @drop.prevent.stop="onDragEnd"
                                 >
                                     <label class="fi-ta-col-manager-label">
                                         <input
@@ -220,11 +311,19 @@ function onReset() {
                                             :checked="column.isToggleable === false || column.isToggled"
                                             :disabled="column.isToggleable === false"
                                             :data-column="column.name"
-                                            @change="onToggle(column.name, item.label)"
+                                            @change="onToggle(column.name, item)"
                                         >
 
                                         <span>{{ column.label }}</span>
                                     </label>
+
+                                    <button
+                                        v-if="reorderable"
+                                        type="button"
+                                        class="fi-ta-col-manager-reorder-handle fi-icon-btn"
+                                    >
+                                        <TrustedIcon :html="icons.reorderHandle" />
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -232,6 +331,11 @@ function onReset() {
                         <div
                             v-else
                             class="fi-ta-col-manager-item"
+                            :draggable="reorderable"
+                            @dragstart="onDragStart('top', item)"
+                            @dragover.prevent="onDragOver('top', item)"
+                            @dragend="onDragEnd"
+                            @drop.prevent="onDragEnd"
                         >
                             <label class="fi-ta-col-manager-label">
                                 <input
@@ -246,6 +350,14 @@ function onReset() {
 
                                 <span>{{ item.label }}</span>
                             </label>
+
+                            <button
+                                v-if="reorderable"
+                                type="button"
+                                class="fi-ta-col-manager-reorder-handle fi-icon-btn"
+                            >
+                                <TrustedIcon :html="icons.reorderHandle" />
+                            </button>
                         </div>
                     </template>
                 </div>

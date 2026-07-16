@@ -146,6 +146,31 @@ describe('actions bridge wire path (DoD)', function (): void {
 });
 
 describe('column manager server path (DoD)', function (): void {
+    it('exposes the reorderable flag and the reorder handle icon', function (): void {
+        $config = vueTableConfig();
+
+        expect($config['schema']['reorderableColumns'])->toBeTrue()
+            ->and($config['schema']['icons']['reorderHandle'])->toContain('<svg');
+    });
+
+    it('persists a reordered column state through applyTableColumnManager', function (): void {
+        User::factory()->create(['name' => 'Reorder Target']);
+
+        $component = livewire(VueListUsers::class);
+        $state = $component->instance()->getDefaultTableColumnState();
+
+        // Move the last column to the front, exactly like a drag would.
+        array_unshift($state, array_pop($state));
+        $movedToFront = $state[0]['name'];
+
+        $component->call('applyTableColumnManager', $state, true);
+
+        // A fresh page render reads the session-persisted order back.
+        $config = vueTableConfig();
+
+        expect($config['state']['columns'][0]['name'])->toBe($movedToFront);
+    });
+
     it('hides toggled-hidden-by-default column data from the endpoint', function (): void {
         User::factory()->create(['name' => 'Toggle Target']);
 

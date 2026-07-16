@@ -260,9 +260,11 @@ export function useLivewireBridge(options) {
 
     /**
      * @param {object[]} columns The FULL updated column manager state array.
+     * @param {boolean} [wasReordered] Whether the change includes a reorder —
+     *     Filament persists the has-reordered flag separately in the session.
      * @returns {void}
      */
-    function applyColumnManager(columns) {
+    function applyColumnManager(columns, wasReordered = false) {
         const wire = wireFor(livewireId)
 
         if (! wire) {
@@ -274,7 +276,7 @@ export function useLivewireBridge(options) {
             // own table.js uses ($wire.mountAction(...)). `$wire.call(...)`
             // is NOT safe: `call` is no special key on the proxy, so it
             // resolves to Function.prototype.call of a phantom method.
-            wire.applyTableColumnManager(columns)
+            wire.applyTableColumnManager(columns, wasReordered)
         } catch {
             // Never break the island on a mid-teardown component.
         }

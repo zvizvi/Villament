@@ -80,6 +80,7 @@ final class SchemaSerializer
             ],
             'globallySearchable' => $table->isSearchable(),
             'striped' => $table->isStriped(),
+            'reorderableColumns' => $table->hasReorderableColumns(),
             'filters' => $filters,
             'pagination' => [
                 'mode' => match ($table->getPaginationMode()) {
@@ -120,6 +121,7 @@ final class SchemaSerializer
             'empty' => $this->iconHtml($table->getEmptyStateIcon(), size: IconSize::Large),
             'columnManager' => $this->iconHtml(Heroicon::ViewColumns, TablesIconAlias::ACTIONS_COLUMN_MANAGER),
             'badgeDelete' => $this->iconHtml(Heroicon::XMark, SupportIconAlias::BADGE_DELETE_BUTTON, IconSize::ExtraSmall),
+            'reorderHandle' => $this->iconHtml(Heroicon::Bars2, TablesIconAlias::REORDER_HANDLE),
         ];
     }
 
