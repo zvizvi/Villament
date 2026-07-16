@@ -143,11 +143,21 @@ export function useLivewireBridge(options) {
 
     let lastKnownFiltersJson = JSON.stringify(options.initialFilters ?? {})
 
+    /** @type {?(event: Event) => void} Document listener while the panel is open. */
+    let onOutsidePointerDown = null
+
     /** @returns {?HTMLElement} */
     function filtersPanelContainer() {
         const wrapper = islandElement?.closest('.fi-vue-table') ?? islandElement?.parentElement
 
         return wrapper?.querySelector(FILTERS_PANEL_SELECTOR) ?? null
+    }
+
+    /** @returns {?HTMLElement} The Vue-rendered funnel trigger, if present. */
+    function filtersTriggerElement() {
+        const wrapper = islandElement?.closest('.fi-vue-table') ?? islandElement?.parentElement
+
+        return wrapper?.querySelector('.fi-vue-ta-filters-trigger') ?? null
     }
 
     /** @returns {void} */
@@ -161,6 +171,21 @@ export function useLivewireBridge(options) {
         container.style.display = ''
         container.classList.add(...FILTERS_PANEL_OPEN_CLASSES)
         isFiltersPanelVisible.value = true
+
+        // Close on an outside click, like the stock filters dropdown. Capture
+        // phase so inner components (a filter's select, etc.) can't swallow the
+        // event, and `pointerdown` — the opening click already completed before
+        // this listener was attached, so it won't self-close. Clicks inside the
+        // panel or on the funnel trigger are ignored (the trigger toggles).
+        onOutsidePointerDown = (event) => {
+            if (container.contains(event.target) || filtersTriggerElement()?.contains(event.target)) {
+                return
+            }
+
+            hideFiltersPanel()
+        }
+
+        document.addEventListener('pointerdown', onOutsidePointerDown, true)
     }
 
     /** @returns {void} */
@@ -170,6 +195,11 @@ export function useLivewireBridge(options) {
         if (container) {
             container.style.display = 'none'
             container.classList.remove(...FILTERS_PANEL_OPEN_CLASSES)
+        }
+
+        if (onOutsidePointerDown) {
+            document.removeEventListener('pointerdown', onOutsidePointerDown, true)
+            onOutsidePointerDown = null
         }
 
         isFiltersPanelVisible.value = false

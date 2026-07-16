@@ -78,6 +78,17 @@
         <div
             data-vue-table-filters-panel
             wire:key="{{ $getLivewire()->getId() }}.vue-table-filters-panel"
+            {{--
+                The bridge toggles this panel open by mutating its inline style
+                + classes at runtime. It stays Livewire-morphable (the filter
+                fields inside must update), but a live commit — e.g. under
+                deferFilters(false) — would otherwise morph the container back
+                to its closed server markup (display:none, no open classes) and
+                snap the panel shut mid-interaction. `wire:ignore.self` freezes
+                the container's OWN attributes across morphs while still morphing
+                its children, so the open/closed state is JS-owned.
+            --}}
+            wire:ignore.self
             @class([
                 'fi-vue-table-filters-panel',
                 ($vueTableFiltersWidth instanceof \Filament\Support\Enums\Width) ? "fi-width-{$vueTableFiltersWidth->value}" : $vueTableFiltersWidth,

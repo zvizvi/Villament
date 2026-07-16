@@ -72,6 +72,18 @@ describe('filter schema serialization', function (): void {
             ->toContain('applyTableFilters');
     });
 
+    it('marks the filters panel wire:ignore.self so live commits do not snap it shut', function (): void {
+        // The bridge owns the panel's open/closed state via runtime style +
+        // classes; wire:ignore.self freezes the container's own attributes
+        // across morphs (e.g. under deferFilters(false)) while still morphing
+        // the filter fields inside.
+        $html = livewire(VueListUsers::class)->html();
+
+        preg_match('/<div\s+data-vue-table-filters-panel.*?>/s', $html, $matches);
+
+        expect($matches[0] ?? '')->toContain('wire:ignore.self');
+    });
+
     it('reconstructs the full .fi-ta-ctn > .fi-ta-header-toolbar > .fi-ta-filters-dropdown chain so stock filter CSS applies', function (): void {
         // The panel lives outside the Vue-owned .fi-ta-ctn, so the stock
         // grid/gap rules (scoped to .fi-ta-ctn) and the p-6 padding rule

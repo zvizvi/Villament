@@ -221,6 +221,52 @@ describe('useLivewireBridge', () => {
         expect(container.style.display).toBe('')
     })
 
+    it('closes the filters panel on an outside pointerdown, like the stock dropdown', () => {
+        const bridge = makeBridge()
+        const container = document.querySelector('[data-vue-table-filters-panel]')
+
+        bridge.toggleFiltersPanel()
+        expect(container.style.display).toBe('')
+
+        document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+
+        expect(container.style.display).toBe('none')
+        expect(bridge.isFiltersPanelVisible.value).toBe(false)
+    })
+
+    it('keeps the panel open when the pointerdown lands inside it or on the trigger', () => {
+        const wrapper = document.querySelector('.fi-vue-table')
+        const trigger = document.createElement('div')
+        trigger.className = 'fi-vue-ta-filters-trigger'
+        wrapper.appendChild(trigger)
+
+        const bridge = makeBridge()
+        const container = document.querySelector('[data-vue-table-filters-panel]')
+        const inner = document.createElement('input')
+        container.appendChild(inner)
+
+        bridge.toggleFiltersPanel()
+
+        inner.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+        expect(container.style.display).toBe('')
+
+        trigger.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+        expect(container.style.display).toBe('')
+        expect(bridge.isFiltersPanelVisible.value).toBe(true)
+    })
+
+    it('stops listening for outside clicks once the panel is closed', () => {
+        const bridge = makeBridge()
+        const container = document.querySelector('[data-vue-table-filters-panel]')
+
+        bridge.toggleFiltersPanel()
+        bridge.toggleFiltersPanel()
+
+        // No listener remains: an outside pointerdown must not throw or reopen.
+        document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+        expect(container.style.display).toBe('none')
+    })
+
     it('unregisters the commit hook on destroy', () => {
         const onFiltersChanged = vi.fn()
         const bridge = makeBridge({ onFiltersChanged })
