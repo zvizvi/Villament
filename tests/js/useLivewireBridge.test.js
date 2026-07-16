@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useLivewireBridge } from '../../resources/js/composables/useLivewireBridge.js'
+import { makeWireProxy } from './support/livewireProxyMock.js'
 
 const LIVEWIRE_ID = 'lw-users-page'
 
 describe('useLivewireBridge', () => {
     /** @type {Array<(payload: object) => void>} */
     let commitHandlers
+    let phantomCalls
 
     /** @type {{ tableFilters: Object<string, *> }} */
     let wireState
@@ -21,6 +23,7 @@ describe('useLivewireBridge', () => {
 
     beforeEach(() => {
         commitHandlers = []
+        phantomCalls = []
         bridges = []
         wireState = { tableFilters: { status: { value: '' } } }
 
@@ -56,7 +59,7 @@ describe('useLivewireBridge', () => {
                     commitHandlers = commitHandlers.filter((handler) => handler !== callback)
                 }
             }),
-            find: (id) => (id === LIVEWIRE_ID ? component : null),
+            find: (id) => (id === LIVEWIRE_ID ? makeWireProxy(component.$wire, (name) => phantomCalls.push(name)) : null),
         }
 
         document.body.innerHTML = `

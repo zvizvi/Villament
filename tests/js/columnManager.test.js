@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import VueTable from '../../resources/js/components/VueTable.vue'
+import { makeWireProxy } from './support/livewireProxyMock.js'
 
 const ENDPOINT = 'https://host.test/admin/filament-vue-table/users/data'
 const LIVEWIRE_ID = 'lw-users'
@@ -126,6 +127,12 @@ describe('VueTable column manager + post-action refresh', () => {
                 call: (...args) => {
                     wireCalls.push(['call', args])
                 },
+                applyTableColumnManager: (...args) => {
+                    wireCalls.push(['applyTableColumnManager', args])
+                },
+                resetTableColumnManager: (...args) => {
+                    wireCalls.push(['resetTableColumnManager', args])
+                },
                 mountAction: (...args) => {
                     wireCalls.push(['mountAction', args])
                 },
@@ -143,7 +150,7 @@ describe('VueTable column manager + post-action refresh', () => {
                     commitHandlers = commitHandlers.filter((handler) => handler !== callback)
                 }
             },
-            find: (id) => (id === LIVEWIRE_ID ? component : null),
+            find: (id) => (id === LIVEWIRE_ID ? makeWireProxy(component.$wire, (name) => wireCalls.push(['phantom', name])) : null),
         }
     })
 
@@ -239,7 +246,7 @@ describe('VueTable column manager + post-action refresh', () => {
         expectedState[1].isToggled = true
 
         expect(wireCalls).toEqual([
-            ['call', ['applyTableColumnManager', expectedState]],
+            ['applyTableColumnManager', [expectedState]],
         ])
 
         // Optimistic visibility: the new column renders (empty cells) before any refetch.
@@ -268,7 +275,7 @@ describe('VueTable column manager + post-action refresh', () => {
         await wrapper.get('.fi-ta-col-manager-header .fi-link').trigger('click')
 
         expect(wireCalls).toEqual([
-            ['call', ['resetTableColumnManager']],
+            ['resetTableColumnManager', []],
         ])
 
         // The server-side reset turns the column back on.

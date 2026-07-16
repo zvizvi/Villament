@@ -100,7 +100,20 @@ function livewire() {
  */
 function wireFor(livewireId) {
     try {
-        return livewire()?.find(livewireId)?.$wire ?? null
+        const found = livewire()?.find(livewireId) ?? null
+
+        if (! found) {
+            return null
+        }
+
+        // Livewire v4's `Livewire.find()` returns the $wire proxy itself. On
+        // that proxy ANY unknown property (including `$wire`) resolves to a
+        // phantom server-method caller FUNCTION — so only unwrap `.$wire`
+        // when it is a real object (a component instance from hook payloads
+        // or older APIs), never a function.
+        const wire = found.$wire
+
+        return (wire && typeof wire === 'object') ? wire : found
     } catch {
         return null
     }
@@ -257,7 +270,11 @@ export function useLivewireBridge(options) {
         }
 
         try {
-            wire.call('applyTableColumnManager', columns)
+            // Direct magic-method invocation — the same pattern Filament's
+            // own table.js uses ($wire.mountAction(...)). `$wire.call(...)`
+            // is NOT safe: `call` is no special key on the proxy, so it
+            // resolves to Function.prototype.call of a phantom method.
+            wire.applyTableColumnManager(columns)
         } catch {
             // Never break the island on a mid-teardown component.
         }
@@ -272,7 +289,7 @@ export function useLivewireBridge(options) {
         }
 
         try {
-            wire.call('resetTableColumnManager')
+            wire.resetTableColumnManager()
         } catch {
             // Never break the island on a mid-teardown component.
         }

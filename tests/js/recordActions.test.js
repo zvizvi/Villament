@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import VueTable from '../../resources/js/components/VueTable.vue'
+import { makeWireProxy } from './support/livewireProxyMock.js'
 
 const ENDPOINT = 'https://host.test/admin/filament-vue-table/users/data'
 const LIVEWIRE_ID = 'lw-users'
@@ -123,7 +124,7 @@ describe('VueTable record actions', () => {
 
         globalThis.Livewire = {
             hook: () => () => {},
-            find: (id) => (id === LIVEWIRE_ID ? component : null),
+            find: (id) => (id === LIVEWIRE_ID ? makeWireProxy(component.$wire, (name) => wireCalls.push(['phantom', name])) : null),
         }
     })
 
@@ -276,7 +277,7 @@ describe('VueTable clickable + striped rows', () => {
 
         globalThis.Livewire = {
             hook: () => () => {},
-            find: (id) => (id === LIVEWIRE_ID ? component : null),
+            find: (id) => (id === LIVEWIRE_ID ? makeWireProxy(component.$wire, (name) => wireCalls.push(['phantom', name])) : null),
         }
     })
 

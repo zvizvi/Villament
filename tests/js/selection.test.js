@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import VueTable from '../../resources/js/components/VueTable.vue'
+import { makeWireProxy } from './support/livewireProxyMock.js'
 
 const ENDPOINT = 'https://host.test/admin/filament-vue-table/users/data'
 const LIVEWIRE_ID = 'lw-users'
@@ -127,7 +128,7 @@ describe('VueTable selection + bulk actions', () => {
                     commitHandlers = commitHandlers.filter((handler) => handler !== callback)
                 }
             },
-            find: (id) => (id === LIVEWIRE_ID ? component : null),
+            find: (id) => (id === LIVEWIRE_ID ? makeWireProxy(component.$wire, (name) => wireCalls.push(['phantom', name])) : null),
         }
     })
 
