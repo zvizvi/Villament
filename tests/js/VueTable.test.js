@@ -212,7 +212,13 @@ describe('VueTable filters (native Livewire panel) + indicators', () => {
             },
         })
 
-        await wrapper.get('.fi-vue-ta-remove-all-filters-btn').trigger('click')
+        const removeAll = wrapper.get('.fi-vue-ta-remove-all-filters-btn')
+
+        // Mirrors the stock remove-all action icon-button (no fi-color-gray).
+        expect(removeAll.classes()).toContain('fi-ac-icon-btn-action')
+        expect(removeAll.classes()).not.toContain('fi-color-gray')
+
+        await removeAll.trigger('click')
 
         expect(wireCalls).toContainEqual(['resetTableFiltersForm', []])
     })

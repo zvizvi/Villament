@@ -75,10 +75,17 @@ const hasRemovableIndicators = computed(
             </div>
         </div>
 
+        <!--
+            Mirrors the stock "remove all filters" action icon-button:
+            `fi-icon-btn fi-size-sm fi-ac-icon-btn-action` (no `fi-color` — the
+            icon-button's default gray applies). Stock's Alpine `x-tooltip`
+            can't run on this Vue-rendered node, so `title` is the native
+            tooltip fallback; the `fi-vue-ta-*` class is our click/test hook.
+        -->
         <button
             v-if="hasRemovableIndicators"
             type="button"
-            class="fi-icon-btn fi-size-sm fi-color fi-color-gray fi-vue-ta-remove-all-filters-btn"
+            class="fi-icon-btn fi-size-sm fi-ac-icon-btn-action fi-vue-ta-remove-all-filters-btn"
             :aria-label="strings.filtersRemoveAll"
             :title="strings.filtersRemoveAll"
             @click="emit('removeAll')"
