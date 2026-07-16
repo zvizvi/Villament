@@ -3,8 +3,11 @@ import TrustedIcon from '../TrustedIcon.js'
 
 defineProps({
     /**
-     * Badge cell payload: `{ type, formatted, color, iconHtml }`.
-     * `iconHtml` is server-rendered trusted SVG markup (documented contract).
+     * Badge cell payload:
+     * `{ type, formatted, color, colorClasses, iconHtml, size }`.
+     * `colorClasses` is the exact class string Filament computes server-side
+     * (FilamentColor::getComponentClasses for BadgeComponent); `iconHtml` is
+     * server-rendered trusted SVG markup.
      */
     cell: {
         type: Object,
@@ -14,26 +17,10 @@ defineProps({
 </script>
 
 <template>
-    <div class="fi-ta-text fi-ta-text-has-badges">
-        <!--
-            `fi-text-color-700` / `dark:fi-text-color-300` are Filament's own
-            utility classes for the badge's `--text` / `--dark-text` slots;
-            they stand in for the contrast shade Filament computes
-            server-side per palette, which the client cannot know.
-        -->
-        <span
-            class="fi-badge fi-size-md"
-            :class="
-                cell.color
-                    ? ['fi-color', `fi-color-${cell.color}`, 'fi-text-color-700', 'dark:fi-text-color-300']
-                    : []
-            "
-        >
+    <div class="fi-ta-text-item fi-ta-text-has-badges fi-ta-text">
+        <span :class="[cell.colorClasses || '', 'fi-badge', `fi-size-${cell.size || 'sm'}`]">
             <TrustedIcon :html="cell.iconHtml" />
-
-            <span class="fi-badge-label-ctn">
-                <span class="fi-badge-label">{{ cell.formatted }}</span>
-            </span>
+            {{ cell.formatted }}
         </span>
     </div>
 </template>

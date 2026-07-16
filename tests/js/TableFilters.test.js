@@ -83,7 +83,7 @@ function mountFilters(props = {}) {
 async function mountOpenPanel(props = {}) {
     const mounted = mountFilters(props)
 
-    await mounted.wrapper.get('button[aria-expanded]').trigger('click')
+    await mounted.wrapper.get('.fi-dropdown-trigger button').trigger('click')
 
     return mounted
 }
@@ -163,7 +163,7 @@ describe('TableFilters', () => {
     it('emits reset from the reset button', async () => {
         const { wrapper, reset } = await mountOpenPanel()
 
-        await wrapper.get('.fi-vue-ta-filters-reset-btn').trigger('click')
+        await wrapper.get('.fi-ta-filters-header .fi-link').trigger('click')
 
         expect(reset).toHaveBeenCalledTimes(1)
     })
@@ -191,11 +191,11 @@ describe('TableFilters', () => {
         const funnel = '<svg data-icon="funnel" class="fi-icon fi-size-md" viewBox="0 0 20 20" fill="currentColor"><path d="M2 3h16" /></svg>'
 
         const { wrapper: withIcon } = mountFilters({ icons: { filters: funnel } })
-        expect(withIcon.find('button[aria-expanded] [data-icon="funnel"]').exists()).toBe(true)
+        expect(withIcon.find('.fi-dropdown-trigger button [data-icon="funnel"]').exists()).toBe(true)
         withIcon.unmount()
 
         const { wrapper: withoutIcon } = mountFilters({ icons: {} })
-        expect(withoutIcon.find('button[aria-expanded] svg').exists()).toBe(false)
+        expect(withoutIcon.find('.fi-dropdown-trigger button svg').exists()).toBe(false)
     })
 
     it('closes the panel on Escape and on outside clicks', async () => {
@@ -207,7 +207,7 @@ describe('TableFilters', () => {
         await wrapper.vm.$nextTick()
         expect(wrapper.find('.fi-vue-ta-filters-panel').exists()).toBe(false)
 
-        await wrapper.get('button[aria-expanded]').trigger('click')
+        await wrapper.get('.fi-dropdown-trigger button').trigger('click')
         expect(wrapper.find('.fi-vue-ta-filters-panel').exists()).toBe(true)
 
         document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))

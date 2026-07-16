@@ -206,7 +206,7 @@ describe('VueTable column manager + post-action refresh', () => {
         const wrapper = mountTable()
 
         const manager = wrapper.get('.fi-vue-ta-column-manager')
-        const trigger = manager.get('button[aria-expanded]')
+        const trigger = manager.get('.fi-dropdown-trigger button')
 
         expect(trigger.attributes('aria-label')).toBe('Columns')
         // Wrapperless icon: the svg is a DIRECT child of the trigger button.
@@ -216,16 +216,23 @@ describe('VueTable column manager + post-action refresh', () => {
 
         expect(manager.get('.fi-ta-col-manager-heading').text()).toBe('Columns')
 
+        // Stock lists every visible column; non-toggleable ones are checked + disabled.
         const checkboxes = manager.findAll('.fi-ta-col-manager-item input.fi-checkbox-input')
-        expect(checkboxes).toHaveLength(1)
-        expect(checkboxes[0].attributes('data-column')).toBe('created_at')
-        expect(checkboxes[0].element.checked).toBe(false)
+        expect(checkboxes).toHaveLength(2)
+
+        const nonToggleable = checkboxes.find((checkbox) => checkbox.attributes('data-column') === 'name')
+        expect(nonToggleable.element.checked).toBe(true)
+        expect(nonToggleable.element.disabled).toBe(true)
+
+        const toggleable = checkboxes.find((checkbox) => checkbox.attributes('data-column') === 'created_at')
+        expect(toggleable.element.checked).toBe(false)
+        expect(toggleable.element.disabled).toBe(false)
     })
 
     it('apply sends the FULL state array and refetches once after the commit', async () => {
         const wrapper = mountTable()
 
-        await wrapper.get('.fi-vue-ta-column-manager button[aria-expanded]').trigger('click')
+        await wrapper.get('.fi-vue-ta-column-manager .fi-dropdown-trigger button').trigger('click')
         await wrapper.get('.fi-ta-col-manager-item input[data-column="created_at"]').setValue(true)
 
         const expectedState = makeColumnsState()
@@ -257,8 +264,8 @@ describe('VueTable column manager + post-action refresh', () => {
     it('reset calls resetTableColumnManager and adopts the authoritative state from Livewire', async () => {
         const wrapper = mountTable()
 
-        await wrapper.get('.fi-vue-ta-column-manager button[aria-expanded]').trigger('click')
-        await wrapper.get('.fi-vue-ta-column-manager-reset-btn').trigger('click')
+        await wrapper.get('.fi-vue-ta-column-manager .fi-dropdown-trigger button').trigger('click')
+        await wrapper.get('.fi-ta-col-manager-header .fi-link').trigger('click')
 
         expect(wireCalls).toEqual([
             ['call', ['resetTableColumnManager']],

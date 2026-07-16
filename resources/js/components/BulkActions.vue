@@ -2,7 +2,7 @@
 import { onBeforeUnmount, ref } from 'vue'
 import TrustedIcon from './TrustedIcon.js'
 
-const props = defineProps({
+defineProps({
     /**
      * Bulk action structure from `schema.actions.bulk`:
      * `{ type: 'action', name, label, color, iconHtml }` or
@@ -13,6 +13,14 @@ const props = defineProps({
     actions: {
         type: Array,
         required: true,
+    },
+    /**
+     * Whether an island fetch is in flight — disables the action triggers,
+     * mirroring stock `wire:loading.attr="disabled"` on toolbar actions.
+     */
+    isLoading: {
+        type: Boolean,
+        default: false,
     },
 })
 
@@ -71,11 +79,42 @@ function buttonClasses(action) {
 }
 
 /**
+ * Stock grouped-action dropdown item classes (`Action::toGroupedActionHtml()`
+ * → `fi-ac-grouped-action`). Gray is the item's default and renders NO color
+ * classes (`ItemComponent` implements `HasDefaultGrayColor`); a real color
+ * adds `fi-color fi-color-{color}` plus the text-shade quartet Filament
+ * computes for the `text` / `hover:text` / `dark:*` slots.
+ *
  * @param {object} action
- * @returns {string[]} Stock dropdown item classes (gray by default).
+ * @returns {string[]}
  */
 function itemClasses(action) {
-    return ['fi-dropdown-list-item', 'fi-color', `fi-color-${action.color ?? 'gray'}`]
+    if (! action.color || action.color === 'gray') {
+        return ['fi-dropdown-list-item', 'fi-ac-grouped-action']
+    }
+
+    return [
+        'fi-color',
+        `fi-color-${action.color}`,
+        'fi-text-color-600',
+        'hover:fi-text-color-700',
+        'dark:fi-text-color-400',
+        'dark:hover:fi-text-color-400',
+        'fi-dropdown-list-item',
+        'fi-ac-grouped-action',
+    ]
+}
+
+/**
+ * @param {object} action
+ * @returns {string[]} Color classes stock appends to the item's icon svg.
+ */
+function itemIconClasses(action) {
+    if (! action.color || action.color === 'gray') {
+        return []
+    }
+
+    return ['fi-color', `fi-color-${action.color}`]
 }
 </script>
 
@@ -92,6 +131,7 @@ function itemClasses(action) {
                 v-if="item.type === 'action'"
                 type="button"
                 :class="buttonClasses(item)"
+                :disabled="isLoading"
                 @click="onActionClick(item.name)"
             >
                 <TrustedIcon :html="item.iconHtml" />
@@ -99,32 +139,58 @@ function itemClasses(action) {
                 {{ item.label }}
             </button>
 
+            <!--
+                Stock `BulkActionGroup`: `button()` trigger + `labeledFrom('sm')`
+                + default gray (no color classes, `HasDefaultGrayColor`)
+                + `dropdownPlacement('bottom-start')`.
+            -->
             <div
                 v-else
-                class="fi-dropdown fi-vue-ta-dropdown fi-vue-ta-actions-group"
+                class="fi-dropdown fi-vue-ta-dropdown fi-vue-ta-dropdown-start fi-vue-ta-actions-group"
             >
-                <div class="fi-dropdown-trigger">
-                    <!-- Label-less groups (stock BulkActionGroup) collapse to an icon button. -->
-                    <button
-                        v-if="! item.label"
-                        type="button"
-                        class="fi-icon-btn fi-size-md fi-color fi-color-gray"
-                        :aria-expanded="openGroup === index ? 'true' : 'false'"
-                        @click="openGroup = openGroup === index ? null : index"
-                    >
-                        <TrustedIcon :html="item.iconHtml" />
-                    </button>
+                <div
+                    class="fi-dropdown-trigger"
+                    :aria-expanded="openGroup === index ? 'true' : 'false'"
+                >
+                    <template v-if="item.label">
+                        <!--
+                            `labeledFrom('sm')` renders TWO sibling buttons: an
+                            icon-only one (Filament CSS shows it below the sm
+                            breakpoint) and the labeled one carrying
+                            `fi-labeled-from-sm`.
+                        -->
+                        <button
+                            class="fi-icon-btn fi-size-md fi-ac-btn-group"
+                            :title="item.label"
+                            :aria-label="item.label"
+                            type="button"
+                            :disabled="isLoading"
+                            @click="openGroup = openGroup === index ? null : index"
+                        >
+                            <TrustedIcon :html="item.iconHtml" />
+                        </button>
 
+                        <button
+                            class="fi-btn fi-size-md fi-labeled-from-sm fi-ac-btn-group"
+                            type="button"
+                            :disabled="isLoading"
+                            @click="openGroup = openGroup === index ? null : index"
+                        >
+                            <TrustedIcon :html="item.iconHtml" />
+
+                            {{ item.label }}
+                        </button>
+                    </template>
+
+                    <!-- Label-less groups collapse to a single icon button. -->
                     <button
                         v-else
+                        class="fi-icon-btn fi-size-md fi-ac-icon-btn-group"
                         type="button"
-                        class="fi-btn fi-size-md fi-color fi-color-gray"
-                        :aria-expanded="openGroup === index ? 'true' : 'false'"
+                        :disabled="isLoading"
                         @click="openGroup = openGroup === index ? null : index"
                     >
                         <TrustedIcon :html="item.iconHtml" />
-
-                        {{ item.label }}
                     </button>
                 </div>
 
@@ -140,7 +206,10 @@ function itemClasses(action) {
                             :class="itemClasses(action)"
                             @click="onActionClick(action.name)"
                         >
-                            <TrustedIcon :html="action.iconHtml" />
+                            <TrustedIcon
+                                :html="action.iconHtml"
+                                :class="itemIconClasses(action)"
+                            />
 
                             <span class="fi-dropdown-list-item-label">
                                 {{ action.label }}

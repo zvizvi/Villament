@@ -5,6 +5,11 @@ declare(strict_types=1);
 namespace Zvizvi\FilamentVueTable\Support;
 
 use Filament\Resources\Resource;
+use Filament\Support\Enums\IconSize;
+use Filament\Support\Enums\Size;
+use Filament\Support\Facades\FilamentView;
+use Filament\Support\View\Components\BadgeComponent;
+use Filament\Support\View\Components\LinkComponent;
 use Filament\Tables\Columns\Column;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\ImageColumn;
@@ -17,6 +22,7 @@ use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Model;
 
 use function Filament\Support\generate_icon_html;
+use function Filament\Support\get_component_color_classes;
 
 /**
  * Turns the current page of records into pre-formatted cell payloads.
@@ -46,12 +52,14 @@ final class RecordSerializer
             }
 
             $recordUrl = $table->getRecordUrl($record);
+            $recordUrlNewTab = filled($recordUrl) && $table->shouldOpenRecordUrlInNewTab($record);
 
             $payload[] = [
                 'key' => $livewire->getTableRecordKey($record),
                 'cells' => $cells,
                 'url' => $recordUrl,
-                'urlNewTab' => filled($recordUrl) && $table->shouldOpenRecordUrlInNewTab($record),
+                'urlNewTab' => $recordUrlNewTab,
+                'urlWireNavigate' => filled($recordUrl) && ! $recordUrlNewTab && FilamentView::hasSpaMode($recordUrl),
                 'action' => $table->getRecordAction($record),
                 'actions' => $this->serializeRecordActions($table, $record),
                 'can' => $record instanceof Model ? [
@@ -125,19 +133,36 @@ final class RecordSerializer
             }
 
             $color = $action->getColor();
+            $color = is_string($color) ? $color : null;
             $url = $action->getUrl();
+            $newTab = filled($url) && $action->shouldOpenUrlInNewTab();
+
+            // Same icon resolution as Action::toLinkHtml(): the explicit icon,
+            // falling back to the table-context icon (v5 ViewAction/EditAction
+            // only define tableIcon()/groupedIcon()).
+            $icon = $action->getIcon(default: $action->getTable() !== null ? $action->getTableIcon() : null);
 
             $actions[$action->getName()] = [
                 'label' => $this->stringable($action->getLabel()),
-                'color' => is_string($color) ? $color : null,
-                'iconHtml' => $this->iconHtml($action->getIcon()),
+                'color' => $color,
+                'colorClasses' => implode(' ', get_component_color_classes(LinkComponent::class, $color)),
+                'iconHtml' => $this->iconHtml($icon, $action->getIconSize() ?? $this->iconSizeForActionSize($action->getSize())),
                 'disabled' => $action->isDisabled(),
                 'url' => $url,
-                'newTab' => filled($url) && $action->shouldOpenUrlInNewTab(),
+                'newTab' => $newTab,
+                'wireNavigate' => filled($url) && ! $newTab && FilamentView::hasSpaMode($url),
             ];
         }
 
         return $actions;
+    }
+
+    private function iconSizeForActionSize(mixed $size): IconSize
+    {
+        return match ($size) {
+            Size::ExtraSmall, Size::Small, 'xs', 'sm' => IconSize::Small,
+            default => IconSize::Medium,
+        };
     }
 
     /**
@@ -191,18 +216,23 @@ final class RecordSerializer
             ? $column->getUrl($firstStateItem)
             : $column->getUrl();
 
+        $textSize = $column->getSize($state);
+
         $cell = [
             'type' => $column->isBadge() ? 'badge' : 'text',
             'formatted' => $formatted,
             'url' => $url,
             'newTab' => $column->shouldOpenUrlInNewTab(),
             'description' => $this->stringable($column->getDescriptionBelow()),
+            'size' => $textSize instanceof \BackedEnum ? $textSize->value : $textSize,
         ];
 
         if ($column->isBadge()) {
             $color = $column->getColor($state);
-            $cell['color'] = is_string($color) ? $color : null;
-            $cell['iconHtml'] = $this->iconHtml($column->getIcon($state));
+            $color = is_string($color) ? $color : null;
+            $cell['color'] = $color;
+            $cell['colorClasses'] = implode(' ', get_component_color_classes(BadgeComponent::class, $color));
+            $cell['iconHtml'] = $this->iconHtml($column->getIcon($state), IconSize::Small);
         }
 
         return $cell;
@@ -253,13 +283,13 @@ final class RecordSerializer
         ];
     }
 
-    private function iconHtml(mixed $icon): ?string
+    private function iconHtml(mixed $icon, ?IconSize $size = null): ?string
     {
         if (blank($icon)) {
             return null;
         }
 
-        return generate_icon_html($icon)?->toHtml();
+        return generate_icon_html($icon, size: $size)?->toHtml();
     }
 
     private function stringable(mixed $value): ?string

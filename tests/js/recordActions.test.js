@@ -42,7 +42,7 @@ function makeConfig(overrides = {}) {
                     key: '1',
                     cells: { name: { type: 'text', formatted: 'Jane' } },
                     actions: {
-                        edit: { label: 'Edit', color: 'primary', iconHtml: null, disabled: false, url: EDIT_URL, newTab: false },
+                        edit: { label: 'Edit', color: 'primary', colorClasses: 'fi-color fi-color-primary fi-text-color-700 dark:fi-text-color-400', iconHtml: null, disabled: false, url: EDIT_URL, newTab: false },
                         delete: { label: 'Delete', color: 'danger', iconHtml: null, disabled: false, url: null, newTab: false },
                         restore: { label: 'Restore', color: null, iconHtml: null, disabled: false, url: null, newTab: false },
                     },
@@ -157,6 +157,8 @@ describe('VueTable record actions', () => {
         expect(editLink.attributes('href')).toBe(EDIT_URL)
         expect(editLink.attributes('target')).toBeUndefined()
         expect(editLink.classes()).toContain('fi-color-primary')
+        expect(editLink.classes()).toContain('fi-ac-link-action')
+        expect(editLink.classes()).toContain('fi-text-color-700')
     })
 
     it('opens url actions in a new tab when newTab is set', () => {
@@ -215,7 +217,7 @@ describe('VueTable record actions', () => {
         const wrapper = mountTable()
 
         const group = wrapper.findAll('tbody tr.fi-ta-row')[0].get('.fi-vue-ta-actions-group')
-        const trigger = group.get('button[aria-expanded]')
+        const trigger = group.get('.fi-dropdown-trigger button')
 
         // Trigger icon comes from the group iconHtml — a DIRECT svg child.
         expect(trigger.find(':scope > svg[data-icon="more"]').exists()).toBe(true)

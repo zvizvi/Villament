@@ -76,6 +76,21 @@ describe('per-record action evaluation', function (): void {
             ->and($record['actions']['delete']['url'])->toBeNull()
             ->and($record['actions']['delete']['color'])->toBe('danger');
     });
+
+    it('renders action icons in the table-context micro variant with Filament-computed color classes', function (): void {
+        User::factory()->create(['name' => 'Stock Parity', 'is_admin' => false, 'status' => 'pending']);
+
+        $record = getJson(ENDPOINT.'?columnSearches[name]=Stock+Parity')->assertOk()->json('records.0');
+
+        // Link actions are Size::Small → fi-size-sm + the 16px micro heroicon,
+        // exactly what the stock blade emits; color class strings come from
+        // FilamentColor::getComponentClasses itself.
+        expect($record['actions']['edit']['iconHtml'])->toContain('fi-size-sm')->toContain('viewBox="0 0 16 16"')
+            ->and($record['actions']['edit']['colorClasses'])->toBe('fi-color fi-color-primary fi-text-color-700 dark:fi-text-color-400')
+            ->and($record['actions']['delete']['colorClasses'])->toBe('fi-color fi-color-danger fi-text-color-600 dark:fi-text-color-300')
+            ->and($record['cells']['status']['size'])->toBe('sm')
+            ->and($record['cells']['status']['colorClasses'])->toBe('fi-color fi-color-warning fi-text-color-700 dark:fi-text-color-400');
+    });
 });
 
 describe('actions bridge wire path (DoD)', function (): void {

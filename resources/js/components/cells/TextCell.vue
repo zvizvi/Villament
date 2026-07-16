@@ -1,7 +1,7 @@
 <script setup>
 defineProps({
     /**
-     * Text cell payload: `{ type, formatted, url, newTab, description }`.
+     * Text cell payload: `{ type, formatted, url, newTab, description, size }`.
      */
     cell: {
         type: Object,
@@ -11,13 +11,15 @@ defineProps({
 </script>
 
 <template>
+    <!-- Stock: a single wrapper carrying size + item + text classes, raw text inside. -->
     <div
-        class="fi-ta-text"
-        :class="{ 'fi-ta-text-has-descriptions': cell.description }"
+        class="fi-ta-text-item fi-ta-text"
+        :class="[
+            `fi-size-${cell.size || 'sm'}`,
+            { 'fi-ta-text-has-descriptions': cell.description },
+        ]"
     >
-        <div class="fi-ta-text-item fi-size-sm">
-            <span>{{ cell.formatted }}</span>
-        </div>
+        {{ cell.formatted }}
 
         <p
             v-if="cell.description"

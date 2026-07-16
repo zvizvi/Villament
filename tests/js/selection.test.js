@@ -272,7 +272,10 @@ describe('VueTable selection + bulk actions', () => {
         await wrapper.findAll('tbody input.fi-ta-record-checkbox')[0].setValue(true)
 
         const group = wrapper.get('.fi-ta-header-toolbar .fi-vue-ta-actions-group')
-        await group.get('button[aria-expanded]').trigger('click')
+        // aria-expanded lives on the trigger DIV (stock markup); the button inside opens it.
+        expect(group.get('.fi-dropdown-trigger').attributes('aria-expanded')).toBe('false')
+        await group.get('.fi-dropdown-trigger button').trigger('click')
+        expect(group.get('.fi-dropdown-trigger').attributes('aria-expanded')).toBe('true')
 
         const item = group.get('.fi-dropdown-list-item')
         expect(item.text()).toBe('Delete selected')

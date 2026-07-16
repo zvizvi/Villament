@@ -14,8 +14,11 @@ const props = defineProps({
     },
     /**
      * This record's evaluated action props, keyed by action name:
-     * `{ label, color, iconHtml, disabled, url, newTab }`. Only VISIBLE
-     * actions are present — a structure name absent here must not render.
+     * `{ label, color, colorClasses, iconHtml, disabled, url, newTab, wireNavigate }`.
+     * Only VISIBLE actions are present — a structure name absent here must
+     * not render. `colorClasses` is the exact string Filament computes
+     * server-side (LinkComponent); empty for color-less actions, which stock
+     * renders with NO color classes at all.
      */
     actions: {
         type: Object,
@@ -67,37 +70,69 @@ function visibleGroupActions(group) {
 
 /**
  * Stock record-action link classes (`HasRecordActions` applies
- * `defaultView(LINK_VIEW)` + `defaultSize(Size::Small)`).
- * `fi-text-color-600` / `dark:fi-text-color-400` are Filament's own
- * utilities for the link's `--text` / `--dark-text` slots (the contrast
- * shade is computed server-side in stock markup).
+ * `defaultView(LINK_VIEW)` + `defaultSize(Size::Small)`): the
+ * server-computed color classes come FIRST, then
+ * `fi-link fi-size-sm fi-ac-link-action` — and a color-less action
+ * carries no color classes at all, exactly like stock.
  *
  * @param {object} action Evaluated action props.
  * @returns {string[]}
  */
 function linkClasses(action) {
     return [
+        ...(action.colorClasses ? [action.colorClasses] : []),
         'fi-link',
         'fi-size-sm',
+        'fi-ac-link-action',
+        ...(action.disabled ? ['fi-disabled'] : []),
+    ]
+}
+
+/**
+ * Stock grouped-action item classes (`fi-ac-grouped-action`): gray default
+ * renders NO color classes; a real color adds the text-shade quartet
+ * Filament computes for dropdown items.
+ *
+ * @param {object} action Evaluated action props.
+ * @returns {string[]}
+ */
+function itemClasses(action) {
+    const base = ['fi-dropdown-list-item', 'fi-ac-grouped-action']
+
+    if (! action.color || action.color === 'gray') {
+        return [...base, ...(action.disabled ? ['fi-disabled'] : [])]
+    }
+
+    return [
         'fi-color',
-        `fi-color-${action.color ?? 'primary'}`,
+        `fi-color-${action.color}`,
         'fi-text-color-600',
+        'hover:fi-text-color-700',
         'dark:fi-text-color-400',
+        'dark:hover:fi-text-color-400',
+        ...base,
         ...(action.disabled ? ['fi-disabled'] : []),
     ]
 }
 
 /**
  * @param {object} action Evaluated action props.
- * @returns {string[]} Stock dropdown item classes (gray by default).
+ * @returns {string} Color classes stock appends to a grouped item's icon svg.
  */
-function itemClasses(action) {
-    return [
-        'fi-dropdown-list-item',
-        'fi-color',
-        `fi-color-${action.color ?? 'gray'}`,
-        ...(action.disabled ? ['fi-disabled'] : []),
-    ]
+function itemIconClasses(action) {
+    if (! action.color || action.color === 'gray') {
+        return ''
+    }
+
+    return `fi-color fi-color-${action.color}`
+}
+
+/**
+ * @param {object} action Evaluated action props.
+ * @returns {object} `wire:navigate` attribute for SPA-mode links, like stock anchors.
+ */
+function linkNavigateAttrs(action) {
+    return action.wireNavigate ? { 'wire:navigate': '' } : {}
 }
 
 /**
@@ -133,6 +168,7 @@ function onActionClick(name, action) {
                         :href="actions[item.name].url"
                         :target="actions[item.name].newTab ? '_blank' : undefined"
                         :rel="actions[item.name].newTab ? 'noopener noreferrer' : undefined"
+                        v-bind="linkNavigateAttrs(actions[item.name])"
                     >
                         <TrustedIcon :html="actions[item.name].iconHtml" />
 
@@ -159,12 +195,15 @@ function onActionClick(name, action) {
                 v-else-if="visibleGroupActions(item).length > 0"
                 class="fi-dropdown fi-vue-ta-dropdown fi-vue-ta-actions-group"
             >
-                <div class="fi-dropdown-trigger">
+                <div
+                    class="fi-dropdown-trigger"
+                    :aria-expanded="openGroup === index ? 'true' : 'false'"
+                >
                     <button
                         type="button"
-                        class="fi-icon-btn fi-size-sm fi-color fi-color-gray"
+                        class="fi-icon-btn fi-size-sm fi-ac-icon-btn-group"
+                        :title="item.label ?? undefined"
                         :aria-label="item.label ?? undefined"
-                        :aria-expanded="openGroup === index ? 'true' : 'false'"
                         @click.prevent.stop="openGroup = openGroup === index ? null : index"
                     >
                         <TrustedIcon :html="item.iconHtml" />
@@ -186,8 +225,12 @@ function onActionClick(name, action) {
                                 :href="actions[name].url"
                                 :target="actions[name].newTab ? '_blank' : undefined"
                                 :rel="actions[name].newTab ? 'noopener noreferrer' : undefined"
+                                v-bind="linkNavigateAttrs(actions[name])"
                             >
-                                <TrustedIcon :html="actions[name].iconHtml" />
+                                <TrustedIcon
+                                    :html="actions[name].iconHtml"
+                                    :class="itemIconClasses(actions[name])"
+                                />
 
                                 <span class="fi-dropdown-list-item-label">
                                     {{ actions[name].label }}
@@ -202,7 +245,10 @@ function onActionClick(name, action) {
                                 :aria-disabled="actions[name].disabled ? 'true' : undefined"
                                 @click.prevent.stop="onActionClick(name, actions[name])"
                             >
-                                <TrustedIcon :html="actions[name].iconHtml" />
+                                <TrustedIcon
+                                    :html="actions[name].iconHtml"
+                                    :class="itemIconClasses(actions[name])"
+                                />
 
                                 <span class="fi-dropdown-list-item-label">
                                     {{ actions[name].label }}

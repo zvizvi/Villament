@@ -179,19 +179,21 @@ const overview = computed(() => formatPaginationOverview(props.strings.paginatio
         >
             <label class="fi-pagination-records-per-page-select fi-compact">
                 <div class="fi-input-wrp">
-                    <select
-                        class="fi-select-input"
-                        :value="perPage ?? meta.perPage"
-                        @change="onPerPageChange"
-                    >
-                        <option
-                            v-for="option in pageOptions"
-                            :key="option"
-                            :value="option"
+                    <div class="fi-input-wrp-content-ctn">
+                        <select
+                            class="fi-select-input"
+                            :value="perPage ?? meta.perPage"
+                            @change="onPerPageChange"
                         >
-                            {{ perPageOptionLabel(option) }}
-                        </option>
-                    </select>
+                            <option
+                                v-for="option in pageOptions"
+                                :key="option"
+                                :value="option"
+                            >
+                                {{ perPageOptionLabel(option) }}
+                            </option>
+                        </select>
+                    </div>
                 </div>
 
                 <span class="fi-sr-only">{{ strings.perPageLabel }}</span>
@@ -203,6 +205,7 @@ const overview = computed(() => formatPaginationOverview(props.strings.paginatio
                         <span class="fi-input-wrp-label">{{ strings.perPageLabel }}</span>
                     </div>
 
+                    <div class="fi-input-wrp-content-ctn">
                     <select
                         class="fi-select-input"
                         :value="perPage ?? meta.perPage"
@@ -216,6 +219,7 @@ const overview = computed(() => formatPaginationOverview(props.strings.paginatio
                             {{ perPageOptionLabel(option) }}
                         </option>
                     </select>
+                    </div>
                 </div>
             </label>
         </div>

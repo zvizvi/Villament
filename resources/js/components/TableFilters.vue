@@ -146,21 +146,22 @@ function onToggleFallback(filter) {
         ref="root"
         class="fi-dropdown fi-ta-filters-dropdown fi-vue-ta-dropdown fi-vue-ta-filters"
     >
-        <div class="fi-dropdown-trigger">
+        <div
+            class="fi-dropdown-trigger"
+            :aria-expanded="isOpen ? 'true' : 'false'"
+        >
             <button
                 type="button"
-                class="fi-icon-btn fi-size-md fi-color fi-color-gray"
+                class="fi-icon-btn fi-size-md fi-ac-icon-btn-action fi-force-enabled"
+                :title="strings.filtersHeading"
                 :aria-label="strings.filtersHeading"
-                :aria-expanded="isOpen ? 'true' : 'false'"
                 @click="isOpen = ! isOpen"
             >
                 <TrustedIcon :html="icons.filters" />
 
-                <div
-                    v-if="activeCount > 0"
-                    class="fi-icon-btn-badge-ctn"
-                >
-                    <span class="fi-badge fi-size-xs fi-color fi-color-primary">
+                <!-- Stock renders the count badge unconditionally (0 included). -->
+                <div class="fi-icon-btn-badge-ctn">
+                    <span class="fi-badge fi-size-xs">
                         {{ activeCount }}
                     </span>
                 </div>
@@ -173,20 +174,14 @@ function onToggleFallback(filter) {
         >
             <div class="fi-ta-filters">
                 <div class="fi-ta-filters-header">
-                    <h3 class="fi-ta-filters-heading">
+                    <h2 class="fi-ta-filters-heading">
                         {{ strings.filtersHeading }}
-                    </h3>
+                    </h2>
 
                     <div>
-                        <!--
-                            `fi-text-color-600` / `dark:fi-text-color-400`
-                            are Filament's own utilities for the link's
-                            `--text` / `--dark-text` slots (the contrast
-                            shade is computed server-side in stock markup).
-                        -->
                         <button
                             type="button"
-                            class="fi-link fi-size-md fi-color fi-color-danger fi-text-color-600 dark:fi-text-color-400 fi-vue-ta-filters-reset-btn"
+                            class="fi-color fi-color-danger fi-text-color-600 dark:fi-text-color-300 fi-link fi-size-md"
                             @click="onReset"
                         >
                             {{ strings.filtersReset }}
@@ -194,39 +189,50 @@ function onToggleFallback(filter) {
                     </div>
                 </div>
 
+                <div class="fi-sc fi-sc-has-gap fi-grid">
                 <div
                     v-for="filter in filters"
                     :key="filter.key"
                     class="fi-fo-field"
+                    :class="{ 'fi-fo-select-wrp': filter.type === 'select' || filter.type === 'ternary' }"
+                    data-field-wrapper=""
                     :data-filter="filter.key"
                 >
                     <template v-if="filter.type === 'select' && ! filter.multiple">
-                        <label
-                            class="fi-fo-field-label"
-                            :for="`fi-vue-ta-filter-${filter.key}`"
-                        >
-                            <span class="fi-fo-field-label-content">{{ filter.label }}</span>
-                        </label>
-
-                        <div class="fi-input-wrp">
-                            <select
-                                :id="`fi-vue-ta-filter-${filter.key}`"
-                                class="fi-select-input"
-                                :value="singleValue(filter)"
-                                @change="onSingleChange(filter, $event)"
-                            >
-                                <option value="">
-                                    {{ filter.placeholder ?? strings.selectPlaceholder }}
-                                </option>
-
-                                <option
-                                    v-for="(optionLabel, optionValue) in filter.options"
-                                    :key="optionValue"
-                                    :value="optionValue"
+                        <div class="fi-fo-field-label-col">
+                            <div class="fi-fo-field-label-ctn">
+                                <label
+                                    class="fi-fo-field-label"
+                                    :for="`fi-vue-ta-filter-${filter.key}`"
                                 >
-                                    {{ optionLabel }}
-                                </option>
-                            </select>
+                                    <span class="fi-fo-field-label-content">{{ filter.label }}</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="fi-fo-field-content-col">
+                            <div class="fi-input-wrp fi-fo-select">
+                                <div class="fi-input-wrp-content-ctn">
+                                    <select
+                                        :id="`fi-vue-ta-filter-${filter.key}`"
+                                        class="fi-select-input"
+                                        :value="singleValue(filter)"
+                                        @change="onSingleChange(filter, $event)"
+                                    >
+                                        <option value="">
+                                            {{ filter.placeholder ?? strings.selectPlaceholder }}
+                                        </option>
+
+                                        <option
+                                            v-for="(optionLabel, optionValue) in filter.options"
+                                            :key="optionValue"
+                                            :value="optionValue"
+                                        >
+                                            {{ optionLabel }}
+                                        </option>
+                                    </select>
+                                </div>
+                            </div>
                         </div>
                     </template>
 
@@ -261,32 +267,40 @@ function onToggleFallback(filter) {
                     </template>
 
                     <template v-else-if="filter.type === 'ternary'">
-                        <label
-                            class="fi-fo-field-label"
-                            :for="`fi-vue-ta-filter-${filter.key}`"
-                        >
-                            <span class="fi-fo-field-label-content">{{ filter.label }}</span>
-                        </label>
+                        <div class="fi-fo-field-label-col">
+                            <div class="fi-fo-field-label-ctn">
+                                <label
+                                    class="fi-fo-field-label"
+                                    :for="`fi-vue-ta-filter-${filter.key}`"
+                                >
+                                    <span class="fi-fo-field-label-content">{{ filter.label }}</span>
+                                </label>
+                            </div>
+                        </div>
 
-                        <div class="fi-input-wrp">
-                            <select
-                                :id="`fi-vue-ta-filter-${filter.key}`"
-                                class="fi-select-input"
-                                :value="singleValue(filter)"
-                                @change="onSingleChange(filter, $event)"
-                            >
-                                <option value="">
-                                    {{ filter.placeholder ?? '-' }}
-                                </option>
+                        <div class="fi-fo-field-content-col">
+                            <div class="fi-input-wrp fi-fo-select">
+                                <div class="fi-input-wrp-content-ctn">
+                                    <select
+                                        :id="`fi-vue-ta-filter-${filter.key}`"
+                                        class="fi-select-input"
+                                        :value="singleValue(filter)"
+                                        @change="onSingleChange(filter, $event)"
+                                    >
+                                        <option value="">
+                                            {{ filter.placeholder ?? '-' }}
+                                        </option>
 
-                                <option value="1">
-                                    {{ filter.trueLabel }}
-                                </option>
+                                        <option value="1">
+                                            {{ filter.trueLabel }}
+                                        </option>
 
-                                <option value="0">
-                                    {{ filter.falseLabel }}
-                                </option>
-                            </select>
+                                        <option value="0">
+                                            {{ filter.falseLabel }}
+                                        </option>
+                                    </select>
+                                </div>
+                            </div>
                         </div>
                     </template>
 
@@ -299,6 +313,7 @@ function onToggleFallback(filter) {
                             {{ filter.label }}
                         </button>
                     </template>
+                </div>
                 </div>
             </div>
         </div>

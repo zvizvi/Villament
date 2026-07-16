@@ -66,16 +66,19 @@ onBeforeUnmount(() => {
 })
 
 /**
+ * Stock lists every non-hidden labeled column — non-toggleable ones render
+ * as checked + disabled checkboxes.
+ *
  * @param {object} entry Column state entry.
  * @returns {boolean} Whether the entry appears in the manager list.
  */
 function isManageable(entry) {
-    return ! entry.isHidden && entry.isToggleable !== false && Boolean(entry.label)
+    return ! entry.isHidden && Boolean(entry.label)
 }
 
 /**
- * Top-level manager items: toggleable columns, plus groups that contain at
- * least one toggleable column (rendered as labeled sections).
+ * Top-level manager items: all listed columns, plus groups that contain at
+ * least one listed column (rendered as labeled sections).
  */
 const items = computed(() => props.columns
     .map((entry) => {
@@ -89,7 +92,20 @@ const items = computed(() => props.columns
     })
     .filter((entry) => entry !== null))
 
-const hasToggleableColumns = computed(() => items.value.length > 0)
+/** The trigger only appears when something is actually toggleable. */
+const hasToggleableColumns = computed(() => props.columns.some((entry) => (
+    entry.type === 'group'
+        ? (entry.columns ?? []).some((column) => column.isToggleable !== false)
+        : entry.isToggleable !== false
+)))
+
+/**
+ * @param {object} column Column state entry.
+ * @returns {string} Stock checkbox element id (`column-{name}`, dots → dashes).
+ */
+function checkboxId(column) {
+    return `column-${String(column.name).replace('.', '-')}`
+}
 
 /**
  * Builds the FULL updated state array with one column's `isToggled` flipped,
@@ -139,12 +155,15 @@ function onReset() {
         ref="root"
         class="fi-dropdown fi-ta-col-manager-dropdown fi-vue-ta-dropdown fi-vue-ta-column-manager"
     >
-        <div class="fi-dropdown-trigger">
+        <div
+            class="fi-dropdown-trigger"
+            :aria-expanded="isOpen ? 'true' : 'false'"
+        >
             <button
                 type="button"
-                class="fi-icon-btn fi-size-md fi-color fi-color-gray"
+                class="fi-icon-btn fi-size-md fi-ac-icon-btn-action fi-force-enabled"
+                :title="strings.columnManagerHeading"
                 :aria-label="strings.columnManagerHeading"
-                :aria-expanded="isOpen ? 'true' : 'false'"
                 @click="isOpen = ! isOpen"
             >
                 <TrustedIcon :html="icons.columnManager" />
@@ -156,81 +175,81 @@ function onReset() {
             class="fi-dropdown-panel fi-width-xs"
         >
             <div class="fi-ta-col-manager">
-                <div class="fi-ta-col-manager-header">
-                    <h3 class="fi-ta-col-manager-heading">
-                        {{ strings.columnManagerHeading }}
-                    </h3>
+                <div class="fi-ta-col-manager-ctn">
+                    <div class="fi-ta-col-manager-header">
+                        <h2 class="fi-ta-col-manager-heading">
+                            {{ strings.columnManagerHeading }}
+                        </h2>
 
-                    <div>
-                        <!--
-                            `fi-text-color-600` / `dark:fi-text-color-400`
-                            are Filament's own utilities for the link's
-                            `--text` / `--dark-text` slots (the contrast
-                            shade is computed server-side in stock markup).
-                        -->
-                        <button
-                            type="button"
-                            class="fi-link fi-size-md fi-color fi-color-danger fi-text-color-600 dark:fi-text-color-400 fi-vue-ta-column-manager-reset-btn"
-                            @click="onReset"
-                        >
-                            {{ strings.columnManagerReset }}
-                        </button>
+                        <div>
+                            <button
+                                type="button"
+                                class="fi-color fi-color-danger fi-text-color-600 dark:fi-text-color-300 fi-link fi-size-md"
+                                @click="onReset"
+                            >
+                                {{ strings.columnManagerReset }}
+                            </button>
+                        </div>
                     </div>
-                </div>
 
-                <div class="fi-ta-col-manager-items">
-                    <template
-                        v-for="(item, index) in items"
-                        :key="item.type === 'group' ? `group-${index}` : item.name"
-                    >
-                        <div
-                            v-if="item.type === 'group'"
-                            class="fi-ta-col-manager-group"
+                    <div class="fi-ta-col-manager-items fi-grid fi-grid-direction-col lg:fi-grid-cols">
+                        <template
+                            v-for="(item, index) in items"
+                            :key="item.type === 'group' ? `group-${index}` : item.name"
                         >
-                            <div class="fi-ta-col-manager-item">
+                            <div
+                                v-if="item.type === 'group'"
+                                class="fi-ta-col-manager-group"
+                            >
+                                <div class="fi-ta-col-manager-item">
+                                    <label class="fi-ta-col-manager-label">
+                                        <span>{{ item.label }}</span>
+                                    </label>
+                                </div>
+
+                                <div class="fi-ta-col-manager-group-items">
+                                    <div
+                                        v-for="column in item.columns"
+                                        :key="column.name"
+                                        class="fi-ta-col-manager-item"
+                                    >
+                                        <label class="fi-ta-col-manager-label">
+                                            <input
+                                                :id="checkboxId(column)"
+                                                type="checkbox"
+                                                class="fi-checkbox-input fi-valid"
+                                                :checked="column.isToggleable === false || column.isToggled"
+                                                :disabled="column.isToggleable === false"
+                                                :data-column="column.name"
+                                                @change="onToggle(column.name, item.label)"
+                                            >
+
+                                            <span>{{ column.label }}</span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div
+                                v-else
+                                class="fi-ta-col-manager-item"
+                            >
                                 <label class="fi-ta-col-manager-label">
+                                    <input
+                                        :id="checkboxId(item)"
+                                        type="checkbox"
+                                        class="fi-checkbox-input fi-valid"
+                                        :checked="item.isToggleable === false || item.isToggled"
+                                        :disabled="item.isToggleable === false"
+                                        :data-column="item.name"
+                                        @change="onToggle(item.name)"
+                                    >
+
                                     <span>{{ item.label }}</span>
                                 </label>
                             </div>
-
-                            <div class="fi-ta-col-manager-group-items">
-                                <div
-                                    v-for="column in item.columns"
-                                    :key="column.name"
-                                    class="fi-ta-col-manager-item"
-                                >
-                                    <label class="fi-ta-col-manager-label">
-                                        <input
-                                            type="checkbox"
-                                            class="fi-checkbox-input fi-valid"
-                                            :checked="column.isToggled"
-                                            :data-column="column.name"
-                                            @change="onToggle(column.name, item.label)"
-                                        >
-
-                                        <span>{{ column.label }}</span>
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div
-                            v-else
-                            class="fi-ta-col-manager-item"
-                        >
-                            <label class="fi-ta-col-manager-label">
-                                <input
-                                    type="checkbox"
-                                    class="fi-checkbox-input fi-valid"
-                                    :checked="item.isToggled"
-                                    :data-column="item.name"
-                                    @change="onToggle(item.name)"
-                                >
-
-                                <span>{{ item.label }}</span>
-                            </label>
-                        </div>
-                    </template>
+                        </template>
+                    </div>
                 </div>
             </div>
         </div>

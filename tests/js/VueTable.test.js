@@ -141,7 +141,7 @@ describe('VueTable filters + indicators', () => {
             state: { ...makeConfig().state, page: 3 },
         })
 
-        await wrapper.get('.fi-vue-ta-filters button[aria-expanded]').trigger('click')
+        await wrapper.get('.fi-vue-ta-filters .fi-dropdown-trigger button').trigger('click')
         await wrapper.get('[data-filter="status"] select').setValue('archived')
 
         expect(fetchMock).toHaveBeenCalledTimes(1)
@@ -218,7 +218,7 @@ describe('VueTable filters + indicators', () => {
 
         expect(wrapper.find('.fi-ta-filter-indicators').exists()).toBe(false)
 
-        await wrapper.get('.fi-vue-ta-filters button[aria-expanded]').trigger('click')
+        await wrapper.get('.fi-vue-ta-filters .fi-dropdown-trigger button').trigger('click')
         await wrapper.get('[data-filter="status"] select').setValue('active')
         await vi.waitFor(() => {
             expect(wrapper.find('.fi-ta-filter-indicators').exists()).toBe(true)
@@ -246,7 +246,7 @@ describe('VueTable filters + indicators', () => {
     it('syncs filters into the URL and hydrates them back on a fresh mount', async () => {
         const wrapper = mountTable()
 
-        await wrapper.get('.fi-vue-ta-filters button[aria-expanded]').trigger('click')
+        await wrapper.get('.fi-vue-ta-filters .fi-dropdown-trigger button').trigger('click')
         await wrapper.get('[data-filter="status"] select').setValue('archived')
 
         const urlParams = new URLSearchParams(window.location.search)
@@ -257,7 +257,7 @@ describe('VueTable filters + indicators', () => {
         // Fresh island on the same URL (e.g. after wire:navigate back).
         const second = mount(VueTable, { props: { config: makeConfig() }, attachTo: document.body })
 
-        await second.get('.fi-vue-ta-filters button[aria-expanded]').trigger('click')
+        await second.get('.fi-vue-ta-filters .fi-dropdown-trigger button').trigger('click')
         expect(second.get('[data-filter="status"] select').element.value).toBe('archived')
 
         second.unmount()
