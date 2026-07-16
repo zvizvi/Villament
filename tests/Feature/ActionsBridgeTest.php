@@ -94,6 +94,31 @@ describe('per-record action evaluation', function (): void {
 });
 
 describe('actions bridge wire path (DoD)', function (): void {
+    it('renders the mounted action modal on the Vue page (the stock table view used to own the modals region)', function (): void {
+        $victims = User::factory()->count(2)->create(['is_admin' => false]);
+
+        $component = livewire(VueListUsers::class);
+
+        // The island blade must render the action-modals CONTAINER (Filament's
+        // page view skips it for HasTable components; the stock table view —
+        // which we replace — used to own it). Without it, the modal partial
+        // has nowhere to land and actions silently do nothing in the browser.
+        expect($component->html())
+            ->toContain('wire:partial="action-modals"')
+            ->toContain('filamentActionModals');
+
+        $component
+            ->set('isTrackingDeselectedTableRecords', false)
+            ->set('selectedTableRecords', $victims->map(fn (User $user): string => (string) $user->id)->all())
+            ->set('deselectedTableRecords', [])
+            ->call('mountAction', 'delete', [], ['table' => true, 'bulk' => true]);
+
+        // The modal itself arrives as a Filament partial effect targeting
+        // that container (same mechanism Filament's own test helpers read).
+        expect($component->instance()->mountedActions)->not->toBeEmpty()
+            ->and($component->getMountedActionModalHtml())->toContain('fi-modal');
+    });
+
     it('deletes a row through the unified mountAction path on the Vue page', function (): void {
         $victim = User::factory()->create(['name' => 'Delete Me', 'is_admin' => false]);
 

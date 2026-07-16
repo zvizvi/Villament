@@ -175,81 +175,79 @@ function onReset() {
             class="fi-dropdown-panel fi-width-xs"
         >
             <div class="fi-ta-col-manager">
-                <div class="fi-ta-col-manager-ctn">
-                    <div class="fi-ta-col-manager-header">
-                        <h2 class="fi-ta-col-manager-heading">
-                            {{ strings.columnManagerHeading }}
-                        </h2>
+                <div class="fi-ta-col-manager-header">
+                    <h2 class="fi-ta-col-manager-heading">
+                        {{ strings.columnManagerHeading }}
+                    </h2>
 
-                        <div>
-                            <button
-                                type="button"
-                                class="fi-color fi-color-danger fi-text-color-600 dark:fi-text-color-300 fi-link fi-size-md"
-                                @click="onReset"
-                            >
-                                {{ strings.columnManagerReset }}
-                            </button>
-                        </div>
-                    </div>
-
-                    <div class="fi-ta-col-manager-items fi-grid fi-grid-direction-col lg:fi-grid-cols">
-                        <template
-                            v-for="(item, index) in items"
-                            :key="item.type === 'group' ? `group-${index}` : item.name"
+                    <div>
+                        <button
+                            type="button"
+                            class="fi-color fi-color-danger fi-text-color-600 dark:fi-text-color-300 fi-link fi-size-md"
+                            @click="onReset"
                         >
-                            <div
-                                v-if="item.type === 'group'"
-                                class="fi-ta-col-manager-group"
-                            >
-                                <div class="fi-ta-col-manager-item">
-                                    <label class="fi-ta-col-manager-label">
-                                        <span>{{ item.label }}</span>
-                                    </label>
-                                </div>
+                            {{ strings.columnManagerReset }}
+                        </button>
+                    </div>
+                </div>
 
-                                <div class="fi-ta-col-manager-group-items">
-                                    <div
-                                        v-for="column in item.columns"
-                                        :key="column.name"
-                                        class="fi-ta-col-manager-item"
-                                    >
-                                        <label class="fi-ta-col-manager-label">
-                                            <input
-                                                :id="checkboxId(column)"
-                                                type="checkbox"
-                                                class="fi-checkbox-input fi-valid"
-                                                :checked="column.isToggleable === false || column.isToggled"
-                                                :disabled="column.isToggleable === false"
-                                                :data-column="column.name"
-                                                @change="onToggle(column.name, item.label)"
-                                            >
-
-                                            <span>{{ column.label }}</span>
-                                        </label>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div
-                                v-else
-                                class="fi-ta-col-manager-item"
-                            >
+                <div class="fi-ta-col-manager-items fi-grid fi-grid-direction-col lg:fi-grid-cols">
+                    <template
+                        v-for="(item, index) in items"
+                        :key="item.type === 'group' ? `group-${index}` : item.name"
+                    >
+                        <div
+                            v-if="item.type === 'group'"
+                            class="fi-ta-col-manager-group"
+                        >
+                            <div class="fi-ta-col-manager-item">
                                 <label class="fi-ta-col-manager-label">
-                                    <input
-                                        :id="checkboxId(item)"
-                                        type="checkbox"
-                                        class="fi-checkbox-input fi-valid"
-                                        :checked="item.isToggleable === false || item.isToggled"
-                                        :disabled="item.isToggleable === false"
-                                        :data-column="item.name"
-                                        @change="onToggle(item.name)"
-                                    >
-
                                     <span>{{ item.label }}</span>
                                 </label>
                             </div>
-                        </template>
-                    </div>
+
+                            <div class="fi-ta-col-manager-group-items">
+                                <div
+                                    v-for="column in item.columns"
+                                    :key="column.name"
+                                    class="fi-ta-col-manager-item"
+                                >
+                                    <label class="fi-ta-col-manager-label">
+                                        <input
+                                            :id="checkboxId(column)"
+                                            type="checkbox"
+                                            class="fi-checkbox-input fi-valid"
+                                            :checked="column.isToggleable === false || column.isToggled"
+                                            :disabled="column.isToggleable === false"
+                                            :data-column="column.name"
+                                            @change="onToggle(column.name, item.label)"
+                                        >
+
+                                        <span>{{ column.label }}</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div
+                            v-else
+                            class="fi-ta-col-manager-item"
+                        >
+                            <label class="fi-ta-col-manager-label">
+                                <input
+                                    :id="checkboxId(item)"
+                                    type="checkbox"
+                                    class="fi-checkbox-input fi-valid"
+                                    :checked="item.isToggleable === false || item.isToggled"
+                                    :disabled="item.isToggleable === false"
+                                    :data-column="item.name"
+                                    @change="onToggle(item.name)"
+                                >
+
+                                <span>{{ item.label }}</span>
+                            </label>
+                        </div>
+                    </template>
                 </div>
             </div>
         </div>
