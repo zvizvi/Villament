@@ -36,26 +36,28 @@ final class FilterIndicatorSerializer
             ];
         }
 
-        $columnSearches = $table->getLivewire()->getTableColumnSearches();
+        // Per-column search indicators come from the HasTable contract method;
+        // the column name is only carried inside the indicator's Livewire
+        // remove handler ("resetTableColumnSearch('name')") — parse it out for
+        // the client-side removal routing.
+        foreach ($table->getLivewire()->getTableColumnSearchIndicators() as $indicator) {
+            $column = null;
 
-        foreach ($table->getColumns() as $column) {
-            if ($column->isHidden() || ! $column->isIndividuallySearchable()) {
-                continue;
-            }
-
-            $search = data_get($columnSearches, $column->getName());
-
-            if (blank($search)) {
-                continue;
+            if (preg_match(
+                "/resetTableColumnSearch\('([^']+)'\)/",
+                (string) $indicator->getRemoveLivewireClickHandler(),
+                $matches,
+            ) === 1) {
+                $column = $matches[1];
             }
 
             $indicators[] = [
                 'type' => 'columnSearch',
                 'filter' => null,
                 'field' => null,
-                'column' => $column->getName(),
-                'label' => "{$column->getLabel()}: {$search}",
-                'removable' => true,
+                'column' => $column,
+                'label' => (string) $indicator->getLabel(),
+                'removable' => $indicator->isRemovable(),
                 'colorClasses' => implode(' ', get_component_color_classes(BadgeComponent::class, 'primary')),
             ];
         }
