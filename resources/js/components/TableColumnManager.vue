@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, ref, watch, TransitionGroup } from 'vue'
 import TrustedIcon from './TrustedIcon.js'
+import { vTooltip } from '../support/tooltip.js'
 
 const props = defineProps({
     /**
@@ -396,9 +397,9 @@ function onReset() {
             :aria-expanded="isOpen ? 'true' : 'false'"
         >
             <button
+                v-tooltip="strings.columnManagerHeading"
                 type="button"
                 class="fi-icon-btn fi-size-md fi-ac-icon-btn-action fi-force-enabled"
-                :title="strings.columnManagerHeading"
                 :aria-label="strings.columnManagerHeading"
                 @click="isOpen = ! isOpen"
             >
