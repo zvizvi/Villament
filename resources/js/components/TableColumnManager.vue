@@ -172,18 +172,35 @@ function onDragStart(scope, entry, event = null) {
 
     // Stock (SortableJS) moves the element itself, so nothing but the
     // checkbox + label appears to travel. The native HTML5 ghost snapshots
-    // the WHOLE item (panel background included) — override it with just
-    // the transparent-background label element.
+    // the WHOLE item (panel background included) — override it with an
+    // offscreen CLONE of the label: guaranteed transparent background,
+    // pinned to the full row width so it doesn't shrink-wrap its content.
     const dataTransfer = event?.dataTransfer
 
     if (dataTransfer) {
         dataTransfer.effectAllowed = 'move'
 
-        const label = event.currentTarget?.querySelector?.('.fi-ta-col-manager-label')
+        const row = event.currentTarget
+        const label = row?.querySelector?.('.fi-ta-col-manager-label')
 
-        if (label && typeof dataTransfer.setDragImage === 'function') {
-            const rect = label.getBoundingClientRect()
-            dataTransfer.setDragImage(label, event.clientX - rect.left, event.clientY - rect.top)
+        if (row && label && typeof dataTransfer.setDragImage === 'function') {
+            const rowRect = row.getBoundingClientRect()
+            const labelRect = label.getBoundingClientRect()
+
+            const ghost = label.cloneNode(true)
+            ghost.style.position = 'fixed'
+            ghost.style.top = '-1000px'
+            ghost.style.left = '0'
+            ghost.style.width = `${rowRect.width || labelRect.width}px`
+            ghost.style.margin = '0'
+            ghost.style.background = 'transparent'
+            ghost.style.boxShadow = 'none'
+            document.body.appendChild(ghost)
+
+            dataTransfer.setDragImage(ghost, event.clientX - labelRect.left, event.clientY - labelRect.top)
+
+            // The browser snapshots synchronously during dragstart.
+            setTimeout(() => ghost.remove())
         }
     }
 }
@@ -191,11 +208,17 @@ function onDragStart(scope, entry, event = null) {
 /**
  * Live-reorders the draft while dragging over a sibling (same scope).
  *
+ * The swap only happens once the pointer crosses the hovered item's
+ * MIDPOINT in the drag direction — swapping on mere overlap makes the
+ * boundary oscillate (swap -> pointer now over the moved neighbor ->
+ * swap back), which reads as blinking.
+ *
  * @param {string} scope
  * @param {object} entry The hovered item.
+ * @param {?DragEvent} event
  * @returns {void}
  */
-function onDragOver(scope, entry) {
+function onDragOver(scope, entry, event = null) {
     const source = dragSource.value
 
     if (! source || source.scope !== scope || source.name === entry.name) {
@@ -218,6 +241,17 @@ function onDragOver(scope, entry) {
 
     if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) {
         return
+    }
+
+    const rect = event?.currentTarget?.getBoundingClientRect?.()
+
+    if (rect && rect.height > 0) {
+        const pastMidpoint = event.clientY > rect.top + (rect.height / 2)
+
+        // Moving down requires crossing below the midpoint; moving up above it.
+        if ((fromIndex < toIndex && ! pastMidpoint) || (fromIndex > toIndex && pastMidpoint)) {
+            return
+        }
     }
 
     list.splice(toIndex, 0, ...list.splice(fromIndex, 1))
@@ -294,7 +328,7 @@ function onReset() {
                             class="fi-ta-col-manager-group"
                             :draggable="reorderable"
                             @dragstart="onDragStart('top', item, $event)"
-                            @dragover.prevent="onDragOver('top', item)"
+                            @dragover.prevent="onDragOver('top', item, $event)"
                             @dragend="onDragEnd"
                             @drop.prevent="onDragEnd"
                         >
@@ -323,7 +357,7 @@ function onReset() {
                                     class="fi-ta-col-manager-item"
                                     :draggable="reorderable"
                                     @dragstart.stop="onDragStart(groupScope(item), column, $event)"
-                                    @dragover.prevent.stop="onDragOver(groupScope(item), column)"
+                                    @dragover.prevent.stop="onDragOver(groupScope(item), column, $event)"
                                     @dragend.stop="onDragEnd"
                                     @drop.prevent.stop="onDragEnd"
                                 >
@@ -358,7 +392,7 @@ function onReset() {
                             class="fi-ta-col-manager-item"
                             :draggable="reorderable"
                             @dragstart="onDragStart('top', item, $event)"
-                            @dragover.prevent="onDragOver('top', item)"
+                            @dragover.prevent="onDragOver('top', item, $event)"
                             @dragend="onDragEnd"
                             @drop.prevent="onDragEnd"
                         >

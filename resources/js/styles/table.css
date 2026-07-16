@@ -50,4 +50,8 @@
  */
 .fi-vue-ta-col-manager-move {
     transition: transform 300ms ease;
+
+    /* An item mid-flight must not intercept dragover — the source would
+       oscillate against it while it travels (visible blinking). */
+    pointer-events: none;
 }
