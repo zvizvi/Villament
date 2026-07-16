@@ -49,6 +49,7 @@ final class SummarySerializer
     }
 
     /**
+     * @param  Builder<\Illuminate\Database\Eloquent\Model>|null  $query
      * @return array{heading: string, cells: array<string, string>}
      */
     private function row(HasTable $livewire, Table $table, ?Builder $query, string $heading): array
