@@ -457,6 +457,21 @@ function clearedFilterState(filterSchema, currentState) {
  * @returns {void}
  */
 function onRemoveIndicator(indicator) {
+    // Search indicators (stock parity): global search / per-column search.
+    if (indicator.type === 'search') {
+        state.search.value = ''
+
+        return
+    }
+
+    if (indicator.type === 'columnSearch') {
+        const next = { ...state.columnSearches.value }
+        delete next[indicator.column]
+        state.columnSearches.value = next
+
+        return
+    }
+
     const filterSchema = filterSchemas.value.find((filter) => filter.key === indicator.filter)
     const currentState = state.filters.value[indicator.filter]
 
@@ -636,6 +651,7 @@ function recordCellClasses(column) {
                                 :sort="state.sort.value"
                                 :icons="icons"
                                 :selectable="isSelectionEnabled"
+                                :has-selectable-records="hasRecords"
                                 :all-selected="areAllPageRecordsSelected"
                                 :has-actions-column="hasRecordActions"
                                 :strings="strings"

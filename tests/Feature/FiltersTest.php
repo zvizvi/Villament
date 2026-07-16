@@ -107,6 +107,20 @@ describe('endpoint filter application', function (): void {
             ->and($response->json('indicators'))->toBeEmpty();
     });
 
+    it('emits search indicators for global and per-column searches, like stock', function (): void {
+        User::factory()->create(['name' => 'Indicator Target']);
+
+        $global = getJson('/admin/filament-vue-table/users/data?search=hello')->assertOk()->json('indicators.0');
+        $column = getJson('/admin/filament-vue-table/users/data?columnSearches[name]=world')->assertOk()->json('indicators.0');
+
+        expect($global['type'])->toBe('search')
+            ->and($global['label'])->toBe('Search: hello')
+            ->and($global['removable'])->toBeTrue()
+            ->and($column['type'])->toBe('columnSearch')
+            ->and($column['column'])->toBe('name')
+            ->and($column['label'])->toBe('Name: world');
+    });
+
     it('evaluates custom indicateUsing labels server-side', function (): void {
         User::factory()->create();
 

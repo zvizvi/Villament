@@ -33,6 +33,14 @@ const props = defineProps({
         default: false,
     },
     /**
+     * Whether the page has records to select — with an empty table the
+     * select-page checkbox renders nothing (there is nothing to select).
+     */
+    hasSelectableRecords: {
+        type: Boolean,
+        default: true,
+    },
+    /**
      * Whether every record on the current page is selected (header checkbox state).
      */
     allSelected: {
@@ -144,6 +152,7 @@ function onSortClick(column) {
                 class="fi-ta-cell fi-ta-selection-cell"
             >
                 <input
+                    v-if="hasSelectableRecords"
                     :aria-label="strings.bulkSelectPage"
                     type="checkbox"
                     :checked="allSelected"
