@@ -85,6 +85,15 @@ Reported from a live multi-tenant app: a `recordUrl`/column `getUrl()` closure r
 
 Verified with a dedicated tenant fixture panel (`Team` tenant, `ProjectResource` with a tenant-scoped `recordUrl`): endpoint records are tenant-isolated, record URLs resolve with the tenant slug, and the island config inlines a `{tenant}`-scoped endpoint.
 
+## 2026-07-17 — Native (Livewire) filters mode
+
+Owner decision: the ENTIRE filter panel should be Filament's original Livewire UI, not a Vue reimplementation — filters have many types (select, multi, ternary, date, custom, query-builder) and 1:1 Vue components are a maintenance/fidelity burden, whereas COLUMN cells are already generic pre-rendered payloads (no per-type Vue burden).
+
+- New config `filters` mode, default `livewire`, shipped as `schema.filtersMode`.
+- `livewire` mode: the island Blade renders Filament's full native `x-filament-tables::filters` panel (heading + every field type + reset + apply) in the hidden, Livewire-morphable container (reusing the Phase 2 fallback plumbing, upgraded from bare form to the full component). Vue renders only the funnel trigger (`TableFiltersTrigger`, byte-identical) + the active-filter badge (count of `type==='filter'` indicators); it opens the native panel via the bridge and refetches on the filter commit. Indicator removal / remove-all route through Livewire (`removeTableFilter` / `resetTableFiltersForm`) so Livewire stays the single source of truth. Zero per-filter-type Vue code runs.
+- `vue` mode keeps the Phase 2 Vue filter controls (instant, no roundtrip) with Livewire fallback for exotic types.
+- Trade-off accepted: applying a filter is one Livewire commit (small form) + one Vue refetch — vs the Vue mode's single fetch. High-frequency interactions (search/sort/pagination) stay Vue/AJAX. Panel positioning uses the existing CSS anchor (no floating-ui); the native trigger button is the one element still Vue-rendered (pixel-identical) to avoid the Vue/Livewire DOM-boundary complexity of teleporting a native dropdown into the wire:ignore toolbar.
+
 ## Verified Filament v5 internal API map (§4.1, §4.8)
 
 Verified against **filament/filament v5.6.8** + **livewire/livewire v4.3.3** by reading installed vendor source on 2026-07-15. Paths relative to `vendor/filament/`.

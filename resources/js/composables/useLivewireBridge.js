@@ -83,8 +83,7 @@ const REFRESH_COMMIT_METHODS = [
 const FALLBACK_FORM_OPEN_CLASSES = [
     'fi-vue-ta-fallback-filters-open',
     'fi-dropdown-panel',
-    'fi-width-sm',
-    'fi-ta-filters',
+    'fi-width-xs',
 ]
 
 /**
@@ -206,6 +205,44 @@ export function useLivewireBridge(options) {
             lastKnownFiltersJson = JSON.stringify(wire.get('tableFilters') ?? {})
         } catch {
             // The component may be mid-teardown (wire:navigate); never break the island.
+        }
+    }
+
+    /**
+     * Removes one active filter via Filament's own `removeTableFilter` (native
+     * filters mode). The resulting commit is caught by the filters watcher,
+     * which refetches — so removal, indicators and data stay in sync.
+     *
+     * @param {string} filterName
+     * @param {?string} [field] Indicator-scoped form field, when applicable.
+     * @returns {void}
+     */
+    function removeFilter(filterName, field = null) {
+        const wire = wireFor(livewireId)
+
+        if (! wire) {
+            return
+        }
+
+        try {
+            wire.removeTableFilter(filterName, field ?? null)
+        } catch {
+            // Never break the island on a mid-teardown component.
+        }
+    }
+
+    /** Resets every filter via Filament's own filters form. @returns {void} */
+    function resetFilters() {
+        const wire = wireFor(livewireId)
+
+        if (! wire) {
+            return
+        }
+
+        try {
+            wire.resetTableFiltersForm()
+        } catch {
+            // Never break the island on a mid-teardown component.
         }
     }
 
@@ -424,6 +461,8 @@ export function useLivewireBridge(options) {
         toggleFallbackForm,
         hideFallbackForm,
         pushFilterToLivewire,
+        removeFilter,
+        resetFilters,
         mountRecordAction,
         mountBulkAction,
         mountTableAction,

@@ -11,6 +11,7 @@ import TrustedIcon from './TrustedIcon.js'
 import TableHeader from './TableHeader.vue'
 import TableSearch from './TableSearch.vue'
 import TableFilters from './TableFilters.vue'
+import TableFiltersTrigger from './TableFiltersTrigger.vue'
 import TableFilterIndicators from './TableFilterIndicators.vue'
 import TableColumnManager from './TableColumnManager.vue'
 import TablePagination from './TablePagination.vue'
@@ -55,6 +56,14 @@ const strings = resolveStrings(schema.strings)
 const icons = schema.icons ?? {}
 
 const filterSchemas = computed(() => schema.filters ?? [])
+
+/**
+ * 'livewire' (default): the filter panel is Filament's native Livewire
+ * dropdown (rendered in Blade); Vue shows only the funnel trigger and
+ * refetches on filter commits. 'vue': filters render as Vue controls.
+ */
+const filtersMode = computed(() => schema.filtersMode ?? 'livewire')
+const hasFilters = computed(() => filterSchemas.value.length > 0)
 
 const recordActionsStructure = computed(() => schema.actions?.record ?? [])
 const bulkActionsStructure = computed(() => schema.actions?.bulk ?? [])
@@ -116,6 +125,11 @@ const bridge = useLivewireBridge({
     },
     onDeselectAll: () => selection.deselectAll(),
 })
+
+/** Funnel badge counts filter indicators only (not search/column-search). */
+const activeFilterCount = computed(
+    () => indicators.value.filter((indicator) => indicator.type === 'filter').length,
+)
 
 onBeforeUnmount(() => {
     bridge.destroy()
@@ -506,6 +520,14 @@ function onRemoveIndicator(indicator) {
         return
     }
 
+    // Native filters mode: Livewire owns the filter state — remove through it
+    // (`removeTableFilter`); the commit hook then drives the Vue refetch.
+    if (filtersMode.value === 'livewire') {
+        bridge.removeFilter(indicator.filter, indicator.field)
+
+        return
+    }
+
     const filterSchema = filterSchemas.value.find((filter) => filter.key === indicator.filter)
     const currentState = state.filters.value[indicator.filter]
 
@@ -527,6 +549,13 @@ function onRemoveIndicator(indicator) {
  * @returns {void}
  */
 function onRemoveAllFilters() {
+    // Native filters mode: reset through Livewire's own filters form.
+    if (filtersMode.value === 'livewire') {
+        bridge.resetFilters()
+
+        return
+    }
+
     /** @type {Object<string, *>} */
     const cleared = {}
 
@@ -613,11 +642,20 @@ function recordCellClasses(column) {
                                 @update:model-value="state.search.value = $event"
                             />
 
+                            <!-- Native Livewire filters panel: Vue shows only the funnel trigger. -->
+                            <TableFiltersTrigger
+                                v-if="hasFilters && filtersMode === 'livewire'"
+                                :active-count="activeFilterCount"
+                                :strings="strings"
+                                :icons="icons"
+                                @toggle="bridge.toggleFallbackForm()"
+                            />
+
                             <TableFilters
-                                v-if="filterSchemas.length > 0"
+                                v-else-if="hasFilters"
                                 :filters="filterSchemas"
                                 :values="state.filters.value"
-                                :active-count="indicators.length"
+                                :active-count="activeFilterCount"
                                 :strings="strings"
                                 :icons="icons"
                                 @update:filter="onFilterChange"

@@ -10,6 +10,19 @@ return [
     'debounce_ms' => 300,
 
     /*
+     * How the filter panel is rendered:
+     *
+     * - 'livewire' (default): the panel is Filament's own native filters
+     *   dropdown (heading, all field types, reset, apply — full fidelity, any
+     *   filter type). The Vue island only opens it and refetches records when
+     *   the filter state changes. Zero per-filter-type Vue reimplementation.
+     * - 'vue': filters render as native Vue controls (instant, no Livewire
+     *   roundtrip), with the Livewire form kept as a fallback for filter types
+     *   the island can't render.
+     */
+    'filters' => 'livewire',
+
+    /*
      * `Cache-Control: private, max-age=...` for data endpoint responses.
      * 0 disables HTTP caching (default). The endpoint is side-effect free,
      * so short per-user caching is safe if your data tolerates it.

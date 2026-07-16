@@ -28,8 +28,14 @@ trait HasVueTable
     {
         $config = $this->getVueTableConfig();
 
-        $hasFallbackFilters = false;
         $serializedFilters = is_array($config['schema'] ?? null) ? ($config['schema']['filters'] ?? []) : [];
+        $filtersMode = $config['schema']['filtersMode'] ?? 'livewire';
+
+        // Render the page's native Livewire filters panel when: the whole
+        // filter UI is delegated to Livewire ('livewire' mode, any filter), or
+        // — in 'vue' mode — at least one filter falls back to Livewire.
+        $hasFilters = is_array($serializedFilters) && $serializedFilters !== [];
+        $hasFallbackFilters = false;
 
         if (is_array($serializedFilters)) {
             foreach ($serializedFilters as $filter) {
@@ -41,11 +47,13 @@ trait HasVueTable
             }
         }
 
+        $withNativeFilters = ($filtersMode === 'livewire' && $hasFilters) || $hasFallbackFilters;
+
         return $schema
             ->components([
                 $this->getTabsContentComponent(),
                 RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_BEFORE),
-                VueTableIsland::make($config, withFallbackFilterForm: $hasFallbackFilters),
+                VueTableIsland::make($config, withNativeFilters: $withNativeFilters),
                 RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_AFTER),
             ]);
     }

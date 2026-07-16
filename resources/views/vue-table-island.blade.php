@@ -34,12 +34,14 @@
         @php($vueTableLivewire->hasActionsModalRendered = true)
     @endif
 
-    @if ($withFallbackFilterForm)
+    @if ($withNativeFilters)
         {{--
-            The page's original Livewire filter form, kept mounted (and
-            Livewire-morphable — no wire:ignore here) but visually hidden.
-            The Vue island toggles it open for `livewire-fallback` filters;
-            state changes flow back through the Livewire commit hook.
+            Filament's own complete filters panel (heading + every native field
+            type + reset + apply), kept mounted and Livewire-morphable (NOT
+            inside the wire:ignore mount) but visually hidden. The Vue island's
+            funnel trigger toggles it open; on apply/reset/remove the Livewire
+            commit hook drives a Vue refetch. This is byte-identical to the
+            stock filters dropdown content — no per-filter-type Vue rebuild.
         --}}
         <div
             data-vue-table-fallback-filters
@@ -47,18 +49,11 @@
             style="display: none;"
             class="fi-vue-table-fallback-filters"
         >
-            {{ $getLivewire()->getTableFiltersForm() }}
-
-            @if ($getLivewire()->getTable()->hasDeferredFilters())
-                <button
-                    type="button"
-                    class="fi-btn fi-size-md fi-color fi-color-primary fi-btn-color-primary"
-                    wire:click="applyTableFilters"
-                    data-vue-table-apply-filters
-                >
-                    {{ __('filament-tables::table.filters.actions.apply.label') }}
-                </button>
-            @endif
+            <x-filament-tables::filters
+                :apply-action="$getLivewire()->getTable()->getFiltersApplyAction()"
+                :form="$getLivewire()->getTableFiltersForm()"
+                :reset-action-position="$getLivewire()->getTable()->getFiltersResetActionPosition()"
+            />
         </div>
     @endif
 </div>

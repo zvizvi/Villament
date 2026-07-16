@@ -19,12 +19,12 @@ final class VueTableIsland extends Component
     /**
      * @param  array<string, mixed>  $config
      */
-    public static function make(array $config, bool $withFallbackFilterForm = false): static
+    public static function make(array $config, bool $withNativeFilters = false): static
     {
         $static = app(self::class);
         $static->viewData([
             'config' => $config,
-            'withFallbackFilterForm' => $withFallbackFilterForm,
+            'withNativeFilters' => $withNativeFilters,
         ]);
         $static->configure();
 

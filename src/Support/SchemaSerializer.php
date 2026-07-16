@@ -43,6 +43,7 @@ final class SchemaSerializer
         ?array $filterSerializers = null,
         ?array $columnSerializers = null,
         private readonly int $debounceMs = 300,
+        private readonly string $filtersMode = 'livewire',
     ) {
         $this->filterSerializers = $filterSerializers ?? [
             new FilterSerializers\TernaryFilterSerializer,
@@ -108,6 +109,7 @@ final class SchemaSerializer
             ],
             'actions' => (new ActionSerializer)->serializeStructure($table),
             'debounceMs' => $this->debounceMs,
+            'filtersMode' => $this->filtersMode,
             'strings' => $this->strings($table),
             'icons' => $this->icons($table),
         ];

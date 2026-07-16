@@ -34,6 +34,7 @@ final class FilamentVueTableServiceProvider extends PackageServiceProvider
                 ],
                 columnSerializers: $this->columnSerializerChain(),
                 debounceMs: (int) config('filament-vue-table.debounce_ms', 300),
+                filtersMode: config('filament-vue-table.filters', 'livewire') === 'vue' ? 'vue' : 'livewire',
             );
         });
 

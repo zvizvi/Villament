@@ -75,12 +75,20 @@ describe('filter schema serialization', function (): void {
             ->and($icons['badgeDelete'])->toContain('fi-size-xs')->toContain('viewBox="0 0 16 16"');
     });
 
-    it('renders the hidden Livewire fallback filter form with an apply button', function (): void {
+    it('renders Filament\'s full native filters panel (heading + form + reset) for the island', function (): void {
         $html = livewire(VueListUsers::class)->html();
 
+        // The hidden, Livewire-morphable container holds the stock filters
+        // component — heading, native fields, and the reset action — not a
+        // Vue reimplementation.
         expect($html)->toContain('data-vue-table-fallback-filters')
-            ->toContain('data-vue-table-apply-filters')
-            ->toContain('wire:click="applyTableFilters"');
+            ->toContain('fi-ta-filters-heading')
+            ->toContain('resetTableFiltersForm')
+            ->toContain('applyTableFilters');
+    });
+
+    it('ships the filters mode in the schema (livewire by default)', function (): void {
+        expect(vueTableConfig()['schema']['filtersMode'])->toBe('livewire');
     });
 });
 
