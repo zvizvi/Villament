@@ -9,6 +9,7 @@
 
 import { createApp } from 'vue'
 import VueTable from './components/VueTable.vue'
+import { registerCellComponent } from './support/cellRegistry.js'
 import tableStyles from './styles/table.css?inline'
 
 /** @type {Map<Element, import('vue').App>} */
@@ -91,6 +92,12 @@ function teardownOrphans() {
         }
     }
 }
+
+// Public extension API — host apps register custom cell components (paired
+// with PHP ColumnSerializers) before or after islands mount (reactive).
+window.FilamentVueTable = Object.assign(window.FilamentVueTable ?? {}, {
+    registerCellComponent,
+})
 
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', scan)

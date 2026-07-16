@@ -8,12 +8,8 @@ use Filament\Resources\Resource;
 use Filament\Support\Enums\IconSize;
 use Filament\Support\Enums\Size;
 use Filament\Support\Facades\FilamentView;
-use Filament\Support\View\Components\BadgeComponent;
 use Filament\Support\View\Components\LinkComponent;
 use Filament\Tables\Columns\Column;
-use Filament\Tables\Columns\IconColumn;
-use Filament\Tables\Columns\ImageColumn;
-use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
 use Illuminate\Contracts\Pagination\CursorPaginator;
@@ -32,6 +28,24 @@ use function Filament\Support\get_component_color_classes;
  */
 final class RecordSerializer
 {
+    /**
+     * @var list<ColumnSerializers\ColumnSerializer>
+     */
+    private readonly array $columnSerializers;
+
+    /**
+     * @param  list<ColumnSerializers\ColumnSerializer>|null  $columnSerializers  Chain links tried in order; the html fallback always terminates it.
+     */
+    public function __construct(?array $columnSerializers = null)
+    {
+        $this->columnSerializers = $columnSerializers ?? [
+            new ColumnSerializers\IconColumnSerializer,
+            new ColumnSerializers\ImageColumnSerializer,
+            new ColumnSerializers\TextColumnSerializer,
+            new ColumnSerializers\HtmlColumnSerializer,
+        ];
+    }
+
     /**
      * @param  class-string<\Filament\Resources\Resource>  $resourceClass
      * @param  iterable<int, Model|array<string, mixed>>  $records
@@ -185,128 +199,15 @@ final class RecordSerializer
      */
     private function serializeCell(Column $column): array
     {
-        return match (true) {
-            $column instanceof IconColumn => $this->serializeIconCell($column),
-            $column instanceof ImageColumn => $this->serializeImageCell($column),
-            $column instanceof TextColumn => $this->serializeTextCell($column),
-            default => $this->serializeHtmlCell($column),
-        };
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function serializeTextCell(TextColumn $column): array
-    {
-        $state = $column->getState();
-        $stateItems = is_array($state) ? array_values($state) : [$state];
-        $firstStateItem = $stateItems[0] ?? null;
-
-        $formattedItems = [];
-        $containsHtml = $column->isHtml();
-
-        foreach ($stateItems as $stateItem) {
-            $formatted = $column->formatState($stateItem);
-
-            if ($formatted instanceof Htmlable) {
-                $containsHtml = true;
-                $formatted = $formatted->toHtml();
-            }
-
-            if (filled($formatted)) {
-                $formattedItems[] = (string) $formatted;
+        foreach ($this->columnSerializers as $serializer) {
+            if ($serializer->canSerialize($column)) {
+                return $serializer->serialize($column);
             }
         }
 
-        // Blank state renders NO badge/text at all in stock — just the
-        // optional placeholder. Icon/color closures are never evaluated.
-        if ($formattedItems === []) {
-            return [
-                'type' => $column->isBadge() ? 'badge' : 'text',
-                'formatted' => null,
-                'empty' => true,
-                'placeholder' => $this->stringable($column->getPlaceholder()),
-            ];
-        }
-
-        $formatted = implode(', ', $formattedItems);
-
-        if ($containsHtml) {
-            return [
-                'type' => 'html',
-                'html' => $formatted,
-            ];
-        }
-
-        $url = $column->hasStateBasedUrls()
-            ? $column->getUrl($firstStateItem)
-            : $column->getUrl();
-
-        $textSize = $column->getSize($state);
-
-        $cell = [
-            'type' => $column->isBadge() ? 'badge' : 'text',
-            'formatted' => $formatted,
-            'url' => $url,
-            'newTab' => $column->shouldOpenUrlInNewTab(),
-            'description' => $this->stringable($column->getDescriptionBelow()),
-            'size' => $textSize instanceof \BackedEnum ? $textSize->value : $textSize,
-        ];
-
-        if ($column->isBadge()) {
-            $color = $column->getColor($state);
-            $color = is_string($color) ? $color : null;
-            $cell['color'] = $color;
-            $cell['colorClasses'] = implode(' ', get_component_color_classes(BadgeComponent::class, $color));
-            $cell['iconHtml'] = $this->iconHtml($column->getIcon($state), IconSize::Small);
-        }
-
-        return $cell;
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function serializeIconCell(IconColumn $column): array
-    {
-        $state = $column->getState();
-        $color = $column->getColor($state);
-
-        return [
-            'type' => 'icon',
-            'html' => $this->iconHtml($column->getIcon($state)),
-            'color' => is_string($color) ? $color : null,
-        ];
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function serializeImageCell(ImageColumn $column): array
-    {
-        $state = $column->getState();
-
-        if (is_array($state)) {
-            $state = array_values($state)[0] ?? null;
-        }
-
-        return [
-            'type' => 'image',
-            'src' => $column->getImageUrl(is_string($state) ? $state : null),
-            'circular' => $column->isCircular(),
-            'height' => $column->getImageHeight(),
-        ];
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function serializeHtmlCell(Column $column): array
-    {
-        return [
-            'type' => 'html',
-            'html' => $column->toHtml(),
-        ];
+        // Unreachable with the default chain (html fallback), kept for
+        // custom chains that forget a terminal link.
+        return ['type' => 'html', 'html' => $column->toHtml()];
     }
 
     private function iconHtml(mixed $icon, ?IconSize $size = null): ?string

@@ -9,10 +9,6 @@ use Filament\Support\Enums\IconSize;
 use Filament\Support\Icons\Heroicon;
 use Filament\Support\View\SupportIconAlias;
 use Filament\Tables\Columns\Column;
-use Filament\Tables\Columns\IconColumn;
-use Filament\Tables\Columns\ImageColumn;
-use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Columns\ViewColumn;
 use Filament\Tables\Enums\PaginationMode;
 use Filament\Tables\Table;
 use Filament\Tables\View\TablesIconAlias;
@@ -34,12 +30,31 @@ final class SchemaSerializer
     /**
      * @param  list<FilterSerializers\FilterSerializer>|null  $filterSerializers
      */
-    public function __construct(?array $filterSerializers = null)
-    {
+    /**
+     * @var list<ColumnSerializers\ColumnSerializer>
+     */
+    private readonly array $columnSerializers;
+
+    /**
+     * @param  list<FilterSerializers\FilterSerializer>|null  $filterSerializers
+     * @param  list<ColumnSerializers\ColumnSerializer>|null  $columnSerializers
+     */
+    public function __construct(
+        ?array $filterSerializers = null,
+        ?array $columnSerializers = null,
+        private readonly int $debounceMs = 300,
+    ) {
         $this->filterSerializers = $filterSerializers ?? [
             new FilterSerializers\TernaryFilterSerializer,
             new FilterSerializers\SelectFilterSerializer,
             new FilterSerializers\FallbackFilterSerializer,
+        ];
+
+        $this->columnSerializers = $columnSerializers ?? [
+            new ColumnSerializers\IconColumnSerializer,
+            new ColumnSerializers\ImageColumnSerializer,
+            new ColumnSerializers\TextColumnSerializer,
+            new ColumnSerializers\HtmlColumnSerializer,
         ];
     }
 
@@ -92,6 +107,7 @@ final class SchemaSerializer
                 'defaultPerPage' => $table->getDefaultPaginationPageOption(),
             ],
             'actions' => (new ActionSerializer)->serializeStructure($table),
+            'debounceMs' => $this->debounceMs,
             'strings' => $this->strings($table),
             'icons' => $this->icons($table),
         ];
@@ -207,12 +223,12 @@ final class SchemaSerializer
 
     private function columnType(Column $column): string
     {
-        return match (true) {
-            $column instanceof ViewColumn => 'html',
-            $column instanceof IconColumn => 'icon',
-            $column instanceof ImageColumn => 'image',
-            $column instanceof TextColumn => $column->isBadge() ? 'badge' : 'text',
-            default => 'html',
-        };
+        foreach ($this->columnSerializers as $serializer) {
+            if ($serializer->canSerialize($column)) {
+                return $serializer->type($column);
+            }
+        }
+
+        return 'html';
     }
 }

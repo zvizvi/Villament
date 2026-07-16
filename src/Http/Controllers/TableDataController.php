@@ -49,7 +49,9 @@ final class TableDataController
         $records = $this->harness->getRecords();
         $schema = $this->schemaSerializer->serialize($table);
 
-        return response()->json([
+        $cacheTtl = (int) config('filament-vue-table.cache_ttl', 0);
+
+        $response = response()->json([
             'records' => $this->recordSerializer->serialize(
                 $this->harness->getComponent(),
                 $resourceClass,
@@ -59,5 +61,11 @@ final class TableDataController
             'indicators' => $this->indicatorSerializer->serialize($table),
             'schemaVersion' => $this->schemaSerializer->version($schema),
         ]);
+
+        if ($cacheTtl > 0) {
+            $response->header('Cache-Control', "private, max-age={$cacheTtl}");
+        }
+
+        return $response;
     }
 }

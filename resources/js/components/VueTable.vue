@@ -6,6 +6,7 @@ import { useTableData } from '../composables/useTableData.js'
 import { useLivewireBridge } from '../composables/useLivewireBridge.js'
 import { useSelection } from '../composables/useSelection.js'
 import { formatString, resolveStrings } from '../support/strings.js'
+import { resolveCellComponent } from '../support/cellRegistry.js'
 import TrustedIcon from './TrustedIcon.js'
 import TableHeader from './TableHeader.vue'
 import TableSearch from './TableSearch.vue'
@@ -80,6 +81,7 @@ const { records, meta, indicators, isLoading, error, retry, fetchNow, destroy: d
     {
         initialData: props.config.initialData,
         schemaVersion: props.config.schemaVersion,
+        debounceMs: schema.debounceMs ?? 300,
     },
 )
 
@@ -733,7 +735,7 @@ function recordCellClasses(column) {
                                             "
                                         >
                                             <component
-                                                :is="cellComponents[cell.getValue()?.type] ?? TextCell"
+                                                :is="resolveCellComponent(cell.getValue()?.type, cellComponents) ?? TextCell"
                                                 v-if="cell.getValue()"
                                                 :cell="cell.getValue()"
                                             />

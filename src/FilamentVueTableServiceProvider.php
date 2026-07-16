@@ -8,6 +8,8 @@ use Filament\Support\Assets\Js;
 use Filament\Support\Facades\FilamentAsset;
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
+use Zvizvi\FilamentVueTable\Support\RecordSerializer;
+use Zvizvi\FilamentVueTable\Support\SchemaSerializer;
 
 final class FilamentVueTableServiceProvider extends PackageServiceProvider
 {
@@ -17,7 +19,42 @@ final class FilamentVueTableServiceProvider extends PackageServiceProvider
     {
         $package
             ->name(self::$name)
+            ->hasConfigFile()
             ->hasViews();
+    }
+
+    public function packageRegistered(): void
+    {
+        $this->app->bind(SchemaSerializer::class, function (): SchemaSerializer {
+            return new SchemaSerializer(
+                filterSerializers: [
+                    ...array_map(app(...), config('filament-vue-table.filter_serializers', [])),
+                    new Support\FilterSerializers\TernaryFilterSerializer,
+                    new Support\FilterSerializers\SelectFilterSerializer,
+                    new Support\FilterSerializers\FallbackFilterSerializer,
+                ],
+                columnSerializers: $this->columnSerializerChain(),
+                debounceMs: (int) config('filament-vue-table.debounce_ms', 300),
+            );
+        });
+
+        $this->app->bind(RecordSerializer::class, function (): RecordSerializer {
+            return new RecordSerializer($this->columnSerializerChain());
+        });
+    }
+
+    /**
+     * @return list<Support\ColumnSerializers\ColumnSerializer>
+     */
+    private function columnSerializerChain(): array
+    {
+        return [
+            ...array_map(app(...), config('filament-vue-table.column_serializers', [])),
+            new Support\ColumnSerializers\IconColumnSerializer,
+            new Support\ColumnSerializers\ImageColumnSerializer,
+            new Support\ColumnSerializers\TextColumnSerializer,
+            new Support\ColumnSerializers\HtmlColumnSerializer,
+        ];
     }
 
     public function packageBooted(): void
