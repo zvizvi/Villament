@@ -10,7 +10,6 @@ import { resolveCellComponent } from '../support/cellRegistry.js'
 import TrustedIcon from './TrustedIcon.js'
 import TableHeader from './TableHeader.vue'
 import TableSearch from './TableSearch.vue'
-import TableFilters from './TableFilters.vue'
 import TableFiltersTrigger from './TableFiltersTrigger.vue'
 import TableFilterIndicators from './TableFilterIndicators.vue'
 import TableColumnManager from './TableColumnManager.vue'
@@ -35,7 +34,7 @@ const props = defineProps({
     },
     /**
      * The `[data-vue-table]` island element (passed by the bootstrapper).
-     * Used by the Livewire bridge to locate the hidden fallback filter form
+     * Used by the Livewire bridge to locate the hidden native filters panel
      * rendered as a sibling inside the same `.fi-vue-table` wrapper.
      */
     rootElement: {
@@ -55,15 +54,11 @@ const strings = resolveStrings(schema.strings)
  */
 const icons = schema.icons ?? {}
 
-const filterSchemas = computed(() => schema.filters ?? [])
-
 /**
- * 'livewire' (default): the filter panel is Filament's native Livewire
- * dropdown (rendered in Blade); Vue shows only the funnel trigger and
- * refetches on filter commits. 'vue': filters render as Vue controls.
+ * The filter panel itself is Filament's native Livewire dropdown (rendered in
+ * Blade); Vue shows only the funnel trigger and refetches on filter commits.
  */
-const filtersMode = computed(() => schema.filtersMode ?? 'livewire')
-const hasFilters = computed(() => filterSchemas.value.length > 0)
+const hasFilters = computed(() => Boolean(schema.hasFilters))
 
 const recordActionsStructure = computed(() => schema.actions?.record ?? [])
 const bulkActionsStructure = computed(() => schema.actions?.bulk ?? [])
@@ -100,10 +95,10 @@ const bridge = useLivewireBridge({
     islandElement: props.rootElement,
     initialFilters: props.config.state?.filters ?? {},
     onFiltersChanged: (filters) => {
-        // Livewire owns this change (fallback filter form commit); merge it
-        // into the Vue state WITHOUT pushing it back — the bridge snapshot
-        // already covers it. The filters watcher refetches immediately, which
-        // also refreshes the server-computed indicators.
+        // Livewire owns filter state (native panel commit); merge it into the
+        // Vue state WITHOUT pushing it back — the bridge snapshot already
+        // covers it. The filters watcher refetches immediately, which also
+        // refreshes the server-computed indicators.
         state.filters.value = { ...state.filters.value, ...filters }
     },
     onActionCompleted: (methods) => {
@@ -331,7 +326,7 @@ const hasBulkActionsBar = computed(
 
 const hasHeaderToolbar = computed(
     () => Boolean(schema.globallySearchable)
-        || filterSchemas.value.length > 0
+        || hasFilters.value
         || hasColumnManager.value
         || hasBulkActionsBar.value
         || toolbarActionsStructure.value.length > 0,
@@ -455,57 +450,14 @@ function onColumnSearch(columnKey, value) {
 }
 
 /**
- * Applies a Vue-owned filter change (select / ternary controls): updates the
- * reactive state (immediate refetch + page reset happen in `useTableData`)
- * and silently mirrors it into the Livewire component so the hidden fallback
- * form and future bridged actions stay consistent.
- *
- * @param {string} filterName
- * @param {*} filterState Exact Filament form state shape, e.g. `{ value: 'active' }`.
- * @returns {void}
- */
-function onFilterChange(filterName, filterState) {
-    bridge.pushFilterToLivewire(filterName, filterState)
-
-    state.filters.value = {
-        ...state.filters.value,
-        [filterName]: filterState,
-    }
-}
-
-/**
- * @param {object} filterSchema Serialized filter schema.
- * @param {*} currentState Current state of the filter (may be undefined).
- * @returns {*} The cleared Filament form state shape for the filter.
- */
-function clearedFilterState(filterSchema, currentState) {
-    if (! filterSchema || filterSchema.type === 'livewire-fallback') {
-        // Opaque Livewire-owned state: null out its own fields, mirroring
-        // Filament's `removeTableFilter()` behavior.
-        const cleared = {}
-
-        for (const key of Object.keys(currentState ?? {})) {
-            cleared[key] = null
-        }
-
-        return cleared
-    }
-
-    if (filterSchema.type === 'select' && filterSchema.multiple) {
-        return { values: [] }
-    }
-
-    return { value: '' }
-}
-
-/**
- * Clears one active filter via its indicator chip.
+ * Clears one active filter via its indicator chip. Search indicators are
+ * Vue-owned state; filter indicators go through Livewire (the single source
+ * of truth for filter state) — the commit hook then drives the Vue refetch.
  *
  * @param {import('../composables/useTableData.js').FilterIndicator} indicator
  * @returns {void}
  */
 function onRemoveIndicator(indicator) {
-    // Search indicators (stock parity): global search / per-column search.
     if (indicator.type === 'search') {
         state.search.value = ''
 
@@ -520,58 +472,17 @@ function onRemoveIndicator(indicator) {
         return
     }
 
-    // Native filters mode: Livewire owns the filter state — remove through it
-    // (`removeTableFilter`); the commit hook then drives the Vue refetch.
-    if (filtersMode.value === 'livewire') {
-        bridge.removeFilter(indicator.filter, indicator.field)
-
-        return
-    }
-
-    const filterSchema = filterSchemas.value.find((filter) => filter.key === indicator.filter)
-    const currentState = state.filters.value[indicator.filter]
-
-    let cleared
-
-    if (indicator.field && (! filterSchema || filterSchema.type === 'livewire-fallback')) {
-        // Indicator scoped to a single form field of a fallback filter.
-        cleared = { ...(currentState ?? {}), [indicator.field]: null }
-    } else {
-        cleared = clearedFilterState(filterSchema, currentState)
-    }
-
-    onFilterChange(indicator.filter, cleared)
+    bridge.removeFilter(indicator.filter, indicator.field)
 }
 
 /**
- * Clears every filter ("remove all" on the indicators bar / panel reset).
+ * Clears every filter ("remove all" on the indicators bar), through
+ * Livewire's own filters form.
  *
  * @returns {void}
  */
 function onRemoveAllFilters() {
-    // Native filters mode: reset through Livewire's own filters form.
-    if (filtersMode.value === 'livewire') {
-        bridge.resetFilters()
-
-        return
-    }
-
-    /** @type {Object<string, *>} */
-    const cleared = {}
-
-    const filterNames = new Set([
-        ...filterSchemas.value.map((filter) => filter.key),
-        ...Object.keys(state.filters.value ?? {}),
-    ])
-
-    for (const filterName of filterNames) {
-        const filterSchema = filterSchemas.value.find((filter) => filter.key === filterName)
-        cleared[filterName] = clearedFilterState(filterSchema, state.filters.value[filterName])
-
-        bridge.pushFilterToLivewire(filterName, cleared[filterName])
-    }
-
-    state.filters.value = cleared
+    bridge.resetFilters()
 }
 
 /**
@@ -644,23 +555,11 @@ function recordCellClasses(column) {
 
                             <!-- Native Livewire filters panel: Vue shows only the funnel trigger. -->
                             <TableFiltersTrigger
-                                v-if="hasFilters && filtersMode === 'livewire'"
+                                v-if="hasFilters"
                                 :active-count="activeFilterCount"
                                 :strings="strings"
                                 :icons="icons"
-                                @toggle="bridge.toggleFallbackForm()"
-                            />
-
-                            <TableFilters
-                                v-else-if="hasFilters"
-                                :filters="filterSchemas"
-                                :values="state.filters.value"
-                                :active-count="activeFilterCount"
-                                :strings="strings"
-                                :icons="icons"
-                                @update:filter="onFilterChange"
-                                @reset="onRemoveAllFilters"
-                                @toggle-fallback="bridge.toggleFallbackForm()"
+                                @toggle="bridge.toggleFiltersPanel()"
                             />
 
                             <TableColumnManager

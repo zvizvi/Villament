@@ -26,33 +26,18 @@ function vueTableConfig(): array
 }
 
 describe('filter schema serialization', function (): void {
-    it('serializes each fixture filter through the correct chain link', function (): void {
-        $filters = collect(vueTableConfig()['schema']['filters'])->keyBy('key');
+    it('ships only a hasFilters flag — the panel itself is native Livewire, never serialized', function (): void {
+        $schema = vueTableConfig()['schema'];
 
-        expect($filters->get('status'))->toMatchArray([
-            'type' => 'select',
-            'multiple' => false,
-            'options' => ['active' => 'Active', 'pending' => 'Pending', 'archived' => 'Archived'],
-        ])
-            ->and($filters->get('statuses'))->toMatchArray([
-                'type' => 'select',
-                'multiple' => true,
-            ])
-            ->and($filters->get('is_admin'))->toMatchArray([
-                'type' => 'ternary',
-                'trueLabel' => 'Yes',
-                'falseLabel' => 'No',
-            ])
-            ->and($filters->get('created_from'))->toMatchArray([
-                'type' => 'livewire-fallback',
-            ]);
+        expect($schema['hasFilters'])->toBeTrue()
+            ->and($schema)->not->toHaveKey('filters');
     });
 
     it('includes localized UI strings in the schema', function (): void {
         $strings = vueTableConfig()['schema']['strings'];
 
         expect($strings['filtersHeading'])->toBe('Filters')
-            ->and($strings['filtersApply'])->toBe('Apply filters')
+            ->and($strings['filtersRemoveAll'])->toBe('Remove all filters')
             ->and($strings['searchPlaceholder'])->toBe('Search')
             ->and($strings['paginationOverview'])->toContain(':first');
     });
@@ -81,14 +66,10 @@ describe('filter schema serialization', function (): void {
         // The hidden, Livewire-morphable container holds the stock filters
         // component — heading, native fields, and the reset action — not a
         // Vue reimplementation.
-        expect($html)->toContain('data-vue-table-fallback-filters')
+        expect($html)->toContain('data-vue-table-filters-panel')
             ->toContain('fi-ta-filters-heading')
             ->toContain('resetTableFiltersForm')
             ->toContain('applyTableFilters');
-    });
-
-    it('ships the filters mode in the schema (livewire by default)', function (): void {
-        expect(vueTableConfig()['schema']['filtersMode'])->toBe('livewire');
     });
 });
 
@@ -216,8 +197,8 @@ describe('parity per filter (DoD)', function (): void {
     });
 });
 
-describe('livewire fallback path', function (): void {
-    it('applies deferred filters through the page component and reflects them in the island config', function (): void {
+describe('native filters panel path', function (): void {
+    it('applies deferred filters through the native panel (page component) and reflects them in the island config', function (): void {
         User::factory()->count(3)->create(['status' => 'active']);
         User::factory()->count(2)->create(['status' => 'archived']);
 

@@ -1,24 +1,24 @@
 import { ref } from 'vue'
 
 /**
- * Bridge between the Vue island and the host Livewire page component, used
- * for `livewire-fallback` filters (Phase 2) and, later, the actions bridge.
+ * Bridge between the Vue island and the host Livewire page component: the
+ * native filters panel and the actions bridge.
  *
- * The Blade island view keeps the page's original Livewire filter form
- * mounted (and Livewire-morphable) in a hidden sibling container
- * `[data-vue-table-fallback-filters]` inside the same `.fi-vue-table`
- * wrapper. This composable:
+ * The Blade island view keeps Filament's own complete filters panel mounted
+ * (and Livewire-morphable) in a hidden sibling container
+ * `[data-vue-table-filters-panel]` inside the same `.fi-vue-table` wrapper.
+ * This composable:
  *
  * - toggles that container open/closed as a floating panel;
  * - watches Livewire commits for `tableFilters` changes and forwards them to
  *   Vue (`onFiltersChanged`) so the island refetches with the new state;
- * - pushes Vue-owned filter changes back into the Livewire component
- *   silently (deferred `$wire.set(..., false)`, no network roundtrip), so
- *   the hidden form and future Livewire actions stay consistent.
+ * - removes/resets filters through Filament's own Livewire methods
+ *   (`removeTableFilter` / `resetTableFiltersForm`) — Livewire is the single
+ *   source of truth for filter state; no filter UI exists in Vue.
  *
- * Loop guard: every state push (either direction) updates the shared
- * `lastKnownFiltersJson` snapshot BEFORE it propagates, so a change echoed
- * back through a later commit never re-triggers `onFiltersChanged`.
+ * Loop guard: `lastKnownFiltersJson` snapshots the last seen filter state, so
+ * a change echoed back through a later commit never re-triggers
+ * `onFiltersChanged`.
  *
  * Verified against livewire/livewire v4 `dist/livewire.esm.js`:
  * - `Livewire.hook('commit', ({ component, commit, respond, succeed, fail }) => ...)`,
@@ -46,10 +46,9 @@ import { ref } from 'vue'
  *   (`$wire.$on`, as `table.js` does in `init()`) → `onDeselectAll`.
  *
  * @typedef {object} LivewireBridge
- * @property {import('vue').Ref<boolean>} isFallbackFormVisible
- * @property {() => void} toggleFallbackForm
- * @property {() => void} hideFallbackForm
- * @property {(filterName: string, filterState: *) => void} pushFilterToLivewire
+ * @property {import('vue').Ref<boolean>} isFiltersPanelVisible
+ * @property {() => void} toggleFiltersPanel
+ * @property {() => void} hideFiltersPanel
  * @property {(name: string, recordKey: string) => void} mountRecordAction
  * @property {(name: string, selection: { isTracking: boolean, selected: Iterable<string>, deselected: Iterable<string> }) => void} mountBulkAction
  * @property {(columns: object[]) => void} applyColumnManager
@@ -58,7 +57,7 @@ import { ref } from 'vue'
  * @property {() => void} destroy
  */
 
-const FALLBACK_FORM_SELECTOR = '[data-vue-table-fallback-filters]'
+const FILTERS_PANEL_SELECTOR = '[data-vue-table-filters-panel]'
 
 /**
  * Host-component methods whose successful commit means the table data may
@@ -75,13 +74,13 @@ const REFRESH_COMMIT_METHODS = [
 ]
 
 /**
- * `fi-vue-ta-fallback-filters-open` anchors the panel (package CSS); the
- * `fi-dropdown-panel fi-width-sm fi-ta-filters` classes are Filament's own —
- * they provide the full panel surface (absolute positioning, z-index,
- * background, ring, shadow, radius, width, grid + padding) natively.
+ * `fi-vue-ta-filters-panel-open` anchors the panel (package CSS); the
+ * `fi-dropdown-panel fi-width-xs` classes are Filament's own — they provide
+ * the full panel surface (absolute positioning, z-index, background, ring,
+ * shadow, radius, width) natively, exactly like the stock filters dropdown.
  */
-const FALLBACK_FORM_OPEN_CLASSES = [
-    'fi-vue-ta-fallback-filters-open',
+const FILTERS_PANEL_OPEN_CLASSES = [
+    'fi-vue-ta-filters-panel-open',
     'fi-dropdown-panel',
     'fi-width-xs',
 ]
@@ -127,7 +126,7 @@ function wireFor(livewireId) {
  *     onActionCompleted?: (methods: string[]) => void,
  *     onDeselectAll?: () => void,
  * }} options `islandElement` is the `[data-vue-table]` mount point; the
- *     fallback form container is looked up among its siblings.
+ *     filters panel container is looked up among its siblings.
  * @returns {LivewireBridge}
  */
 export function useLivewireBridge(options) {
@@ -139,79 +138,55 @@ export function useLivewireBridge(options) {
         onDeselectAll = null,
     } = options
 
-    const isFallbackFormVisible = ref(false)
+    const isFiltersPanelVisible = ref(false)
 
     let lastKnownFiltersJson = JSON.stringify(options.initialFilters ?? {})
 
     /** @returns {?HTMLElement} */
-    function fallbackFormContainer() {
+    function filtersPanelContainer() {
         const wrapper = islandElement?.closest('.fi-vue-table') ?? islandElement?.parentElement
 
-        return wrapper?.querySelector(FALLBACK_FORM_SELECTOR) ?? null
+        return wrapper?.querySelector(FILTERS_PANEL_SELECTOR) ?? null
     }
 
     /** @returns {void} */
-    function showFallbackForm() {
-        const container = fallbackFormContainer()
+    function showFiltersPanel() {
+        const container = filtersPanelContainer()
 
         if (! container) {
             return
         }
 
         container.style.display = ''
-        container.classList.add(...FALLBACK_FORM_OPEN_CLASSES)
-        isFallbackFormVisible.value = true
+        container.classList.add(...FILTERS_PANEL_OPEN_CLASSES)
+        isFiltersPanelVisible.value = true
     }
 
     /** @returns {void} */
-    function hideFallbackForm() {
-        const container = fallbackFormContainer()
+    function hideFiltersPanel() {
+        const container = filtersPanelContainer()
 
         if (container) {
             container.style.display = 'none'
-            container.classList.remove(...FALLBACK_FORM_OPEN_CLASSES)
+            container.classList.remove(...FILTERS_PANEL_OPEN_CLASSES)
         }
 
-        isFallbackFormVisible.value = false
+        isFiltersPanelVisible.value = false
     }
 
     /** @returns {void} */
-    function toggleFallbackForm() {
-        if (isFallbackFormVisible.value) {
-            hideFallbackForm()
+    function toggleFiltersPanel() {
+        if (isFiltersPanelVisible.value) {
+            hideFiltersPanel()
         } else {
-            showFallbackForm()
+            showFiltersPanel()
         }
     }
 
     /**
-     * Silently syncs a Vue-owned filter's state into the Livewire component.
-     * `live = false` defers the mutation (no network request), and the
-     * snapshot is updated first so the commit watcher never echoes it back.
-     *
-     * @param {string} filterName
-     * @param {*} filterState Filament form state shape, e.g. `{ value: 'active' }`.
-     * @returns {void}
-     */
-    function pushFilterToLivewire(filterName, filterState) {
-        const wire = wireFor(livewireId)
-
-        if (! wire) {
-            return
-        }
-
-        try {
-            wire.set(`tableFilters.${filterName}`, filterState, false)
-            lastKnownFiltersJson = JSON.stringify(wire.get('tableFilters') ?? {})
-        } catch {
-            // The component may be mid-teardown (wire:navigate); never break the island.
-        }
-    }
-
-    /**
-     * Removes one active filter via Filament's own `removeTableFilter` (native
-     * filters mode). The resulting commit is caught by the filters watcher,
-     * which refetches — so removal, indicators and data stay in sync.
+     * Removes one active filter via Filament's own `removeTableFilter`. The
+     * resulting commit is caught by the filters watcher, which refetches —
+     * so removal, indicators and data stay in sync.
      *
      * @param {string} filterName
      * @param {?string} [field] Indicator-scoped form field, when applicable.
@@ -433,7 +408,7 @@ export function useLivewireBridge(options) {
                 const calls = Array.isArray(commit?.calls) ? commit.calls : []
 
                 if (calls.some((call) => call?.method === 'applyTableFilters')) {
-                    hideFallbackForm()
+                    hideFiltersPanel()
                 }
 
                 const refreshMethods = calls
@@ -453,14 +428,13 @@ export function useLivewireBridge(options) {
     function destroy() {
         forgetCommitHook?.()
         forgetCommitHook = null
-        hideFallbackForm()
+        hideFiltersPanel()
     }
 
     return {
-        isFallbackFormVisible,
-        toggleFallbackForm,
-        hideFallbackForm,
-        pushFilterToLivewire,
+        isFiltersPanelVisible,
+        toggleFiltersPanel,
+        hideFiltersPanel,
         removeFilter,
         resetFilters,
         mountRecordAction,

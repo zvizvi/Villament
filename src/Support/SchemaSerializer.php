@@ -23,34 +23,17 @@ use function Filament\Support\generate_icon_html;
 final class SchemaSerializer
 {
     /**
-     * @var list<FilterSerializers\FilterSerializer>
-     */
-    private readonly array $filterSerializers;
-
-    /**
-     * @param  list<FilterSerializers\FilterSerializer>|null  $filterSerializers
-     */
-    /**
      * @var list<ColumnSerializers\ColumnSerializer>
      */
     private readonly array $columnSerializers;
 
     /**
-     * @param  list<FilterSerializers\FilterSerializer>|null  $filterSerializers
      * @param  list<ColumnSerializers\ColumnSerializer>|null  $columnSerializers
      */
     public function __construct(
-        ?array $filterSerializers = null,
         ?array $columnSerializers = null,
         private readonly int $debounceMs = 300,
-        private readonly string $filtersMode = 'livewire',
     ) {
-        $this->filterSerializers = $filterSerializers ?? [
-            new FilterSerializers\TernaryFilterSerializer,
-            new FilterSerializers\SelectFilterSerializer,
-            new FilterSerializers\FallbackFilterSerializer,
-        ];
-
         $this->columnSerializers = $columnSerializers ?? [
             new ColumnSerializers\IconColumnSerializer,
             new ColumnSerializers\ImageColumnSerializer,
@@ -76,18 +59,6 @@ final class SchemaSerializer
             $columns[] = $this->serializeColumn($column);
         }
 
-        $filters = [];
-
-        foreach ($table->getFilters() as $filter) {
-            foreach ($this->filterSerializers as $serializer) {
-                if ($serializer->canSerialize($filter)) {
-                    $filters[] = $serializer->serialize($filter);
-
-                    break;
-                }
-            }
-        }
-
         return [
             'columns' => $columns,
             'defaultSort' => $defaultSortColumn === null ? null : [
@@ -97,7 +68,10 @@ final class SchemaSerializer
             'globallySearchable' => $table->isSearchable(),
             'striped' => $table->isStriped(),
             'reorderableColumns' => $table->hasReorderableColumns(),
-            'filters' => $filters,
+            // The filter panel itself is Filament's native Livewire dropdown
+            // (rendered in Blade); the island only needs to know whether to
+            // show the funnel trigger.
+            'hasFilters' => $table->getFilters() !== [],
             'pagination' => [
                 'mode' => match ($table->getPaginationMode()) {
                     PaginationMode::Simple => 'simple',
@@ -109,7 +83,6 @@ final class SchemaSerializer
             ],
             'actions' => (new ActionSerializer)->serializeStructure($table),
             'debounceMs' => $this->debounceMs,
-            'filtersMode' => $this->filtersMode,
             'strings' => $this->strings($table),
             'icons' => $this->icons($table),
         ];
@@ -161,12 +134,8 @@ final class SchemaSerializer
             'searchLabel' => __('filament-tables::table.fields.search.label'),
             'filtersHeading' => __('filament-tables::table.filters.heading'),
             'filtersIndicator' => __('filament-tables::table.filters.indicator'),
-            'filtersApply' => __('filament-tables::table.filters.actions.apply.label'),
             'filtersRemove' => __('filament-tables::table.filters.actions.remove.label'),
             'filtersRemoveAll' => __('filament-tables::table.filters.actions.remove_all.label'),
-            'filtersReset' => __('filament-tables::table.filters.actions.reset.label'),
-            'selectPlaceholder' => __('filament-tables::table.filters.select.placeholder'),
-            'multiSelectPlaceholder' => __('filament-tables::table.filters.multi_select.placeholder'),
             'emptyHeading' => __('filament-tables::table.empty.heading', ['model' => $table->getPluralModelLabel()]),
             'paginationLabel' => __('filament::components/pagination.label'),
             'paginationOverview' => __('filament::components/pagination.overview'),

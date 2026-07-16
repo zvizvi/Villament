@@ -20,7 +20,7 @@ use Zvizvi\FilamentVueTable\Support\SummarySerializer;
  * Swaps the embedded Livewire table on a ListRecords page for the Vue island
  * mount point. Header actions, widgets, tabs, breadcrumbs and render hooks
  * stay untouched Filament output, and the Livewire page component keeps its
- * full table state (needed for the actions bridge and the filter fallback).
+ * full table state (needed for the actions bridge and the native filters panel).
  */
 trait HasVueTable
 {
@@ -28,32 +28,11 @@ trait HasVueTable
     {
         $config = $this->getVueTableConfig();
 
-        $serializedFilters = is_array($config['schema'] ?? null) ? ($config['schema']['filters'] ?? []) : [];
-        $filtersMode = $config['schema']['filtersMode'] ?? 'livewire';
-
-        // Render the page's native Livewire filters panel when: the whole
-        // filter UI is delegated to Livewire ('livewire' mode, any filter), or
-        // — in 'vue' mode — at least one filter falls back to Livewire.
-        $hasFilters = is_array($serializedFilters) && $serializedFilters !== [];
-        $hasFallbackFilters = false;
-
-        if (is_array($serializedFilters)) {
-            foreach ($serializedFilters as $filter) {
-                if (is_array($filter) && ($filter['type'] ?? null) === 'livewire-fallback') {
-                    $hasFallbackFilters = true;
-
-                    break;
-                }
-            }
-        }
-
-        $withNativeFilters = ($filtersMode === 'livewire' && $hasFilters) || $hasFallbackFilters;
-
         return $schema
             ->components([
                 $this->getTabsContentComponent(),
                 RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_BEFORE),
-                VueTableIsland::make($config, withNativeFilters: $withNativeFilters),
+                VueTableIsland::make($config, withNativeFilters: (bool) ($config['schema']['hasFilters'] ?? false)),
                 RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_AFTER),
             ]);
     }

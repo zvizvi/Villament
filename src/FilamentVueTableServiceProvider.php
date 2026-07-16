@@ -26,15 +26,8 @@ final class FilamentVueTableServiceProvider extends PackageServiceProvider
     {
         $this->app->bind(SchemaSerializer::class, function (): SchemaSerializer {
             return new SchemaSerializer(
-                filterSerializers: [
-                    ...array_map(app(...), config('filament-vue-table.filter_serializers', [])),
-                    new Support\FilterSerializers\TernaryFilterSerializer,
-                    new Support\FilterSerializers\SelectFilterSerializer,
-                    new Support\FilterSerializers\FallbackFilterSerializer,
-                ],
                 columnSerializers: $this->columnSerializerChain(),
                 debounceMs: (int) config('filament-vue-table.debounce_ms', 300),
-                filtersMode: config('filament-vue-table.filters', 'livewire') === 'vue' ? 'vue' : 'livewire',
             );
         });
 

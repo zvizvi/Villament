@@ -20,12 +20,7 @@ function makeConfig(overrides = {}) {
             ],
             defaultSort: null,
             globallySearchable: true,
-            filtersMode: 'vue',
-            filters: [
-                { key: 'status', label: 'Status', type: 'select', options: { active: 'Active', archived: 'Archived' }, multiple: false, placeholder: null },
-                { key: 'statuses', label: 'Statuses', type: 'select', options: { active: 'Active', pending: 'Pending' }, multiple: true, placeholder: null },
-                { key: 'is_admin', label: 'Administrator', type: 'ternary', trueLabel: 'Yes', falseLabel: 'No', placeholder: '-' },
-            ],
+            hasFilters: true,
             pagination: { mode: 'offset', pageOptions: [10, 25], defaultPerPage: 10 },
             strings: {
                 filtersIndicator: 'Active filters',
@@ -48,8 +43,6 @@ function makeConfig(overrides = {}) {
             columnSearches: {},
             filters: {
                 status: { value: '' },
-                statuses: { values: [] },
-                is_admin: { value: '' },
             },
             page: 1,
             perPage: 10,
@@ -75,9 +68,18 @@ function jsonResponse(overrides = {}) {
     }
 }
 
-describe('VueTable filters + indicators', () => {
+describe('VueTable filters (native Livewire panel) + indicators', () => {
     /** @type {import('vitest').Mock} */
     let fetchMock
+
+    /** @type {Array<(payload: object) => void>} */
+    let commitHandlers
+
+    /** @type {object} */
+    let component
+
+    /** @type {Array<[string, *[]]>} */
+    let wireCalls
 
     /** @type {?import('@vue/test-utils').VueWrapper} */
     let wrapper = null
@@ -86,11 +88,36 @@ describe('VueTable filters + indicators', () => {
         window.history.replaceState(null, '', '/admin/users')
         fetchMock = vi.fn().mockResolvedValue(jsonResponse())
         vi.stubGlobal('fetch', fetchMock)
+
+        commitHandlers = []
+        wireCalls = []
+        component = {
+            id: 'lw-users',
+            $wire: {
+                get: (property) => (property === 'tableFilters' ? {} : undefined),
+                set: (...args) => wireCalls.push(['set', args]),
+                removeTableFilter: (...args) => wireCalls.push(['removeTableFilter', args]),
+                resetTableFiltersForm: (...args) => wireCalls.push(['resetTableFiltersForm', args]),
+                $on: () => {},
+            },
+        }
+        globalThis.Livewire = {
+            hook: (name, callback) => {
+                if (name === 'commit') {
+                    commitHandlers.push(callback)
+                }
+
+                return () => {}
+            },
+            find: (id) => (id === 'lw-users' ? makeWireProxy(component.$wire, (name) => wireCalls.push(['phantom', name])) : null),
+        }
     })
 
     afterEach(() => {
         wrapper?.unmount()
         wrapper = null
+        delete globalThis.Livewire
+        document.body.innerHTML = ''
         vi.unstubAllGlobals()
     })
 
@@ -105,14 +132,6 @@ describe('VueTable filters + indicators', () => {
         })
 
         return wrapper
-    }
-
-    /**
-     * @param {number} [callIndex]
-     * @returns {URL} The URL of the given fetch call (default: last).
-     */
-    function fetchedUrl(callIndex = fetchMock.mock.calls.length - 1) {
-        return new URL(fetchMock.mock.calls[callIndex][0])
     }
 
     it('renders indicator chips from the latest server data', async () => {
@@ -138,95 +157,64 @@ describe('VueTable filters + indicators', () => {
         expect(chips[1].find('.fi-badge-delete-btn').exists()).toBe(false)
     })
 
-    it('changing a filter fetches immediately with the COMPLETE filters map and resets the page', async () => {
+    it('renders only the funnel trigger (no Vue filter fields) and toggles the native panel', async () => {
+        document.body.innerHTML = `
+            <div class="fi-vue-table">
+                <div data-vue-table></div>
+                <div data-vue-table-filters-panel style="display: none;"></div>
+            </div>`
+        const island = document.querySelector('[data-vue-table]')
+
+        wrapper = mount(VueTable, {
+            props: { config: makeConfig(), rootElement: island },
+            attachTo: island,
+        })
+
+        // The funnel trigger renders; no Vue-rendered filter panel exists.
+        expect(wrapper.find('.fi-vue-ta-filters-trigger').exists()).toBe(true)
+        expect(wrapper.find('.fi-vue-ta-filters-trigger .fi-dropdown-panel').exists()).toBe(false)
+
+        const panel = document.querySelector('[data-vue-table-filters-panel]')
+        expect(panel.style.display).toBe('none')
+
+        await wrapper.get('.fi-vue-ta-filters-trigger button').trigger('click')
+        expect(panel.style.display).not.toBe('none')
+        expect(panel.classList.contains('fi-vue-ta-filters-panel-open')).toBe(true)
+    })
+
+    it('hides the funnel trigger when the table defines no filters', () => {
+        const config = makeConfig()
+        config.schema.hasFilters = false
+
+        wrapper = mount(VueTable, { props: { config }, attachTo: document.body })
+
+        expect(wrapper.find('.fi-vue-ta-filters-trigger').exists()).toBe(false)
+    })
+
+    it('removes a filter indicator through Livewire (removeTableFilter), not Vue state', async () => {
         const wrapper = mountTable({
-            state: { ...makeConfig().state, page: 3 },
-        })
-
-        await wrapper.get('.fi-vue-ta-filters .fi-dropdown-trigger button').trigger('click')
-        await wrapper.get('[data-filter="status"] select').setValue('archived')
-
-        expect(fetchMock).toHaveBeenCalledTimes(1)
-
-        const params = fetchedUrl().searchParams
-        expect(params.get('filters[status][value]')).toBe('archived')
-        expect(params.get('filters[statuses][values]')).toBe('')
-        expect(params.get('filters[is_admin][value]')).toBe('')
-        expect(params.has('page')).toBe(false)
-    })
-
-    it('clearing via an indicator chip X produces the cleared shape and refetches immediately', async () => {
-        const config = makeConfig({
             initialData: {
                 ...makeConfig().initialData,
-                indicators: [
-                    { filter: 'status', field: null, label: 'Status: Archived', removable: true },
-                ],
+                indicators: [{ type: 'filter', filter: 'status', field: null, label: 'Status: Active', removable: true, colorClasses: '' }],
             },
         })
-        config.state.filters.status = { value: 'archived' }
 
-        const wrapper = mount(VueTable, { props: { config }, attachTo: document.body })
+        await wrapper.get('.fi-ta-filter-indicators-badges-ctn .fi-badge-delete-btn').trigger('click')
 
-        await wrapper.get('.fi-badge-delete-btn').trigger('click')
-
-        expect(fetchMock).toHaveBeenCalledTimes(1)
-
-        const params = fetchedUrl().searchParams
-        expect(params.get('filters[status][value]')).toBe('')
-        expect(params.get('filters[statuses][values]')).toBe('')
-        expect(params.get('filters[is_admin][value]')).toBe('')
-
-        wrapper.unmount()
+        expect(wireCalls).toContainEqual(['removeTableFilter', ['status', null]])
     })
 
-    it('remove all clears every filter to its exact cleared shape and refetches once', async () => {
-        const config = makeConfig({
+    it('remove-all resets filters through Livewire (resetTableFiltersForm)', async () => {
+        const wrapper = mountTable({
             initialData: {
                 ...makeConfig().initialData,
-                indicators: [
-                    { filter: 'status', field: null, label: 'Status: Archived', removable: true },
-                    { filter: 'statuses', field: null, label: 'Statuses: Active, Pending', removable: true },
-                ],
+                indicators: [{ type: 'filter', filter: 'status', field: null, label: 'Status: Active', removable: true, colorClasses: '' }],
             },
         })
-        config.state.filters = {
-            status: { value: 'archived' },
-            statuses: { values: ['active', 'pending'] },
-            is_admin: { value: '1' },
-        }
 
-        const localWrapper = mount(VueTable, { props: { config }, attachTo: document.body })
+        await wrapper.get('.fi-vue-ta-remove-all-filters-btn').trigger('click')
 
-        await localWrapper.get('.fi-vue-ta-remove-all-filters-btn').trigger('click')
-
-        expect(fetchMock).toHaveBeenCalledTimes(1)
-
-        const params = fetchedUrl().searchParams
-        expect(params.get('filters[status][value]')).toBe('')
-        expect(params.get('filters[statuses][values]')).toBe('')
-        expect(params.get('filters[is_admin][value]')).toBe('')
-        expect([...params.keys()].filter((key) => key.startsWith('filters['))).toHaveLength(3)
-
-        localWrapper.unmount()
-    })
-
-    it('replaces the indicators with the latest response payload after a fetch', async () => {
-        fetchMock.mockResolvedValue(jsonResponse({
-            indicators: [{ filter: 'status', field: null, label: 'Status: Active', removable: true }],
-        }))
-
-        const wrapper = mountTable()
-
-        expect(wrapper.find('.fi-ta-filter-indicators').exists()).toBe(false)
-
-        await wrapper.get('.fi-vue-ta-filters .fi-dropdown-trigger button').trigger('click')
-        await wrapper.get('[data-filter="status"] select').setValue('active')
-        await vi.waitFor(() => {
-            expect(wrapper.find('.fi-ta-filter-indicators').exists()).toBe(true)
-        })
-
-        expect(wrapper.get('.fi-ta-filter-indicators .fi-badge').text()).toContain('Status: Active')
+        expect(wireCalls).toContainEqual(['resetTableFiltersForm', []])
     })
 
     it('uses the localized empty state heading', async () => {
@@ -243,122 +231,5 @@ describe('VueTable filters + indicators', () => {
         expect(localWrapper.get('.fi-ta-empty-state-heading').text()).toBe('No users')
 
         localWrapper.unmount()
-    })
-
-    it('syncs filters into the URL and hydrates them back on a fresh mount', async () => {
-        const wrapper = mountTable()
-
-        await wrapper.get('.fi-vue-ta-filters .fi-dropdown-trigger button').trigger('click')
-        await wrapper.get('[data-filter="status"] select').setValue('archived')
-
-        const urlParams = new URLSearchParams(window.location.search)
-        expect(urlParams.get('filters[status][value]')).toBe('archived')
-
-        wrapper.unmount()
-
-        // Fresh island on the same URL (e.g. after wire:navigate back).
-        const second = mount(VueTable, { props: { config: makeConfig() }, attachTo: document.body })
-
-        await second.get('.fi-vue-ta-filters .fi-dropdown-trigger button').trigger('click')
-        expect(second.get('[data-filter="status"] select').element.value).toBe('archived')
-
-        second.unmount()
-    })
-})
-
-describe('VueTable native (livewire) filters mode', () => {
-    let fetchMock
-    let commitHandlers
-    let component
-    let wireCalls
-    let wrapper = null
-
-    beforeEach(() => {
-        window.history.replaceState(null, '', '/admin/users')
-        fetchMock = vi.fn().mockResolvedValue(jsonResponse())
-        vi.stubGlobal('fetch', fetchMock)
-
-        commitHandlers = []
-        wireCalls = []
-        component = {
-            id: 'lw-users',
-            $wire: {
-                get: (p) => (p === 'tableFilters' ? {} : undefined),
-                set: (...args) => wireCalls.push(['set', args]),
-                removeTableFilter: (...args) => wireCalls.push(['removeTableFilter', args]),
-                resetTableFiltersForm: (...args) => wireCalls.push(['resetTableFiltersForm', args]),
-                $on: () => {},
-            },
-        }
-        globalThis.Livewire = {
-            hook: (name, cb) => {
-                if (name === 'commit') commitHandlers.push(cb)
-                return () => {}
-            },
-            find: (id) => (id === 'lw-users' ? makeWireProxy(component.$wire, (n) => wireCalls.push(['phantom', n])) : null),
-        }
-    })
-
-    afterEach(() => {
-        wrapper?.unmount()
-        wrapper = null
-        delete globalThis.Livewire
-        vi.unstubAllGlobals()
-    })
-
-    it('renders only the funnel trigger (no Vue filter fields) and toggles the native panel', async () => {
-        document.body.innerHTML = `
-            <div class="fi-vue-table">
-                <div data-vue-table></div>
-                <div data-vue-table-fallback-filters style="display: none;"></div>
-            </div>`
-        const island = document.querySelector('[data-vue-table]')
-
-        const cfg = makeConfig()
-        cfg.schema.filtersMode = 'livewire'
-        wrapper = mount(VueTable, {
-            props: { config: cfg, rootElement: island },
-            attachTo: document.querySelector('[data-vue-table]'),
-        })
-
-        // The funnel trigger renders; the Vue filter dropdown panel does not.
-        expect(wrapper.find('.fi-vue-ta-filters-trigger').exists()).toBe(true)
-        expect(wrapper.find('.fi-vue-ta-filters .fi-dropdown-panel').exists()).toBe(false)
-
-        const fallback = document.querySelector('[data-vue-table-fallback-filters]')
-        expect(fallback.style.display).toBe('none')
-
-        await wrapper.get('.fi-vue-ta-filters-trigger button').trigger('click')
-        expect(fallback.style.display).not.toBe('none')
-    })
-
-    it('removes a filter indicator through Livewire (removeTableFilter), not Vue state', async () => {
-        const cfg = makeConfig({
-            initialData: {
-                ...makeConfig().initialData,
-                indicators: [{ type: 'filter', filter: 'status', field: null, label: 'Status: Active', removable: true, colorClasses: '' }],
-            },
-        })
-        cfg.schema.filtersMode = 'livewire'
-        wrapper = mount(VueTable, { props: { config: cfg }, attachTo: document.body })
-
-        await wrapper.get('.fi-ta-filter-indicators-badges-ctn .fi-badge-delete-btn').trigger('click')
-
-        expect(wireCalls).toContainEqual(['removeTableFilter', ['status', null]])
-    })
-
-    it('remove-all resets filters through Livewire (resetTableFiltersForm)', async () => {
-        const cfg = makeConfig({
-            initialData: {
-                ...makeConfig().initialData,
-                indicators: [{ type: 'filter', filter: 'status', field: null, label: 'Status: Active', removable: true, colorClasses: '' }],
-            },
-        })
-        cfg.schema.filtersMode = 'livewire'
-        wrapper = mount(VueTable, { props: { config: cfg }, attachTo: document.body })
-
-        await wrapper.get('.fi-vue-ta-remove-all-filters-btn').trigger('click')
-
-        expect(wireCalls).toContainEqual(['resetTableFiltersForm', []])
     })
 })

@@ -41,13 +41,13 @@
             inside the wire:ignore mount) but visually hidden. The Vue island's
             funnel trigger toggles it open; on apply/reset/remove the Livewire
             commit hook drives a Vue refetch. This is byte-identical to the
-            stock filters dropdown content — no per-filter-type Vue rebuild.
+            stock filters dropdown content — no filter UI exists in Vue.
         --}}
         <div
-            data-vue-table-fallback-filters
-            wire:key="{{ $getLivewire()->getId() }}.vue-table-fallback-filters"
+            data-vue-table-filters-panel
+            wire:key="{{ $getLivewire()->getId() }}.vue-table-filters-panel"
             style="display: none;"
-            class="fi-vue-table-fallback-filters"
+            class="fi-vue-table-filters-panel"
         >
             <x-filament-tables::filters
                 :apply-action="$getLivewire()->getTable()->getFiltersApplyAction()"

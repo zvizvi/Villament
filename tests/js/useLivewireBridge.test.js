@@ -18,12 +18,16 @@ describe('useLivewireBridge', () => {
     /** @type {import('vitest').Mock} */
     let wireSet
 
+    /** @type {Array<[string, *[]]>} Recorded real $wire method calls. */
+    let wireCalls
+
     /** @type {Array<{ destroy: () => void }>} */
     let bridges
 
     beforeEach(() => {
         commitHandlers = []
         phantomCalls = []
+        wireCalls = []
         bridges = []
         wireState = { tableFilters: { status: { value: '' } } }
 
@@ -46,6 +50,8 @@ describe('useLivewireBridge', () => {
             $wire: {
                 get: (property) => (property === 'tableFilters' ? wireState.tableFilters : undefined),
                 set: wireSet,
+                removeTableFilter: (...args) => wireCalls.push(['removeTableFilter', args]),
+                resetTableFiltersForm: (...args) => wireCalls.push(['resetTableFiltersForm', args]),
             },
         }
 
@@ -65,7 +71,7 @@ describe('useLivewireBridge', () => {
         document.body.innerHTML = `
             <div class="fi-vue-table">
                 <div data-vue-table></div>
-                <div data-vue-table-fallback-filters style="display: none;"></div>
+                <div data-vue-table-filters-panel style="display: none;"></div>
             </div>
         `
     })
@@ -156,63 +162,60 @@ describe('useLivewireBridge', () => {
         expect(onFiltersChanged).not.toHaveBeenCalled()
     })
 
-    it('pushes Vue-owned changes into Livewire silently (deferred set, no echo)', () => {
-        const onFiltersChanged = vi.fn()
-        const bridge = makeBridge({ onFiltersChanged })
-
-        bridge.pushFilterToLivewire('status', { value: 'active' })
-
-        expect(wireSet).toHaveBeenCalledWith('tableFilters.status', { value: 'active' }, false)
-        expect(wireState.tableFilters.status).toEqual({ value: 'active' })
-
-        // A later commit that merely reflects the pushed state must NOT echo
-        // back into Vue (loop guard).
-        fireCommit()
-        expect(onFiltersChanged).not.toHaveBeenCalled()
-
-        // ... but a genuine Livewire-side change afterwards still flows through.
-        wireState.tableFilters = { status: { value: 'pending' } }
-        fireCommit()
-        expect(onFiltersChanged).toHaveBeenCalledTimes(1)
-        expect(onFiltersChanged).toHaveBeenCalledWith({ status: { value: 'pending' } })
-    })
-
-    it('toggles the hidden fallback form container', () => {
+    it("removes a filter through Filament's own removeTableFilter", () => {
         const bridge = makeBridge()
-        const container = document.querySelector('[data-vue-table-fallback-filters]')
 
-        expect(container.style.display).toBe('none')
+        bridge.removeFilter('status', null)
+        bridge.removeFilter('created_from', 'created_from')
 
-        bridge.toggleFallbackForm()
-        expect(container.style.display).toBe('')
-        expect(container.classList.contains('fi-vue-ta-fallback-filters-open')).toBe(true)
-        expect(bridge.isFallbackFormVisible.value).toBe(true)
-
-        bridge.toggleFallbackForm()
-        expect(container.style.display).toBe('none')
-        expect(container.classList.contains('fi-vue-ta-fallback-filters-open')).toBe(false)
-        expect(bridge.isFallbackFormVisible.value).toBe(false)
+        expect(wireCalls).toContainEqual(['removeTableFilter', ['status', null]])
+        expect(wireCalls).toContainEqual(['removeTableFilter', ['created_from', 'created_from']])
     })
 
-    it('hides the fallback form after an applyTableFilters commit', () => {
-        const bridge = makeBridge({ onFiltersChanged: vi.fn() })
-        const container = document.querySelector('[data-vue-table-fallback-filters]')
+    it("resets all filters through Filament's own resetTableFiltersForm", () => {
+        const bridge = makeBridge()
 
-        bridge.toggleFallbackForm()
+        bridge.resetFilters()
+
+        expect(wireCalls).toContainEqual(['resetTableFiltersForm', []])
+    })
+
+    it('toggles the hidden native filters panel container', () => {
+        const bridge = makeBridge()
+        const container = document.querySelector('[data-vue-table-filters-panel]')
+
+        expect(container.style.display).toBe('none')
+
+        bridge.toggleFiltersPanel()
+        expect(container.style.display).toBe('')
+        expect(container.classList.contains('fi-vue-ta-filters-panel-open')).toBe(true)
+        expect(bridge.isFiltersPanelVisible.value).toBe(true)
+
+        bridge.toggleFiltersPanel()
+        expect(container.style.display).toBe('none')
+        expect(container.classList.contains('fi-vue-ta-filters-panel-open')).toBe(false)
+        expect(bridge.isFiltersPanelVisible.value).toBe(false)
+    })
+
+    it('hides the filters panel after an applyTableFilters commit', () => {
+        const bridge = makeBridge({ onFiltersChanged: vi.fn() })
+        const container = document.querySelector('[data-vue-table-filters-panel]')
+
+        bridge.toggleFiltersPanel()
         expect(container.style.display).toBe('')
 
         wireState.tableFilters = { created_from: { created_from: '2026-01-01' } }
         fireCommit({ calls: [{ method: 'applyTableFilters', params: [], metadata: {} }] })
 
         expect(container.style.display).toBe('none')
-        expect(bridge.isFallbackFormVisible.value).toBe(false)
+        expect(bridge.isFiltersPanelVisible.value).toBe(false)
     })
 
-    it('keeps the fallback form open on ordinary (non-apply) commits', () => {
+    it('keeps the filters panel open on ordinary (non-apply) commits', () => {
         const bridge = makeBridge({ onFiltersChanged: vi.fn() })
-        const container = document.querySelector('[data-vue-table-fallback-filters]')
+        const container = document.querySelector('[data-vue-table-filters-panel]')
 
-        bridge.toggleFallbackForm()
+        bridge.toggleFiltersPanel()
         fireCommit()
 
         expect(container.style.display).toBe('')
@@ -234,8 +237,9 @@ describe('useLivewireBridge', () => {
         const bridge = makeBridge({ onFiltersChanged: vi.fn() })
 
         expect(() => {
-            bridge.pushFilterToLivewire('status', { value: 'active' })
-            bridge.toggleFallbackForm()
+            bridge.removeFilter('status')
+            bridge.resetFilters()
+            bridge.toggleFiltersPanel()
             bridge.destroy()
         }).not.toThrow()
     })

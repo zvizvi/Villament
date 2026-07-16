@@ -47,7 +47,7 @@ Therefore `tests/TestCase.php` registers `SupportServiceProvider` **before** `Li
 
 ## 2026-07-16 — Phase 2 decisions
 
-1. **Filter serializer chain** (§4.4): `TernaryFilterSerializer` must precede `SelectFilterSerializer` (TernaryFilter *extends* SelectFilter). A `SelectFilter` whose `getOptions()` is empty (lazy relationship/searchable options) falls through to `livewire-fallback` rather than shipping an empty select. Date-range convention detection was NOT implemented — schema-based `Filter`s go to the fallback path, which is strictly safer; a dedicated serializer can be added later without breaking anything.
+1. **Filter serializer chain** (§4.4) — **SUPERSEDED 2026-07-17** (chain deleted; filters are native Livewire only, see below): `TernaryFilterSerializer` had to precede `SelectFilterSerializer` (TernaryFilter *extends* SelectFilter); empty-options selects and schema-based `Filter`s fell through to a `livewire-fallback` type.
 2. **Indicators are server-computed** on every response (`FilterIndicatorSerializer`), not rebuilt client-side: `BaseFilter::getIndicators()` evaluates `indicateUsing` closures against the injected harness state, so custom labels match stock exactly. Payload: `{filter, field, label, removable}`.
 3. **Complete-map filter protocol**: the client always sends the full `filters[...]` state for every filter it knows; clearing = explicit empty value (`{value: ''}`, `{values: []}`). This makes `array_replace` semantics deterministic and clears defaulted filters correctly.
 4. **Localized UI strings** (`schema.strings`) resolve through Filament's own translation keys (`filament-tables::table.*`, `filament::components/pagination.*`), so the island follows the panel locale — verified live in Hebrew on the host app. Fixes the Phase 1 hardcoded-English gap.
@@ -85,14 +85,14 @@ Reported from a live multi-tenant app: a `recordUrl`/column `getUrl()` closure r
 
 Verified with a dedicated tenant fixture panel (`Team` tenant, `ProjectResource` with a tenant-scoped `recordUrl`): endpoint records are tenant-isolated, record URLs resolve with the tenant slug, and the island config inlines a `{tenant}`-scoped endpoint.
 
-## 2026-07-17 — Native (Livewire) filters mode
+## 2026-07-17 — Filters are native Livewire, period (no Vue filter UI)
 
-Owner decision: the ENTIRE filter panel should be Filament's original Livewire UI, not a Vue reimplementation — filters have many types (select, multi, ternary, date, custom, query-builder) and 1:1 Vue components are a maintenance/fidelity burden, whereas COLUMN cells are already generic pre-rendered payloads (no per-type Vue burden).
+Owner decision: the ENTIRE filter panel is Filament's original Livewire UI, not a Vue reimplementation — filters have many types (select, multi, ternary, date, custom, query-builder) and 1:1 Vue components are a maintenance/fidelity burden, whereas COLUMN cells are already generic pre-rendered payloads (no per-type Vue burden). Initially shipped behind a `filters` config mode (`livewire`/`vue`); the owner then hardcoded it — the mode toggle and the whole Vue filter path were DELETED (config key, `FilterSerializers` chain + `filter_serializers` extension point, `TableFilters.vue`, `pushFilterToLivewire`, filter schema serialization, related strings).
 
-- New config `filters` mode, default `livewire`, shipped as `schema.filtersMode`.
-- `livewire` mode: the island Blade renders Filament's full native `x-filament-tables::filters` panel (heading + every field type + reset + apply) in the hidden, Livewire-morphable container (reusing the Phase 2 fallback plumbing, upgraded from bare form to the full component). Vue renders only the funnel trigger (`TableFiltersTrigger`, byte-identical) + the active-filter badge (count of `type==='filter'` indicators); it opens the native panel via the bridge and refetches on the filter commit. Indicator removal / remove-all route through Livewire (`removeTableFilter` / `resetTableFiltersForm`) so Livewire stays the single source of truth. Zero per-filter-type Vue code runs.
-- `vue` mode keeps the Phase 2 Vue filter controls (instant, no roundtrip) with Livewire fallback for exotic types.
-- Trade-off accepted: applying a filter is one Livewire commit (small form) + one Vue refetch — vs the Vue mode's single fetch. High-frequency interactions (search/sort/pagination) stay Vue/AJAX. Panel positioning uses the existing CSS anchor (no floating-ui); the native trigger button is the one element still Vue-rendered (pixel-identical) to avoid the Vue/Livewire DOM-boundary complexity of teleporting a native dropdown into the wire:ignore toolbar.
+- The island Blade renders Filament's full native `x-filament-tables::filters` panel (heading + every field type + reset + apply) in a hidden, Livewire-morphable container `[data-vue-table-filters-panel]` (upgraded from the Phase 2 fallback plumbing; "fallback" naming retired — it IS the filters UI).
+- Vue renders only the funnel trigger (`TableFiltersTrigger`, byte-identical to stock) + the active-filter badge (count of `type==='filter'` indicators); the bridge toggles the native panel and refetches on the filter commit. Indicator removal / remove-all route through Livewire (`removeTableFilter` / `resetTableFiltersForm`) so Livewire stays the single source of truth for filter state.
+- The schema ships only `hasFilters: bool` (show the trigger or not) — filter definitions never leave the server.
+- Trade-off accepted: applying a filter is one Livewire commit (small form) + one Vue refetch. High-frequency interactions (search/sort/pagination) stay Vue/AJAX. Panel positioning uses the existing CSS anchor (no floating-ui); the trigger button is the one filter element Vue-rendered (pixel-identical) to avoid teleporting a native dropdown into the wire:ignore toolbar.
 
 ## Verified Filament v5 internal API map (§4.1, §4.8)
 

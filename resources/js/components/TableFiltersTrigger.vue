@@ -30,10 +30,10 @@ const emit = defineEmits(['toggle'])
 
 <template>
     <!--
-        Funnel trigger for the NATIVE Livewire filters panel (filters mode
-        'livewire'). Byte-identical to Filament's stock filters trigger; the
-        panel it opens is Filament's own filters component (rendered in Blade,
-        Livewire-morphable). No filter fields are reimplemented in Vue.
+        Funnel trigger for the native Livewire filters panel. Byte-identical
+        to Filament's stock filters trigger; the panel it opens is Filament's
+        own filters component (rendered in Blade, Livewire-morphable). No
+        filter UI exists in Vue.
     -->
     <div class="fi-dropdown fi-ta-filters-dropdown fi-vue-ta-filters-trigger">
         <div class="fi-dropdown-trigger">

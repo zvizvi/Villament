@@ -17,19 +17,19 @@ describe('resolveStrings', () => {
 
         expect(strings.filtersHeading).toBe('סינון')
         expect(strings.searchPlaceholder).toBe('חיפוש')
-        expect(strings.filtersReset).toBe('Reset')
+        expect(strings.filtersRemoveAll).toBe('Remove all filters')
         expect(strings.previousLabel).toBe('Previous')
     })
 
     it('keeps the English literal when a key is missing, blank, or not a string', () => {
         const strings = resolveStrings({
             filtersHeading: '',
-            filtersApply: null,
+            filtersRemove: null,
             nextLabel: undefined,
         })
 
         expect(strings.filtersHeading).toBe(defaultStrings.filtersHeading)
-        expect(strings.filtersApply).toBe(defaultStrings.filtersApply)
+        expect(strings.filtersRemove).toBe(defaultStrings.filtersRemove)
         expect(strings.nextLabel).toBe(defaultStrings.nextLabel)
     })
 

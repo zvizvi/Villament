@@ -39,16 +39,17 @@
 }
 
 /*
- * The hidden Livewire fallback filter form opens as a floating panel. Its
+ * The native Livewire filters panel (Filament's own filters component, kept
+ * hidden in the Blade island) opens as a floating panel. Its
  * surface/z-index/absolute positioning come from Filament's own
- * `fi-dropdown-panel fi-width-sm fi-ta-filters` classes (added by the bridge
- * while open); only the anchor point has no native equivalent.
+ * `fi-dropdown-panel fi-width-xs` classes (added by the bridge while open);
+ * only the anchor point has no native equivalent.
  */
 .fi-vue-table {
     position: relative;
 }
 
-.fi-vue-table > [data-vue-table-fallback-filters].fi-vue-ta-fallback-filters-open {
+.fi-vue-table > [data-vue-table-filters-panel].fi-vue-ta-filters-panel-open {
     inset-block-start: 4rem;
     inset-inline-end: 1.5rem;
 }
