@@ -1,7 +1,7 @@
 <script setup>
 import { computed } from 'vue'
 import { formatPaginationOverview } from '../support/strings.js'
-import TrustedIcon from './TrustedIcon.vue'
+import TrustedIcon from './TrustedIcon.js'
 
 const props = defineProps({
     /**

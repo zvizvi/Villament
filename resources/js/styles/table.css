@@ -10,29 +10,19 @@
  */
 
 /*
- * Vue's `v-html` needs a host element, but Filament's icon/badge selectors
- * (`.fi-ta-icon > .fi-icon`, `.fi-badge` flex gaps) assume the SVG sits
- * directly in the flex container. `display: contents` removes the host from
- * layout; Filament ships no utility class for it. Color still inherits, so
- * the host carries Filament's own `fi-icon` / `fi-color*` / `fi-text-color-*`
- * classes.
- */
-.fi-vue-ta .fi-vue-ta-trusted-icon {
-    display: contents;
-}
-
-/*
  * Filament positions `.fi-dropdown-panel` (already `position: absolute` +
  * surface styling in its own CSS) at runtime with Alpine's floating-ui
- * plugin, via inline styles. The island has no Alpine, so the panel is
+ * plugin, via inline styles. The island has no Alpine, so panels are
  * anchored in pure CSS instead: relative wrapper + logical inset (end edge),
  * which mirrors Filament's `placement="bottom-end"` in both LTR and RTL.
+ * `fi-vue-ta-dropdown` marks every island dropdown (filters, column
+ * manager, action groups).
  */
-.fi-vue-ta .fi-vue-ta-filters {
+.fi-vue-ta .fi-vue-ta-dropdown {
     position: relative;
 }
 
-.fi-vue-ta .fi-vue-ta-filters > .fi-dropdown-panel {
+.fi-vue-ta .fi-vue-ta-dropdown > .fi-dropdown-panel {
     inset-block-start: calc(100% + 0.5rem);
     inset-inline-end: 0;
 }

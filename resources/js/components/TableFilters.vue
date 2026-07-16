@@ -1,6 +1,6 @@
 <script setup>
 import { onBeforeUnmount, ref } from 'vue'
-import TrustedIcon from './TrustedIcon.vue'
+import TrustedIcon from './TrustedIcon.js'
 
 const props = defineProps({
     /**
@@ -144,7 +144,7 @@ function onToggleFallback(filter) {
 <template>
     <div
         ref="root"
-        class="fi-dropdown fi-ta-filters-dropdown fi-vue-ta-filters"
+        class="fi-dropdown fi-ta-filters-dropdown fi-vue-ta-dropdown fi-vue-ta-filters"
     >
         <div class="fi-dropdown-trigger">
             <button

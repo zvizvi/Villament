@@ -68,10 +68,22 @@ describe('TableHeader sort icons (schema.icons contract)', () => {
         expect(wrapper.get('.fi-ta-header-cell-name').find('[data-icon="sort"]').exists()).toBe(true)
     })
 
+    it('renders the icon svg as a DIRECT child of the sort button (no wrapper element)', () => {
+        const wrapper = mountHeader('name:asc')
+
+        const sortButton = wrapper.get('.fi-ta-header-cell-name .fi-ta-header-cell-sort-btn')
+        const directSvg = sortButton.find(':scope > svg[data-icon="sort-asc"]')
+
+        expect(directSvg.exists()).toBe(true)
+        expect(directSvg.element.parentElement).toBe(sortButton.element)
+        expect(directSvg.classes()).toContain('fi-icon')
+        // The svg's inner markup survives the parse → render round trip.
+        expect(directSvg.element.querySelector('path')).not.toBeNull()
+    })
+
     it('renders no glyph at all when an icons key is missing', () => {
         const wrapper = mountHeader('name:asc', {})
 
         expect(wrapper.get('.fi-ta-header-cell-name').findAll('svg')).toHaveLength(0)
-        expect(wrapper.get('.fi-ta-header-cell-name').find('.fi-vue-ta-trusted-icon').exists()).toBe(false)
     })
 })

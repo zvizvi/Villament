@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue'
-import TrustedIcon from './TrustedIcon.vue'
+import TrustedIcon from './TrustedIcon.js'
 
 const props = defineProps({
     /**

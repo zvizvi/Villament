@@ -26,6 +26,13 @@ export const defaultStrings = Object.freeze({
     perPageAll: 'All',
     previousLabel: 'Previous',
     nextLabel: 'Next',
+    columnManagerHeading: 'Columns',
+    columnManagerReset: 'Reset',
+    bulkSelectPage: 'Select/deselect all items for bulk actions.',
+    bulkSelectRecord: 'Select/deselect item :key for bulk actions.',
+    selectedCount: '1 record selected|:count records selected',
+    selectAll: 'Select all :count',
+    deselectAll: 'Deselect all',
 })
 
 /**
@@ -127,6 +134,39 @@ export function choosePluralSegment(template, count) {
     }
 
     return (count === 1 ? plainSegments[0] : plainSegments[1]).text
+}
+
+/**
+ * Replaces Laravel-style `:placeholder` tokens in a plain template string.
+ *
+ * @param {string} template E.g. `"Select all :count"`.
+ * @param {Object<string, string|number>} replacements
+ * @returns {string}
+ */
+export function formatString(template, replacements) {
+    let text = template
+
+    for (const [key, value] of Object.entries(replacements)) {
+        text = text.replace(new RegExp(`:${key}`, 'g'), String(value))
+    }
+
+    return text
+}
+
+/**
+ * Formats a Laravel `trans_choice` template for a count (the count is also
+ * available as the `:count` replacement, mirroring `trans_choice()`).
+ *
+ * @param {string} template E.g. `"1 record selected|:count records selected"`.
+ * @param {number} count
+ * @param {Object<string, string|number>} [replacements]
+ * @returns {string}
+ */
+export function formatTransChoice(template, count, replacements = {}) {
+    return formatString(
+        choosePluralSegment(template, count),
+        { count, ...replacements },
+    ).trim()
 }
 
 /**

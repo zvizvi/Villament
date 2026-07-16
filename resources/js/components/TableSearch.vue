@@ -1,5 +1,5 @@
 <script setup>
-import TrustedIcon from './TrustedIcon.vue'
+import TrustedIcon from './TrustedIcon.js'
 
 defineProps({
     modelValue: {

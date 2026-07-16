@@ -1,5 +1,5 @@
 <script setup>
-import TrustedIcon from './TrustedIcon.vue'
+import TrustedIcon from './TrustedIcon.js'
 
 const props = defineProps({
     /**
@@ -25,9 +25,37 @@ const props = defineProps({
         type: Object,
         default: () => ({}),
     },
+    /**
+     * Whether the leading selection column renders (bulk actions present).
+     */
+    selectable: {
+        type: Boolean,
+        default: false,
+    },
+    /**
+     * Whether every record on the current page is selected (header checkbox state).
+     */
+    allSelected: {
+        type: Boolean,
+        default: false,
+    },
+    /**
+     * Whether the trailing record-actions column renders.
+     */
+    hasActionsColumn: {
+        type: Boolean,
+        default: false,
+    },
+    /**
+     * Localized UI strings; `bulkSelectPage` is used here.
+     */
+    strings: {
+        type: Object,
+        default: () => ({}),
+    },
 })
 
-const emit = defineEmits(['sort'])
+const emit = defineEmits(['sort', 'toggleSelectPage'])
 
 /**
  * @param {object} column
@@ -112,6 +140,19 @@ function onSortClick(column) {
     <thead>
         <tr>
             <th
+                v-if="selectable"
+                class="fi-ta-cell fi-ta-selection-cell"
+            >
+                <input
+                    :aria-label="strings.bulkSelectPage"
+                    type="checkbox"
+                    :checked="allSelected"
+                    class="fi-ta-page-checkbox fi-checkbox-input"
+                    @change="emit('toggleSelectPage')"
+                >
+            </th>
+
+            <th
                 v-for="column in columns"
                 :key="column.key"
                 :class="headerCellClasses(column)"
@@ -140,6 +181,12 @@ function onSortClick(column) {
                     {{ column.label }}
                 </template>
             </th>
+
+            <!-- Stock actions header: an empty labelled cell after the columns. -->
+            <th
+                v-if="hasActionsColumn"
+                class="fi-ta-actions-header-cell fi-ta-empty-header-cell"
+            />
         </tr>
     </thead>
 </template>

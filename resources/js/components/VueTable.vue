@@ -1,16 +1,21 @@
 <script setup>
-import { computed, onBeforeUnmount } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 import { getCoreRowModel, useVueTable } from '@tanstack/vue-table'
 import { useTableState } from '../composables/useTableState.js'
 import { useTableData } from '../composables/useTableData.js'
 import { useLivewireBridge } from '../composables/useLivewireBridge.js'
-import { resolveStrings } from '../support/strings.js'
-import TrustedIcon from './TrustedIcon.vue'
+import { useSelection } from '../composables/useSelection.js'
+import { formatString, resolveStrings } from '../support/strings.js'
+import TrustedIcon from './TrustedIcon.js'
 import TableHeader from './TableHeader.vue'
 import TableSearch from './TableSearch.vue'
 import TableFilters from './TableFilters.vue'
 import TableFilterIndicators from './TableFilterIndicators.vue'
+import TableColumnManager from './TableColumnManager.vue'
 import TablePagination from './TablePagination.vue'
+import RecordActions from './RecordActions.vue'
+import BulkActions from './BulkActions.vue'
+import SelectionIndicator from './SelectionIndicator.vue'
 import TextCell from './cells/TextCell.vue'
 import BadgeCell from './cells/BadgeCell.vue'
 import IconCell from './cells/IconCell.vue'
@@ -50,9 +55,26 @@ const icons = schema.icons ?? {}
 
 const filterSchemas = computed(() => schema.filters ?? [])
 
+const recordActionsStructure = computed(() => schema.actions?.record ?? [])
+const bulkActionsStructure = computed(() => schema.actions?.bulk ?? [])
+
+const hasRecordActions = computed(() => recordActionsStructure.value.length > 0)
+
+/** Selection UI (checkbox column, indicator, bulk bar) exists only when bulk actions do. */
+const isSelectionEnabled = computed(() => bulkActionsStructure.value.length > 0)
+
 const state = useTableState(props.config.state ?? {})
 
-const { records, meta, indicators, isLoading, error, retry, destroy: destroyData } = useTableData(
+/**
+ * Filament column manager state (`state.columns`, session-hydrated
+ * server-side). Owned here: the manager applies optimistically, then the
+ * authoritative copy is re-read from Livewire after the commit succeeds.
+ */
+const columnsState = ref(JSON.parse(JSON.stringify(props.config.state?.columns ?? [])))
+
+const selection = useSelection()
+
+const { records, meta, indicators, isLoading, error, retry, fetchNow, destroy: destroyData } = useTableData(
     props.config.endpoint,
     state,
     {
@@ -72,6 +94,24 @@ const bridge = useLivewireBridge({
         // also refreshes the server-computed indicators.
         state.filters.value = { ...state.filters.value, ...filters }
     },
+    onActionCompleted: (methods) => {
+        // A table action or the column manager ran on the host component.
+        // Re-read the authoritative column state first (cells for newly
+        // toggled columns only exist after the refetch below), then refetch
+        // records+meta+indicators exactly once. The bridge already skips this
+        // callback when the same commit changed `tableFilters` (the filters
+        // watcher refetches then).
+        if (methods.includes('applyTableColumnManager') || methods.includes('resetTableColumnManager')) {
+            const authoritativeColumns = bridge.getTableColumns()
+
+            if (Array.isArray(authoritativeColumns)) {
+                columnsState.value = JSON.parse(JSON.stringify(authoritativeColumns))
+            }
+        }
+
+        fetchNow()
+    },
+    onDeselectAll: () => selection.deselectAll(),
 })
 
 onBeforeUnmount(() => {
@@ -81,12 +121,45 @@ onBeforeUnmount(() => {
 })
 
 /**
- * Columns hidden by default (toggleable, no column manager UI in this phase)
- * are simply not rendered.
+ * Column visibility, derived from the column manager state: a column renders
+ * when its entry is not hidden and is either non-toggleable or currently
+ * toggled on. Columns without an entry (no manager state shipped) fall back
+ * to the schema flags: toggleable + hidden-by-default columns don't render.
  */
-const visibleColumns = computed(
-    () => schema.columns.filter((column) => ! (column.toggleable && column.hiddenByDefault)),
-)
+const columnVisibility = computed(() => {
+    /** @type {Object<string, boolean>} */
+    const visibility = {}
+
+    /** @param {object} entry */
+    function collect(entry) {
+        if (entry.type === 'group') {
+            for (const column of entry.columns ?? []) {
+                collect(column)
+            }
+
+            return
+        }
+
+        visibility[entry.name] = ! entry.isHidden
+            && (entry.isToggleable === false || Boolean(entry.isToggled))
+    }
+
+    for (const entry of columnsState.value) {
+        collect(entry)
+    }
+
+    return visibility
+})
+
+const visibleColumns = computed(() => schema.columns.filter((column) => {
+    const managed = columnVisibility.value[column.key]
+
+    if (managed !== undefined) {
+        return managed
+    }
+
+    return ! (column.toggleable && column.hiddenByDefault)
+}))
 
 const cellComponents = {
     text: TextCell,
@@ -138,9 +211,127 @@ const hasColumnSearches = computed(
     () => visibleColumns.value.some((column) => column.individuallySearchable),
 )
 
-const hasHeaderToolbar = computed(
-    () => Boolean(schema.globallySearchable) || filterSchemas.value.length > 0,
+/** Whether any column can be toggled (renders the column manager trigger). */
+const hasColumnManager = computed(() => {
+    /** @param {object[]} entries @returns {boolean} */
+    function anyToggleable(entries) {
+        return entries.some((entry) => (
+            entry.type === 'group'
+                ? anyToggleable(entry.columns ?? [])
+                : (! entry.isHidden && entry.isToggleable !== false)
+        ))
+    }
+
+    return anyToggleable(columnsState.value)
+})
+
+const pageRecordKeys = computed(() => records.value.map((record) => record.key))
+
+const selectedCount = computed(() => selection.selectedCount(meta.value?.total ?? null))
+
+const areAllPageRecordsSelected = computed(
+    () => selection.areRecordsSelected(pageRecordKeys.value),
 )
+
+const hasBulkActionsBar = computed(
+    () => isSelectionEnabled.value && selectedCount.value > 0,
+)
+
+const hasHeaderToolbar = computed(
+    () => Boolean(schema.globallySearchable)
+        || filterSchemas.value.length > 0
+        || hasColumnManager.value
+        || hasBulkActionsBar.value,
+)
+
+/**
+ * Mounts a bulk action on the host Livewire component, pushing the complete
+ * selection state first (table.js semantics, replicated in the bridge).
+ *
+ * @param {string} name
+ * @returns {void}
+ */
+function onMountBulkAction(name) {
+    bridge.mountBulkAction(name, {
+        isTracking: selection.isTrackingDeselected.value,
+        selected: selection.selectedRecords.value,
+        deselected: selection.deselectedRecords.value,
+    })
+}
+
+/**
+ * Applies a column manager change: optimistic local visibility (a newly
+ * toggled column renders empty cells until the refetch lands), then the
+ * FULL state array goes to Livewire. The commit watcher re-reads the
+ * authoritative state and refetches.
+ *
+ * @param {object[]} nextColumns
+ * @returns {void}
+ */
+function onApplyColumnManager(nextColumns) {
+    columnsState.value = nextColumns
+    bridge.applyColumnManager(nextColumns)
+}
+
+/** @returns {void} */
+function onResetColumnManager() {
+    bridge.resetColumnManager()
+}
+
+/**
+ * @param {object} record
+ * @param {number} rowIndex Zero-based row index on the page (striping).
+ * @returns {Array<string|Object<string, boolean>>} Row classes matching Filament's own markup.
+ */
+function recordRowClasses(record, rowIndex) {
+    return [
+        'fi-ta-row',
+        {
+            'fi-clickable': Boolean(record.url || record.action),
+            'fi-selected': isSelectionEnabled.value && selection.isRecordSelected(record.key),
+            'fi-striped': Boolean(schema.striped) && rowIndex % 2 === 1,
+        },
+    ]
+}
+
+/**
+ * Stock cell wrapper tag: an anchor when the column has a URL or the record
+ * itself does; a button when the record has a click action; a plain div
+ * otherwise.
+ *
+ * @param {?object} cellValue
+ * @param {object} record
+ * @returns {'a'|'button'|'div'}
+ */
+function cellWrapperTag(cellValue, record) {
+    if (cellValue?.url || record.url) {
+        return 'a'
+    }
+
+    if (record.action) {
+        return 'button'
+    }
+
+    return 'div'
+}
+
+/**
+ * @param {?object} cellValue
+ * @param {object} record
+ * @returns {?string}
+ */
+function cellWrapperUrl(cellValue, record) {
+    return cellValue?.url || record.url || null
+}
+
+/**
+ * @param {?object} cellValue
+ * @param {object} record
+ * @returns {boolean}
+ */
+function cellWrapperNewTab(cellValue, record) {
+    return cellValue?.url ? Boolean(cellValue.newTab) : Boolean(record.urlNewTab)
+}
 
 /**
  * Toggles a column's sort: asc → desc → none.
@@ -301,7 +492,16 @@ function recordCellClasses(column) {
                     class="fi-ta-header-ctn"
                 >
                     <div class="fi-ta-header-toolbar">
-                        <div class="fi-ta-actions fi-align-start fi-wrapped" />
+                        <BulkActions
+                            v-if="hasBulkActionsBar"
+                            :actions="bulkActionsStructure"
+                            @mount="onMountBulkAction"
+                        />
+
+                        <div
+                            v-else
+                            class="fi-ta-actions fi-align-start fi-wrapped"
+                        />
 
                         <div>
                             <TableSearch
@@ -324,9 +524,27 @@ function recordCellClasses(column) {
                                 @reset="onRemoveAllFilters"
                                 @toggle-fallback="bridge.toggleFallbackForm()"
                             />
+
+                            <TableColumnManager
+                                v-if="hasColumnManager"
+                                :columns="columnsState"
+                                :strings="strings"
+                                :icons="icons"
+                                @apply="onApplyColumnManager"
+                                @reset="onResetColumnManager"
+                            />
                         </div>
                     </div>
                 </div>
+
+                <SelectionIndicator
+                    v-if="isSelectionEnabled && selectedCount > 0"
+                    :count="selectedCount"
+                    :total="meta?.total ?? null"
+                    :strings="strings"
+                    @select-all="selection.selectAllMatching()"
+                    @deselect-all="selection.deselectAll()"
+                />
 
                 <TableFilterIndicators
                     v-if="indicators.length > 0"
@@ -369,7 +587,12 @@ function recordCellClasses(column) {
                                 :columns="visibleColumns"
                                 :sort="state.sort.value"
                                 :icons="icons"
+                                :selectable="isSelectionEnabled"
+                                :all-selected="areAllPageRecordsSelected"
+                                :has-actions-column="hasRecordActions"
+                                :strings="strings"
                                 @sort="onSort"
+                                @toggle-select-page="selection.toggleSelectPage(pageRecordKeys)"
                             />
 
                             <tbody>
@@ -377,6 +600,11 @@ function recordCellClasses(column) {
                                     v-if="hasColumnSearches"
                                     class="fi-ta-row fi-ta-row-not-reorderable"
                                 >
+                                    <td
+                                        v-if="isSelectionEnabled"
+                                        class="fi-ta-cell fi-ta-selection-cell"
+                                    />
+
                                     <td
                                         v-for="column in visibleColumns"
                                         :key="column.key"
@@ -396,25 +624,49 @@ function recordCellClasses(column) {
                                             @update:model-value="onColumnSearch(column.key, $event)"
                                         />
                                     </td>
+
+                                    <td
+                                        v-if="hasRecordActions"
+                                        class="fi-ta-cell"
+                                    />
                                 </tr>
 
                                 <tr
-                                    v-for="row in table.getRowModel().rows"
+                                    v-for="(row, rowIndex) in table.getRowModel().rows"
                                     :key="row.id"
-                                    class="fi-ta-row"
+                                    :class="recordRowClasses(row.original, rowIndex)"
                                 >
+                                    <td
+                                        v-if="isSelectionEnabled"
+                                        class="fi-ta-cell fi-ta-selection-cell"
+                                    >
+                                        <input
+                                            :aria-label="formatString(strings.bulkSelectRecord, { key: row.original.key })"
+                                            type="checkbox"
+                                            :value="row.original.key"
+                                            :checked="selection.isRecordSelected(row.original.key)"
+                                            class="fi-ta-record-checkbox fi-checkbox-input"
+                                            @change="selection.toggleRecord(row.original.key)"
+                                        >
+                                    </td>
+
                                     <td
                                         v-for="cell in row.getVisibleCells()"
                                         :key="cell.id"
                                         :class="recordCellClasses(cell.column.columnDef.meta.schema)"
                                     >
                                         <component
-                                            :is="cell.getValue()?.url ? 'a' : 'div'"
+                                            :is="cellWrapperTag(cell.getValue(), row.original)"
                                             class="fi-ta-col"
                                             :class="{ 'fi-ta-col-has-column-url': Boolean(cell.getValue()?.url) }"
-                                            :href="cell.getValue()?.url || undefined"
-                                            :target="cell.getValue()?.url && cell.getValue()?.newTab ? '_blank' : undefined"
-                                            :rel="cell.getValue()?.url && cell.getValue()?.newTab ? 'noopener noreferrer' : undefined"
+                                            :type="cellWrapperTag(cell.getValue(), row.original) === 'button' ? 'button' : undefined"
+                                            :href="cellWrapperUrl(cell.getValue(), row.original) || undefined"
+                                            :target="cellWrapperUrl(cell.getValue(), row.original) && cellWrapperNewTab(cell.getValue(), row.original) ? '_blank' : undefined"
+                                            :rel="cellWrapperUrl(cell.getValue(), row.original) && cellWrapperNewTab(cell.getValue(), row.original) ? 'noopener noreferrer' : undefined"
+                                            @click="
+                                                cellWrapperTag(cell.getValue(), row.original) === 'button'
+                                                    && bridge.mountRecordAction(row.original.action, row.original.key)
+                                            "
                                         >
                                             <component
                                                 :is="cellComponents[cell.getValue()?.type] ?? TextCell"
@@ -422,6 +674,17 @@ function recordCellClasses(column) {
                                                 :cell="cell.getValue()"
                                             />
                                         </component>
+                                    </td>
+
+                                    <td
+                                        v-if="hasRecordActions"
+                                        class="fi-ta-cell"
+                                    >
+                                        <RecordActions
+                                            :structure="recordActionsStructure"
+                                            :actions="row.original.actions ?? {}"
+                                            @mount="bridge.mountRecordAction($event, row.original.key)"
+                                        />
                                     </td>
                                 </tr>
                             </tbody>

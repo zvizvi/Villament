@@ -1,4 +1,6 @@
 <script setup>
+import TrustedIcon from '../TrustedIcon.js'
+
 defineProps({
     /**
      * Badge cell payload: `{ type, formatted, color, iconHtml }`.
@@ -27,12 +29,7 @@ defineProps({
                     : []
             "
         >
-            <!-- eslint-disable-next-line vue/no-v-html — server-rendered trusted SVG (documented contract) -->
-            <span
-                v-if="cell.iconHtml"
-                class="fi-vue-ta-trusted-icon"
-                v-html="cell.iconHtml"
-            />
+            <TrustedIcon :html="cell.iconHtml" />
 
             <span class="fi-badge-label-ctn">
                 <span class="fi-badge-label">{{ cell.formatted }}</span>

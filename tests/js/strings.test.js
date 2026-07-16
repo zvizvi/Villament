@@ -3,6 +3,8 @@ import {
     choosePluralSegment,
     defaultStrings,
     formatPaginationOverview,
+    formatString,
+    formatTransChoice,
     resolveStrings,
 } from '../../resources/js/support/strings.js'
 
@@ -66,6 +68,28 @@ describe('choosePluralSegment', () => {
 
     it('returns the plain template when it has no pipe at all', () => {
         expect(choosePluralSegment('Showing :total results', 3)).toBe('Showing :total results')
+    })
+})
+
+describe('formatString', () => {
+    it('replaces every :placeholder occurrence', () => {
+        expect(formatString('Select all :count', { count: 45 })).toBe('Select all 45')
+        expect(formatString('Select/deselect item :key for bulk actions.', { key: '17' }))
+            .toBe('Select/deselect item 17 for bulk actions.')
+    })
+})
+
+describe('formatTransChoice', () => {
+    const template = '1 record selected|:count records selected'
+
+    it('pluralizes and injects the count (selection indicator contract)', () => {
+        expect(formatTransChoice(template, 1)).toBe('1 record selected')
+        expect(formatTransChoice(template, 5)).toBe('5 records selected')
+    })
+
+    it('supports extra replacements alongside :count', () => {
+        expect(formatTransChoice(':count of :total items|:count of :total items', 3, { total: 9 }))
+            .toBe('3 of 9 items')
     })
 })
 
