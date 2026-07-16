@@ -43,6 +43,10 @@ function readStateFromUrl() {
         state.search = params.get('search')
     }
 
+    if (params.has('cursor')) {
+        state.cursor = params.get('cursor')
+    }
+
     if (params.has('page')) {
         const page = Number.parseInt(params.get('page'), 10)
 
@@ -116,6 +120,7 @@ export function useTableState(initialState = {}, options = {}) {
     )
     const page = ref(urlState.page ?? initialState.page ?? 1)
     const perPage = ref(urlState.perPage ?? initialState.perPage ?? null)
+    const cursor = ref(urlState.cursor ?? initialState.cursor ?? null)
 
     let isApplyingUrlState = false
 
@@ -125,7 +130,7 @@ export function useTableState(initialState = {}, options = {}) {
         const params = url.searchParams
 
         for (const key of [...params.keys()]) {
-            if (['sort', 'search', 'page', 'perPage'].includes(key) || COLUMN_SEARCH_PARAM_PATTERN.test(key)) {
+            if (['sort', 'search', 'page', 'perPage', 'cursor'].includes(key) || COLUMN_SEARCH_PARAM_PATTERN.test(key)) {
                 params.delete(key)
             }
         }
@@ -158,6 +163,10 @@ export function useTableState(initialState = {}, options = {}) {
             params.set('perPage', String(perPage.value))
         }
 
+        if (cursor.value) {
+            params.set('cursor', cursor.value)
+        }
+
         window.history.replaceState(window.history.state, '', url.toString())
     }
 
@@ -173,6 +182,7 @@ export function useTableState(initialState = {}, options = {}) {
             columnSearches.value = { ...(urlState.columnSearches ?? {}) }
             filters.value = urlState.filters ?? {}
             page.value = urlState.page ?? 1
+            cursor.value = urlState.cursor ?? null
 
             if (urlState.perPage !== undefined) {
                 perPage.value = urlState.perPage
@@ -190,7 +200,7 @@ export function useTableState(initialState = {}, options = {}) {
 
     if (urlSync) {
         stopUrlWatcher = watch(
-            () => [sort.value, search.value, page.value, perPage.value, { ...columnSearches.value }, filters.value],
+            () => [sort.value, search.value, page.value, perPage.value, cursor.value, { ...columnSearches.value }, filters.value],
             () => {
                 if (! isApplyingUrlState) {
                     writeStateToUrl()
@@ -220,6 +230,7 @@ export function useTableState(initialState = {}, options = {}) {
         filters,
         page,
         perPage,
+        cursor,
         destroy,
     }
 }

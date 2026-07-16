@@ -95,7 +95,9 @@ export function useTableData(endpoint, state, options = {}) {
 
         appendFilterParams(params, state.filters.value ?? {}, { includeBlank: true })
 
-        if (state.page.value && state.page.value !== 1) {
+        if (state.cursor?.value) {
+            params.set('cursor', state.cursor.value)
+        } else if (state.page.value && state.page.value !== 1) {
             params.set('page', String(state.page.value))
         }
 
@@ -190,7 +192,7 @@ export function useTableData(endpoint, state, options = {}) {
      * @returns {void}
      */
     function resetPageSilently() {
-        if (state.page.value === 1) {
+        if (state.page.value === 1 && ! state.cursor?.value) {
             return
         }
 
@@ -198,6 +200,10 @@ export function useTableData(endpoint, state, options = {}) {
 
         try {
             state.page.value = 1
+
+            if (state.cursor) {
+                state.cursor.value = null
+            }
         } finally {
             isResettingPage = false
         }
@@ -225,10 +231,19 @@ export function useTableData(endpoint, state, options = {}) {
         }, { flush: 'sync' }),
 
         watch(state.sort, () => {
+            // A cursor encodes a position under the PREVIOUS ordering — it
+            // must never survive a sort change (stock resets the page too).
+            resetPageSilently()
             fetchNow()
         }, { flush: 'sync' }),
 
         watch(state.page, () => {
+            if (! isResettingPage) {
+                fetchNow()
+            }
+        }, { flush: 'sync' }),
+
+        watch(() => state.cursor?.value, () => {
             if (! isResettingPage) {
                 fetchNow()
             }

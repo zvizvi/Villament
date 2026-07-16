@@ -780,10 +780,12 @@ function recordCellClasses(column) {
                         :per-page="state.perPage.value"
                         :page-options="schema.pagination?.pageOptions ?? []"
                         :records-count="records.length"
+                        :mode="schema.pagination?.mode ?? 'offset'"
                         :strings="strings"
                         :icons="icons"
                         @update:page="state.page.value = $event"
                         @update:per-page="state.perPage.value = $event"
+                        @update:cursor="state.cursor.value = $event"
                     />
                 </template>
             </div>

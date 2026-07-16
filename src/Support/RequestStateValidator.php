@@ -6,6 +6,7 @@ namespace Zvizvi\FilamentVueTable\Support;
 
 use Filament\Tables\Table;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\Cursor;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -24,6 +25,7 @@ final class RequestStateValidator
             filters: $this->validateFilters($request, $table),
             page: $this->validatePage($request),
             perPage: $this->validatePerPage($request, $table),
+            cursor: $this->validateCursor($request),
         );
     }
 
@@ -173,6 +175,31 @@ final class RequestStateValidator
         }
 
         $this->reject('perPage', 'The perPage value is not one of the allowed pagination options.');
+    }
+
+    private function validateCursor(Request $request): ?string
+    {
+        $cursor = $request->query('cursor');
+
+        if (blank($cursor)) {
+            return null;
+        }
+
+        if (! is_string($cursor)) {
+            $this->reject('cursor', 'The cursor parameter must be a string.');
+        }
+
+        try {
+            if (Cursor::fromEncoded($cursor) === null) {
+                $this->reject('cursor', 'The cursor is malformed.');
+            }
+        } catch (ValidationException $exception) {
+            throw $exception;
+        } catch (\Throwable) {
+            $this->reject('cursor', 'The cursor is malformed.');
+        }
+
+        return $cursor;
     }
 
     private function reject(string $key, string $message): never

@@ -15,6 +15,7 @@ function makeState() {
         filters: ref({}),
         page: ref(1),
         perPage: ref(10),
+        cursor: ref(null),
         destroy: () => {},
     }
 }
@@ -251,6 +252,35 @@ describe('useTableData', () => {
         await vi.runAllTimersAsync()
 
         expect(reload).toHaveBeenCalledTimes(1)
+
+        data.destroy()
+    })
+
+    it('sends the cursor instead of the page, and search changes clear it', async () => {
+        const state = makeState()
+
+        const data = useTableData(ENDPOINT, state, {
+            initialData: {
+                records: [],
+                meta: { currentPage: null, perPage: 10, total: null, lastPage: null, from: null, to: null },
+                indicators: [],
+            },
+            schemaVersion: 'v1',
+        })
+
+        // Cursor change fetches immediately with the cursor param (no page).
+        state.cursor.value = 'CURSOR1'
+        await vi.runAllTimersAsync()
+        const cursorCall = fetchMock.mock.calls.at(-1)[0]
+        expect(cursorCall).toContain('cursor=CURSOR1')
+        expect(cursorCall).not.toContain('page=')
+
+        // A search change resets the cursor and fetches without it.
+        state.search.value = 'needle'
+        await vi.advanceTimersByTimeAsync(300)
+
+        expect(state.cursor.value).toBeNull()
+        expect(fetchMock.mock.calls.at(-1)[0]).not.toContain('cursor=')
 
         data.destroy()
     })

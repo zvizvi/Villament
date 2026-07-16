@@ -21,5 +21,6 @@ final readonly class TableState
         public ?array $filters = null,
         public int $page = 1,
         public int|string|null $perPage = null,
+        public ?string $cursor = null,
     ) {}
 }

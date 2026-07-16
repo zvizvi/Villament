@@ -193,4 +193,19 @@ describe('useTableState', () => {
         expect(state.page.value).toBe(1)
         expect(state.columnSearches.value).toEqual({})
     })
+
+    it('round-trips the cursor through the URL and clears it with state', () => {
+        window.history.replaceState(null, '', '/admin/users')
+
+        const state = makeState({ cursor: null })
+        state.cursor.value = 'eyJpZCI6NTB9'
+
+        expect(new URL(window.location.href).searchParams.get('cursor')).toBe('eyJpZCI6NTB9')
+
+        const fresh = makeState({})
+        expect(fresh.cursor.value).toBe('eyJpZCI6NTB9')
+
+        fresh.destroy()
+        state.destroy()
+    })
 })

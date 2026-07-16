@@ -12,6 +12,7 @@ use Filament\PanelProvider;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 use Zvizvi\FilamentVueTable\FilamentVueTablePlugin;
+use Zvizvi\FilamentVueTable\Tests\Fixtures\Resources\CursorUsers\CursorUserResource;
 use Zvizvi\FilamentVueTable\Tests\Fixtures\Resources\Users\UserResource;
 
 class AdminPanelProvider extends PanelProvider
@@ -25,6 +26,7 @@ class AdminPanelProvider extends PanelProvider
             ->login()
             ->resources([
                 UserResource::class,
+                CursorUserResource::class,
             ])
             ->middleware([
                 StartSession::class,

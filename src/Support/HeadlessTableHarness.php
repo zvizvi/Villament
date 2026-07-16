@@ -8,7 +8,9 @@ use Filament\Resources\Pages\ListRecords;
 use Filament\Tables\Table;
 use Illuminate\Contracts\Pagination\CursorPaginator;
 use Illuminate\Contracts\Pagination\Paginator;
+use Illuminate\Pagination\AbstractCursorPaginator;
 use Illuminate\Pagination\AbstractPaginator;
+use Illuminate\Pagination\Cursor;
 use Illuminate\Support\Collection;
 use InvalidArgumentException;
 use Livewire\LivewireManager;
@@ -78,6 +80,12 @@ final class HeadlessTableHarness
 
         AbstractPaginator::currentPageResolver(
             fn (string $currentPageName = 'page'): int => $currentPageName === $pageName ? $state->page : 1,
+        );
+
+        AbstractCursorPaginator::currentCursorResolver(
+            fn (string $cursorName = 'cursor'): ?Cursor => ($cursorName === $pageName && $state->cursor !== null)
+                ? Cursor::fromEncoded($state->cursor)
+                : null,
         );
 
         return $this;

@@ -16,6 +16,7 @@ use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
+use Illuminate\Contracts\Pagination\CursorPaginator;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Contracts\Pagination\Paginator;
 use Illuminate\Contracts\Support\Htmlable;
@@ -79,6 +80,20 @@ final class RecordSerializer
      */
     public function meta(iterable $records): array
     {
+        if ($records instanceof CursorPaginator) {
+            return [
+                'currentPage' => null,
+                'perPage' => $records->perPage(),
+                'total' => null,
+                'lastPage' => null,
+                'from' => null,
+                'to' => null,
+                'cursor' => $records->cursor()?->encode(),
+                'nextCursor' => $records->nextCursor()?->encode(),
+                'previousCursor' => $records->previousCursor()?->encode(),
+            ];
+        }
+
         if ($records instanceof LengthAwarePaginator) {
             return [
                 'currentPage' => $records->currentPage(),

@@ -30,6 +30,14 @@ const props = defineProps({
         default: 0,
     },
     /**
+     * Pagination mode (`schema.pagination.mode`): cursor mode navigates via
+     * `meta.nextCursor` / `meta.previousCursor` (no page numbers, no totals).
+     */
+    mode: {
+        type: String,
+        default: 'offset',
+    },
+    /**
      * Localized UI strings (already resolved with English fallbacks).
      */
     strings: {
@@ -47,7 +55,9 @@ const props = defineProps({
     },
 })
 
-const emit = defineEmits(['update:page', 'update:perPage'])
+const emit = defineEmits(['update:page', 'update:perPage', 'update:cursor'])
+
+const isCursor = computed(() => props.mode === 'cursor')
 
 const isSimple = computed(() => props.meta.total === null || props.meta.total === undefined)
 
@@ -157,11 +167,11 @@ const overview = computed(() => formatPaginationOverview(props.strings.paginatio
         :class="{ 'fi-simple': isSimple }"
     >
         <button
-            v-if="page > 1"
+            v-if="isCursor ? meta.previousCursor : page > 1"
             type="button"
             rel="prev"
             class="fi-btn fi-size-md fi-pagination-previous-btn"
-            @click="goToPage(page - 1)"
+            @click="isCursor ? emit('update:cursor', meta.previousCursor) : goToPage(page - 1)"
         >
             {{ strings.previousLabel }}
         </button>
@@ -225,11 +235,11 @@ const overview = computed(() => formatPaginationOverview(props.strings.paginatio
         </div>
 
         <button
-            v-if="hasMorePages"
+            v-if="isCursor ? meta.nextCursor : hasMorePages"
             type="button"
             rel="next"
             class="fi-btn fi-size-md fi-pagination-next-btn"
-            @click="goToPage(page + 1)"
+            @click="isCursor ? emit('update:cursor', meta.nextCursor) : goToPage(page + 1)"
         >
             {{ strings.nextLabel }}
         </button>
