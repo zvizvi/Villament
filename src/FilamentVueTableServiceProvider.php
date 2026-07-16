@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Zvizvi\FilamentVueTable;
 
-use Filament\Support\Assets\Js;
 use Filament\Support\Facades\FilamentAsset;
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
@@ -60,7 +59,10 @@ final class FilamentVueTableServiceProvider extends PackageServiceProvider
     public function packageBooted(): void
     {
         FilamentAsset::register([
-            Js::make('filament-vue-table', __DIR__.'/../dist/filament-vue-table.js'),
+            // Content-hashed version so a rebuilt bundle busts the browser
+            // cache automatically (the default `?v=` is the composer package
+            // version, stable for dev-main installs — see ContentHashedJs).
+            Support\Assets\ContentHashedJs::make('filament-vue-table', __DIR__.'/../dist/filament-vue-table.js'),
         ], package: 'zvizvi/filament-vue-table');
     }
 }
