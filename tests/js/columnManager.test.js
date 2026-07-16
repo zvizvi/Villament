@@ -378,15 +378,21 @@ describe('VueTable column manager + post-action refresh', () => {
             clientY: 10,
         })
 
-        // Native ghost replaced with a blank pixel.
+        // Native ghost replaced with a rendered transparent element (an
+        // unloaded <img> makes Chrome show a default globe/document icon).
         expect(setDragImage).toHaveBeenCalledTimes(1)
-        expect(setDragImage.mock.calls[0][0].tagName).toBe('IMG')
+        const blank = setDragImage.mock.calls[0][0]
+        expect(blank.tagName).toBe('DIV')
+        expect(document.body.contains(blank)).toBe(true)
+        expect(blank.style.background).toBe('transparent')
 
-        // The live preview: manager-context shell, half opacity, row clone
-        // WITH its reorder handle; the source row dims in place.
+        // The live preview: manager-context shell, OPAQUE with a soft
+        // drop-shadow (stock look), row clone WITH its reorder handle; the
+        // source row dims in place as the placeholder.
         const preview = document.body.querySelector('.fi-vue-ta-drag-preview')
         expect(preview).not.toBeNull()
-        expect(preview.style.opacity).toBe('0.5')
+        expect(preview.style.opacity).toBe('')
+        expect(preview.style.filter).toContain('drop-shadow')
         expect(preview.querySelector('.fi-ta-col-manager-item .fi-ta-col-manager-reorder-handle')).not.toBeNull()
         expect(item.element.style.opacity).toBe('0.4')
 

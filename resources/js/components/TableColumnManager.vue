@@ -78,6 +78,8 @@ onBeforeUnmount(() => {
     document.removeEventListener('mousedown', onDocumentPointerDown)
     document.removeEventListener('keydown', onDocumentKeydown)
     destroyDragPreview()
+    blankDragImageElement?.remove()
+    blankDragImageElement = null
 })
 
 /**
@@ -184,10 +186,11 @@ function onDragStart(scope, entry, event = null) {
     if (dataTransfer && row) {
         dataTransfer.effectAllowed = 'move'
 
-        if (typeof dataTransfer.setDragImage === 'function' && typeof Image !== 'undefined') {
-            const blank = new Image()
-            blank.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAAIBRAA7'
-            dataTransfer.setDragImage(blank, 0, 0)
+        if (typeof dataTransfer.setDragImage === 'function') {
+            // An <img> that hasn't finished loading makes Chrome fall back to
+            // a default document/globe icon — use a rendered, fully
+            // transparent in-DOM element instead.
+            dataTransfer.setDragImage(blankDragImage(), 0, 0)
         }
 
         createDragPreview(row, event)
@@ -211,6 +214,29 @@ function positionDragPreview(event) {
     if (dragPreview && (event.clientX || event.clientY)) {
         dragPreview.style.transform = `translate3d(${event.clientX - dragOffsetX}px, ${event.clientY - dragOffsetY}px, 0)`
     }
+}
+
+/** @type {?HTMLElement} */
+let blankDragImageElement = null
+
+/**
+ * @returns {HTMLElement} A rendered, fully transparent 1x1 element used to
+ *     suppress the native drag ghost.
+ */
+function blankDragImage() {
+    if (! blankDragImageElement) {
+        blankDragImageElement = document.createElement('div')
+        blankDragImageElement.style.position = 'fixed'
+        blankDragImageElement.style.top = '0'
+        blankDragImageElement.style.left = '0'
+        blankDragImageElement.style.width = '1px'
+        blankDragImageElement.style.height = '1px'
+        blankDragImageElement.style.background = 'transparent'
+        blankDragImageElement.style.pointerEvents = 'none'
+        document.body.appendChild(blankDragImageElement)
+    }
+
+    return blankDragImageElement
 }
 
 /**
@@ -240,8 +266,10 @@ function createDragPreview(row, event) {
     shell.style.margin = '0'
     shell.style.pointerEvents = 'none'
     shell.style.zIndex = '9999'
-    shell.style.opacity = '0.5'
     shell.style.background = 'transparent'
+    // Stock's traveling item is opaque with a soft shadow; drop-shadow hugs
+    // the rendered shapes (checkbox/label/handle) instead of a boxy shadow.
+    shell.style.filter = 'drop-shadow(0 4px 6px rgba(0, 0, 0, 0.15))'
     shell.style.transform = `translate3d(${rect.left}px, ${rect.top}px, 0)`
 
     const itemsShell = document.createElement('div')
