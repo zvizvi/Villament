@@ -71,6 +71,18 @@ describe('filter schema serialization', function (): void {
             ->toContain('resetTableFiltersForm')
             ->toContain('applyTableFilters');
     });
+
+    it('sizes the panel from filtersFormColumns, including responsive arrays', function (): void {
+        // The fixture defines filtersFormColumns(['sm' => 2, 'md' => 3,
+        // 'lg' => 4]) — the panel width follows the largest breakpoint via
+        // stock's own columns→width mapping (4 => 6xl). Stock itself maps
+        // ints only and silently falls back to ExtraSmall for arrays.
+        $html = livewire(VueListUsers::class)->html();
+
+        preg_match('/data-vue-table-filters-panel[^>]*class="([^"]*)"/s', $html, $matches);
+
+        expect($matches[1] ?? '')->toContain('fi-width-6xl');
+    });
 });
 
 describe('endpoint filter application', function (): void {

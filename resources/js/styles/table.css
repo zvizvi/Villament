@@ -42,7 +42,8 @@
  * The native Livewire filters panel (Filament's own filters component, kept
  * hidden in the Blade island) opens as a floating panel. Its
  * surface/z-index/absolute positioning come from Filament's own
- * `fi-dropdown-panel fi-width-xs` classes (added by the bridge while open);
+ * `fi-dropdown-panel` class (added by the bridge while open) plus the
+ * server-rendered `fi-width-*` class (filtersFormWidth/filtersFormColumns);
  * only the anchor point has no native equivalent.
  */
 .fi-vue-table {

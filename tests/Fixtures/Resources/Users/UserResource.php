@@ -82,6 +82,7 @@ class UserResource extends Resource
             ->defaultSort('name')
             ->striped()
             ->reorderableColumns()
+            ->filtersFormColumns(['sm' => 2, 'md' => 3, 'lg' => 4])
             ->filters([
                 SelectFilter::make('status')
                     ->options([

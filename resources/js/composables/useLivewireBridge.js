@@ -74,15 +74,16 @@ const REFRESH_COMMIT_METHODS = [
 ]
 
 /**
- * `fi-vue-ta-filters-panel-open` anchors the panel (package CSS); the
- * `fi-dropdown-panel fi-width-xs` classes are Filament's own — they provide
- * the full panel surface (absolute positioning, z-index, background, ring,
- * shadow, radius, width) natively, exactly like the stock filters dropdown.
+ * `fi-vue-ta-filters-panel-open` anchors the panel (package CSS);
+ * `fi-dropdown-panel` is Filament's own — it provides the full panel surface
+ * (absolute positioning, z-index, background, ring, shadow, radius)
+ * natively, exactly like the stock filters dropdown. The width class
+ * (`fi-width-*`, resolved from filtersFormWidth()/filtersFormColumns()) is
+ * rendered server-side on the container by the Blade island view.
  */
 const FILTERS_PANEL_OPEN_CLASSES = [
     'fi-vue-ta-filters-panel-open',
     'fi-dropdown-panel',
-    'fi-width-xs',
 ]
 
 /**

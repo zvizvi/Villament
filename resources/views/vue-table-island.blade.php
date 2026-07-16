@@ -15,7 +15,9 @@
         empty. Pinned by a contract test; the double-render guard
         (hasActionsModalRendered) is honored both ways.
     --}}
-    @php($vueTableLivewire = $getLivewire())
+    @php
+        $vueTableLivewire = $getLivewire();
+    @endphp
     @if ($vueTableLivewire instanceof \Filament\Actions\Contracts\HasActions && (! $vueTableLivewire->hasActionsModalRendered))
         <div
             wire:partial="action-modals"
@@ -31,7 +33,9 @@
             @endforeach
         </div>
 
-        @php($vueTableLivewire->hasActionsModalRendered = true)
+        @php
+            $vueTableLivewire->hasActionsModalRendered = true;
+        @endphp
     @endif
 
     @if ($withNativeFilters)
@@ -43,16 +47,51 @@
             commit hook drives a Vue refetch. This is byte-identical to the
             stock filters dropdown content — no filter UI exists in Vue.
         --}}
+        @php
+            $vueTableFiltersTable = $getLivewire()->getTable();
+
+            // Panel width, resolved like the stock dropdown: explicit
+            // filtersFormWidth() first, then the width implied by
+            // filtersFormColumns() (stock maps ints only — a responsive array
+            // like ['sm' => 2, 'lg' => 4] is mapped here via its largest
+            // breakpoint value, where stock falls back to ExtraSmall).
+            $vueTableFiltersWidth = $vueTableFiltersTable->getFiltersFormWidth();
+
+            if (blank($vueTableFiltersWidth)) {
+                $vueTableFiltersColumns = $vueTableFiltersTable->getFiltersFormColumns();
+
+                $vueTableFiltersWidth = match (is_array($vueTableFiltersColumns) ? max($vueTableFiltersColumns) : $vueTableFiltersColumns) {
+                    2 => \Filament\Support\Enums\Width::TwoExtraLarge,
+                    3 => \Filament\Support\Enums\Width::FourExtraLarge,
+                    4 => \Filament\Support\Enums\Width::SixExtraLarge,
+                    default => \Filament\Support\Enums\Width::ExtraSmall,
+                };
+            }
+
+            if (is_string($vueTableFiltersWidth)) {
+                $vueTableFiltersWidth = \Filament\Support\Enums\Width::tryFrom($vueTableFiltersWidth) ?? $vueTableFiltersWidth;
+            }
+
+            $vueTableFiltersMaxHeight = $vueTableFiltersTable->getFiltersFormMaxHeight();
+        @endphp
+
         <div
             data-vue-table-filters-panel
             wire:key="{{ $getLivewire()->getId() }}.vue-table-filters-panel"
-            style="display: none;"
-            class="fi-vue-table-filters-panel"
+            @class([
+                'fi-vue-table-filters-panel',
+                ($vueTableFiltersWidth instanceof \Filament\Support\Enums\Width) ? "fi-width-{$vueTableFiltersWidth->value}" : $vueTableFiltersWidth,
+                'fi-scrollable' => $vueTableFiltersMaxHeight,
+            ])
+            @style([
+                'display: none',
+                ('max-height: ' . e($vueTableFiltersMaxHeight)) => $vueTableFiltersMaxHeight,
+            ])
         >
             <x-filament-tables::filters
-                :apply-action="$getLivewire()->getTable()->getFiltersApplyAction()"
+                :apply-action="$vueTableFiltersTable->getFiltersApplyAction()"
                 :form="$getLivewire()->getTableFiltersForm()"
-                :reset-action-position="$getLivewire()->getTable()->getFiltersResetActionPosition()"
+                :reset-action-position="$vueTableFiltersTable->getFiltersResetActionPosition()"
             />
         </div>
     @endif
