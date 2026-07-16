@@ -1,5 +1,6 @@
 <script setup>
 import TrustedIcon from './TrustedIcon.js'
+import { vTooltip } from '../support/tooltip.js'
 
 defineProps({
     /**
@@ -38,9 +39,9 @@ const emit = defineEmits(['toggle'])
     <div class="fi-dropdown fi-ta-filters-dropdown fi-vue-ta-filters-trigger">
         <div class="fi-dropdown-trigger">
             <button
+                v-tooltip="strings.filtersHeading"
                 type="button"
                 class="fi-icon-btn fi-size-md fi-ac-icon-btn-action fi-force-enabled"
-                :title="strings.filtersHeading"
                 :aria-label="strings.filtersHeading"
                 @click="emit('toggle')"
             >
