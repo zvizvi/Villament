@@ -1,76 +1,25 @@
 /**
- * Vue directive mirroring Filament's Alpine `x-tooltip` (Tippy) on a
- * Vue-rendered element.
+ * Builds the `x-tooltip` expression string Filament's own blade emits, so an
+ * island element gets a native Filament tooltip (Alpine + Tippy, panel theme).
  *
- * Alpine only processes directives on nodes it walked itself; it never scans
- * Vue output, so a plain `x-tooltip` attribute in a Vue template does nothing.
- * This sets the exact `x-tooltip` config the stock blade emits — including the
- * reactive `$store.theme` binding — and hands the node to Alpine's own
- * `initTree()`, producing a tooltip byte-identical to native Filament icon
- * buttons. It tears the Tippy instance down on unmount and no-ops gracefully
- * when Alpine isn't on the page (e.g. jsdom tests, or a non-panel context).
+ * It MUST be bound as an attribute in the template — `:x-tooltip="..."` — and
+ * NOT applied from a `mounted` hook. Alpine initializes the `x-tooltip`
+ * directive when its mutation observer sees the node inserted with the
+ * attribute already present (or during Alpine's own start-up walk). Setting
+ * the attribute AFTER insertion is too late: Alpine has already walked and
+ * marked the node, and `Alpine.initTree()` won't re-process an
+ * already-initialized element — so no Tippy instance is ever created.
  *
- * @type {import('vue').Directive<HTMLElement, ?string>}
- */
-export const vTooltip = {
-    mounted(el, binding) {
-        applyTooltip(el, binding.value)
-    },
-    updated(el, binding) {
-        if (binding.value !== binding.oldValue) {
-            destroyTooltip(el)
-            applyTooltip(el, binding.value)
-        }
-    },
-    beforeUnmount(el) {
-        destroyTooltip(el)
-    },
-}
-
-/**
- * @param {HTMLElement} el
+ * Returns null when there's no content, so Vue omits the attribute entirely
+ * (and, without Alpine, the element simply has no tooltip — same as stock).
+ *
  * @param {?string} content
- * @returns {void}
+ * @returns {?string}
  */
-function applyTooltip(el, content) {
-    const alpine = window.Alpine
-
-    if (! alpine || ! content) {
-        return
+export function filamentTooltip(content) {
+    if (! content) {
+        return null
     }
 
-    // Exactly the object Filament's blade renders into `x-tooltip`.
-    el.setAttribute(
-        'x-tooltip',
-        `{ content: ${JSON.stringify(content)}, theme: $store.theme, allowHTML: false }`,
-    )
-
-    // A native `title` would double up with the Tippy tooltip.
-    el.removeAttribute('title')
-
-    try {
-        alpine.initTree(el)
-    } catch {
-        // Alpine present but the tooltip plugin isn't registered; drop the
-        // dead attribute so nothing lingers.
-        el.removeAttribute('x-tooltip')
-    }
-}
-
-/**
- * @param {HTMLElement} el
- * @returns {void}
- */
-function destroyTooltip(el) {
-    const alpine = window.Alpine
-
-    if (alpine && el.hasAttribute('x-tooltip')) {
-        try {
-            alpine.destroyTree(el)
-        } catch {
-            // Nothing to tear down.
-        }
-    }
-
-    el.removeAttribute('x-tooltip')
+    return `{ content: ${JSON.stringify(content)}, theme: $store.theme, allowHTML: false }`
 }

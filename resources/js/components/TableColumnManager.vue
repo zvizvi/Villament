@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, ref, watch, TransitionGroup } from 'vue'
 import TrustedIcon from './TrustedIcon.js'
-import { vTooltip } from '../support/tooltip.js'
+import { filamentTooltip } from '../support/tooltip.js'
 
 const props = defineProps({
     /**
@@ -397,7 +397,7 @@ function onReset() {
             :aria-expanded="isOpen ? 'true' : 'false'"
         >
             <button
-                v-tooltip="strings.columnManagerHeading"
+                :x-tooltip="filamentTooltip(strings.columnManagerHeading)"
                 type="button"
                 class="fi-icon-btn fi-size-md fi-ac-icon-btn-action fi-force-enabled"
                 :aria-label="strings.columnManagerHeading"

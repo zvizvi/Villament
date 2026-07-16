@@ -1,7 +1,7 @@
 <script setup>
 import { onBeforeUnmount, ref } from 'vue'
 import TrustedIcon from './TrustedIcon.js'
-import { vTooltip } from '../support/tooltip.js'
+import { filamentTooltip } from '../support/tooltip.js'
 
 defineProps({
     /**
@@ -154,7 +154,7 @@ function itemIconClasses(action) {
                             `fi-labeled-from-sm`.
                         -->
                         <button
-                            v-tooltip="item.label"
+                            :x-tooltip="filamentTooltip(item.label)"
                             class="fi-icon-btn fi-size-md fi-ac-btn-group"
                             :aria-label="item.label"
                             type="button"

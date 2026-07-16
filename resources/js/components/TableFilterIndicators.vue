@@ -1,7 +1,7 @@
 <script setup>
 import { computed } from 'vue'
 import TrustedIcon from './TrustedIcon.js'
-import { vTooltip } from '../support/tooltip.js'
+import { filamentTooltip } from '../support/tooltip.js'
 
 const props = defineProps({
     /**
@@ -80,12 +80,12 @@ const hasRemovableIndicators = computed(
             Mirrors the stock "remove all filters" action icon-button:
             `fi-icon-btn fi-size-sm fi-ac-icon-btn-action` (no `fi-color` — the
             icon-button's default gray applies), with Filament's own Alpine
-            `x-tooltip` (Tippy) applied via v-tooltip. The `fi-vue-ta-*` class
-            is our click/test hook.
+            `x-tooltip` (Tippy) bound as an attribute so Alpine inits it on
+            insertion. The `fi-vue-ta-*` class is our click/test hook.
         -->
         <button
             v-if="hasRemovableIndicators"
-            v-tooltip="strings.filtersRemoveAll"
+            :x-tooltip="filamentTooltip(strings.filtersRemoveAll)"
             type="button"
             class="fi-icon-btn fi-size-sm fi-ac-icon-btn-action fi-vue-ta-remove-all-filters-btn"
             :aria-label="strings.filtersRemoveAll"

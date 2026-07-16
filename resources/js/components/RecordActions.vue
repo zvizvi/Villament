@@ -1,7 +1,7 @@
 <script setup>
 import { onBeforeUnmount, ref } from 'vue'
 import TrustedIcon from './TrustedIcon.js'
-import { vTooltip } from '../support/tooltip.js'
+import { filamentTooltip } from '../support/tooltip.js'
 
 const props = defineProps({
     /**
@@ -201,7 +201,7 @@ function onActionClick(name, action) {
                     :aria-expanded="openGroup === index ? 'true' : 'false'"
                 >
                     <button
-                        v-tooltip="item.label ?? null"
+                        :x-tooltip="filamentTooltip(item.label ?? null)"
                         type="button"
                         class="fi-icon-btn fi-size-sm fi-ac-icon-btn-group"
                         :aria-label="item.label ?? undefined"

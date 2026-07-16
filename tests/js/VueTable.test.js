@@ -174,6 +174,12 @@ describe('VueTable filters (native Livewire panel) + indicators', () => {
         expect(wrapper.find('.fi-vue-ta-filters-trigger').exists()).toBe(true)
         expect(wrapper.find('.fi-vue-ta-filters-trigger .fi-dropdown-panel').exists()).toBe(false)
 
+        // The native Filament tooltip is a bound x-tooltip attribute (present
+        // at insertion, so Alpine's observer initializes it) — not a title.
+        const triggerBtn = wrapper.get('.fi-vue-ta-filters-trigger button')
+        expect(triggerBtn.attributes('x-tooltip')).toContain('theme: $store.theme')
+        expect(triggerBtn.attributes('title')).toBeUndefined()
+
         const panel = document.querySelector('[data-vue-table-filters-panel]')
         expect(panel.style.display).toBe('none')
 
