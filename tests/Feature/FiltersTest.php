@@ -69,7 +69,10 @@ describe('filter schema serialization', function (): void {
             ->and($icons['filters'])->toContain('<svg')
             ->and($icons['previous'])->toContain('<svg')
             ->and($icons['next'])->toContain('<svg')
-            ->and($icons['empty'])->toContain('<svg');
+            ->and($icons['empty'])->toContain('<svg')
+            // The indicator-chip delete icon is the xs micro variant, like
+            // the stock badge delete button.
+            ->and($icons['badgeDelete'])->toContain('fi-size-xs')->toContain('viewBox="0 0 16 16"');
     });
 
     it('renders the hidden Livewire fallback filter form with an apply button', function (): void {
@@ -90,7 +93,8 @@ describe('endpoint filter application', function (): void {
 
         expect($response->json('meta.total'))->toBe(2)
             ->and($response->json('indicators.0.filter'))->toBe('status')
-            ->and($response->json('indicators.0.label'))->toContain('Archived');
+            ->and($response->json('indicators.0.label'))->toContain('Archived')
+            ->and($response->json('indicators.0.colorClasses'))->toBe('fi-color fi-color-primary fi-text-color-700 dark:fi-text-color-400');
     });
 
     it('clears a filter when its value is sent empty', function (): void {

@@ -5,7 +5,8 @@ import TrustedIcon from './TrustedIcon.js'
 const props = defineProps({
     /**
      * Server-computed active-filter chips, always from the latest response:
-     * `[{ filter, field, label, removable }]`.
+     * `[{ filter, field, label, removable, colorClasses }]` — `colorClasses`
+     * is the exact string Filament computes (BadgeComponent).
      */
     indicators: {
         type: Array,
@@ -43,16 +44,14 @@ const hasRemovableIndicators = computed(
             </span>
 
             <div class="fi-ta-filter-indicators-badges-ctn">
-                <!--
-                    `fi-text-color-700` / `dark:fi-text-color-300` are
-                    Filament's own utilities for the badge's `--text` /
-                    `--dark-text` slots (stock markup computes the contrast
-                    shade server-side per palette).
-                -->
                 <span
                     v-for="(indicator, index) in indicators"
                     :key="`${indicator.filter}.${indicator.field ?? ''}.${index}`"
-                    class="fi-badge fi-size-md fi-color fi-color-primary fi-text-color-700 dark:fi-text-color-300"
+                    :class="[
+                        indicator.colorClasses || 'fi-color fi-color-primary fi-text-color-700 dark:fi-text-color-400',
+                        'fi-badge',
+                        'fi-size-md',
+                    ]"
                 >
                     <span class="fi-badge-label-ctn">
                         <span class="fi-badge-label">
@@ -66,7 +65,7 @@ const hasRemovableIndicators = computed(
                         class="fi-badge-delete-btn"
                         @click="emit('remove', indicator)"
                     >
-                        <TrustedIcon :html="icons.removeFilters" />
+                        <TrustedIcon :html="icons.badgeDelete || icons.removeFilters" />
 
                         <span class="fi-sr-only">
                             {{ strings.filtersRemove }}
