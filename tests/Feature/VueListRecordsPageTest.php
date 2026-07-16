@@ -36,7 +36,7 @@ it('inlines schema and initial records so first paint needs zero extra requests'
     expect($config['endpoint'])->toContain('/admin/filament-vue-table/users/data')
         ->and($config['livewireId'])->toBeString()->not->toBeEmpty()
         ->and($config['schemaVersion'])->toBeString()
-        ->and(array_column($config['schema']['columns'], 'key'))->toBe(['name', 'status', 'is_admin', 'avatar_url', 'email', 'created_at'])
+        ->and(array_column($config['schema']['columns'], 'key'))->toBe(['name', 'status', 'is_admin', 'avatar_url', 'email', 'logins_count', 'created_at'])
         ->and($config['schema']['defaultSort'])->toBe(['column' => 'name', 'direction' => 'asc'])
         ->and($config['schema']['pagination']['mode'])->toBe('offset')
         ->and($config['initialData']['records'])->toHaveCount(4) // 3 created + the acting user

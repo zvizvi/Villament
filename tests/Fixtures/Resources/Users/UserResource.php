@@ -16,6 +16,8 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\ImageColumn;
+use Filament\Tables\Columns\Summarizers\Average;
+use Filament\Tables\Columns\Summarizers\Sum;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\ViewColumn;
 use Filament\Tables\Filters\Filter;
@@ -67,6 +69,11 @@ class UserResource extends Resource
                     ->circular(),
                 ViewColumn::make('email')
                     ->view('fixtures.columns.user-email'),
+                TextColumn::make('logins_count')
+                    ->summarize([
+                        Sum::make(),
+                        Average::make(),
+                    ]),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()

@@ -13,6 +13,7 @@ use Zvizvi\FilamentVueTable\Support\RecordSerializer;
 use Zvizvi\FilamentVueTable\Support\RequestStateValidator;
 use Zvizvi\FilamentVueTable\Support\ResourceRegistry;
 use Zvizvi\FilamentVueTable\Support\SchemaSerializer;
+use Zvizvi\FilamentVueTable\Support\SummarySerializer;
 
 final class TableDataController
 {
@@ -59,6 +60,7 @@ final class TableDataController
             ),
             'meta' => $this->recordSerializer->meta($records),
             'indicators' => $this->indicatorSerializer->serialize($table),
+            'summaries' => app(SummarySerializer::class)->serialize($this->harness->getComponent()),
             'schemaVersion' => $this->schemaSerializer->version($schema),
         ]);
 

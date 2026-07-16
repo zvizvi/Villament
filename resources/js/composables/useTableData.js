@@ -62,6 +62,7 @@ export function useTableData(endpoint, state, options = {}) {
     const records = ref(options.initialData?.records ?? [])
     const meta = ref(options.initialData?.meta ?? null)
     const indicators = ref(options.initialData?.indicators ?? [])
+    const summaries = ref(options.initialData?.summaries ?? null)
     const isLoading = ref(false)
     const error = ref(null)
 
@@ -156,6 +157,7 @@ export function useTableData(endpoint, state, options = {}) {
             records.value = payload.records ?? []
             meta.value = payload.meta ?? null
             indicators.value = payload.indicators ?? []
+            summaries.value = payload.summaries ?? null
             error.value = null
         } catch (caught) {
             if (caught?.name === 'AbortError') {
@@ -269,6 +271,7 @@ export function useTableData(endpoint, state, options = {}) {
         records,
         meta,
         indicators,
+        summaries,
         isLoading,
         error,
         retry: fetchNow,

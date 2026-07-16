@@ -76,7 +76,7 @@ const columnsState = ref(JSON.parse(JSON.stringify(props.config.state?.columns ?
 
 const selection = useSelection()
 
-const { records, meta, indicators, isLoading, error, retry, fetchNow, destroy: destroyData } = useTableData(
+const { records, meta, indicators, summaries, isLoading, error, retry, fetchNow, destroy: destroyData } = useTableData(
     props.config.endpoint,
     state,
     {
@@ -215,6 +215,36 @@ const cellComponents = {
     icon: IconCell,
     image: ImageCell,
     html: HtmlCell,
+}
+
+/** Summary rows (page + all), server-rendered per response. */
+const summaryRows = computed(() => {
+    if (! summaries.value) {
+        return []
+    }
+
+    return [summaries.value.page, summaries.value.all].filter((row) => row && Object.keys(row.cells ?? {}).length)
+})
+
+/**
+ * Stock heading colspan: the heading occupies the leading columns up to the
+ * first summarized one.
+ *
+ * @param {{cells: Object<string, string>}} row
+ * @returns {number}
+ */
+function summaryHeadingColspan(row) {
+    let span = 0
+
+    for (const column of visibleColumns.value) {
+        if (span > 0 && row.cells[column.key] !== undefined) {
+            break
+        }
+
+        span++
+    }
+
+    return span
 }
 
 const columnDefs = computed(() => visibleColumns.value.map((column) => ({
@@ -762,6 +792,40 @@ function recordCellClasses(column) {
                                     </td>
                                 </tr>
                             </tbody>
+
+                            <tfoot v-if="summaryRows.length">
+                                <tr
+                                    v-for="(row, rowIndex) in summaryRows"
+                                    :key="rowIndex"
+                                    class="fi-ta-row fi-ta-summary-row"
+                                >
+                                    <td v-if="isSelectionEnabled" />
+
+                                    <template
+                                        v-for="(column, columnIndex) in visibleColumns"
+                                        :key="column.key"
+                                    >
+                                        <td
+                                            v-if="columnIndex === 0"
+                                            :colspan="summaryHeadingColspan(row) > 1 ? summaryHeadingColspan(row) : undefined"
+                                            class="fi-ta-cell fi-ta-summary-row-heading-cell"
+                                        >
+                                            {{ row.heading }}
+                                        </td>
+
+                                        <td
+                                            v-else-if="columnIndex >= summaryHeadingColspan(row)"
+                                            class="fi-ta-cell"
+                                            :class="column.alignment ? `fi-align-${column.alignment}` : undefined"
+                                        >
+                                            <!-- eslint-disable-next-line vue/no-v-html — trusted server-rendered summarizer views -->
+                                            <span v-html="row.cells[column.key] ?? ''" />
+                                        </td>
+                                    </template>
+
+                                    <td v-if="hasRecordActions" />
+                                </tr>
+                            </tfoot>
                         </table>
                     </div>
 

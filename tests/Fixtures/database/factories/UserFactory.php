@@ -27,6 +27,7 @@ class UserFactory extends Factory
             'is_admin' => fake()->boolean(20),
             'avatar_url' => 'https://avatars.example.test/'.fake()->uuid().'.jpg',
             'is_banned' => false,
+            'logins_count' => fake()->numberBetween(0, 100),
         ];
     }
 

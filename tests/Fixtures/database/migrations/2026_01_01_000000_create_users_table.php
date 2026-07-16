@@ -19,6 +19,7 @@ return new class extends Migration
             $table->boolean('is_admin')->default(false);
             $table->string('avatar_url')->nullable();
             $table->boolean('is_banned')->default(false);
+            $table->unsignedInteger('logins_count')->default(0);
             $table->rememberToken();
             $table->timestamps();
         });

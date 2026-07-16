@@ -14,6 +14,7 @@ use Zvizvi\FilamentVueTable\Support\FilterIndicatorSerializer;
 use Zvizvi\FilamentVueTable\Support\RecordSerializer;
 use Zvizvi\FilamentVueTable\Support\RequestStateValidator;
 use Zvizvi\FilamentVueTable\Support\SchemaSerializer;
+use Zvizvi\FilamentVueTable\Support\SummarySerializer;
 
 /**
  * Swaps the embedded Livewire table on a ListRecords page for the Vue island
@@ -125,6 +126,7 @@ trait HasVueTable
                 'records' => $recordSerializer->serialize($this, $resourceClass, $records),
                 'meta' => $recordSerializer->meta($records),
                 'indicators' => app(FilterIndicatorSerializer::class)->serialize($table),
+                'summaries' => app(SummarySerializer::class)->serialize($this),
             ],
             'state' => [
                 'sort' => $this->tableSort,
