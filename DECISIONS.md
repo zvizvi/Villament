@@ -66,6 +66,15 @@ Therefore `tests/TestCase.php` registers `SupportServiceProvider` **before** `Li
 6. **Stock markup corrections**: there is no `fi-ta-actions-cell` class in v5 — record actions live in `<td class="fi-ta-cell"><div class="fi-ta-actions">`, header cell is `fi-ta-actions-header-cell fi-ta-empty-header-cell`.
 7. **Not replicated (documented gaps)**: shift-click range selection; non-bulk toolbar actions (stock toolbar region is replaced by the island's own toolbar); selection-bar wire:loading spinner.
 
+## 2026-07-16 — Phase 4 decisions
+
+1. **Cursor pagination**: request `cursor` param (422 on malformed via `Cursor::fromEncoded`), scoped `AbstractCursorPaginator::currentCursorResolver` in the harness, cursor meta (`cursor`/`nextCursor`/`previousCursor`, null totals). Client: cursor in state/URL; ANY search/filter/sort/perPage change clears it (a cursor encodes a position under the previous ordering); sort changes now reset offset pagination too (stock parity). DoD: 10k-row walk, byte-identical keys AND identical cursor strings vs stock, backward step included.
+2. **Extension API**: `ColumnSerializer` chain (icon/image/text → html terminal) mirroring the filter chain; both PREPEND custom links via the config file and resolve through the container. JS: `window.FilamentVueTable.registerCellComponent(type, component)` — reactive registry, overrides builtins.
+3. **Config**: `debounce_ms` ships as `schema.debounceMs`; `cache_ttl` adds `Cache-Control: private, max-age` on endpoint responses (default off — spec §4.5).
+4. **Toolbar (non-bulk) actions**: `schema.actions.toolbar`; mixed ActionGroups split between the bulk and toolbar structures; url actions render anchors, mountable ones go through `mountAction(name, {}, {table: true})`.
+5. **Summaries**: `SummarySerializer` renders each summarized column's summarizer VIEWS server-side (labels + formatted state, trusted html) against Filament's own page/all summary queries + selected state; page row only when the paginator has pages. The island renders a stock-markup tfoot with the heading-colspan rule.
+6. **SchemaSerializer/RecordSerializer are container-bound** (non-singleton) so per-test/per-request config changes apply.
+
 ## Verified Filament v5 internal API map (§4.1, §4.8)
 
 Verified against **filament/filament v5.6.8** + **livewire/livewire v4.3.3** by reading installed vendor source on 2026-07-15. Paths relative to `vendor/filament/`.
