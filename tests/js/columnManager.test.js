@@ -379,6 +379,12 @@ describe('VueTable column manager + post-action refresh', () => {
         })
 
         expect(setDragImage).toHaveBeenCalledTimes(1)
-        expect(setDragImage.mock.calls[0][0].classList.contains('fi-ta-col-manager-label')).toBe(true)
+
+        const ghost = setDragImage.mock.calls[0][0]
+        expect(ghost.classList.contains('fi-ta-col-manager-item')).toBe(true)
+        // Reorder handle travels with the ghost; background transparent, half opacity (stock look).
+        expect(ghost.querySelector('.fi-ta-col-manager-reorder-handle')).not.toBeNull()
+        expect(ghost.style.background).toBe('transparent')
+        expect(ghost.style.opacity).toBe('0.5')
     })
 })

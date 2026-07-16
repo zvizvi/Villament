@@ -170,34 +170,36 @@ function onDragStart(scope, entry, event = null) {
     dragSource.value = { scope, type: entry.type ?? 'column', name: entry.name }
     hasReordered.value = false
 
-    // Stock (SortableJS) moves the element itself, so nothing but the
-    // checkbox + label appears to travel. The native HTML5 ghost snapshots
-    // the WHOLE item (panel background included) — override it with an
-    // offscreen CLONE of the label: guaranteed transparent background,
-    // pinned to the full row width so it doesn't shrink-wrap its content.
+    // Stock (SortableJS) moves the element itself, semi-transparent, so the
+    // checkbox + label + reorder handle travel together without the panel
+    // background. The native HTML5 ghost snapshots the item WITH its
+    // background — override it with an offscreen CLONE of the whole row:
+    // transparent background forced, half opacity like stock, full row
+    // width, and the cursor offset measured against the ROW rect (label-rect
+    // offsets drift in RTL, where the label sits away from the left edge).
     const dataTransfer = event?.dataTransfer
 
     if (dataTransfer) {
         dataTransfer.effectAllowed = 'move'
 
         const row = event.currentTarget
-        const label = row?.querySelector?.('.fi-ta-col-manager-label')
 
-        if (row && label && typeof dataTransfer.setDragImage === 'function') {
+        if (row && typeof dataTransfer.setDragImage === 'function') {
             const rowRect = row.getBoundingClientRect()
-            const labelRect = label.getBoundingClientRect()
 
-            const ghost = label.cloneNode(true)
+            const ghost = row.cloneNode(true)
             ghost.style.position = 'fixed'
             ghost.style.top = '-1000px'
             ghost.style.left = '0'
-            ghost.style.width = `${rowRect.width || labelRect.width}px`
+            ghost.style.width = `${rowRect.width}px`
             ghost.style.margin = '0'
             ghost.style.background = 'transparent'
+            ghost.style.border = 'none'
             ghost.style.boxShadow = 'none'
+            ghost.style.opacity = '0.5'
             document.body.appendChild(ghost)
 
-            dataTransfer.setDragImage(ghost, event.clientX - labelRect.left, event.clientY - labelRect.top)
+            dataTransfer.setDragImage(ghost, event.clientX - rowRect.left, event.clientY - rowRect.top)
 
             // The browser snapshots synchronously during dragstart.
             setTimeout(() => ghost.remove())
