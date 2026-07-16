@@ -88,11 +88,26 @@
                 ('max-height: ' . e($vueTableFiltersMaxHeight)) => $vueTableFiltersMaxHeight,
             ])
         >
-            <x-filament-tables::filters
-                :apply-action="$vueTableFiltersTable->getFiltersApplyAction()"
-                :form="$getLivewire()->getTableFiltersForm()"
-                :reset-action-position="$vueTableFiltersTable->getFiltersResetActionPosition()"
-            />
+            {{--
+                Stock scopes the ENTIRE filters styling block (grid, gap-y,
+                header/heading/actions layout, and the dropdown `p-6` padding)
+                under `.fi-ta-ctn .fi-ta-filters-dropdown`. This panel lives
+                OUTSIDE the Vue-owned `.fi-ta-ctn` (it must stay Livewire-
+                morphable, i.e. out of the wire:ignore mount), so those rules
+                would miss it. Reconstruct the exact ancestor chain with
+                `display: contents` wrappers: they carry the classes the
+                descendant selectors need but generate no box, so every native
+                rule applies verbatim — no custom filter CSS.
+            --}}
+            <div class="fi-ta-ctn" style="display: contents">
+                <div class="fi-ta-filters-dropdown" style="display: contents">
+                    <x-filament-tables::filters
+                        :apply-action="$vueTableFiltersTable->getFiltersApplyAction()"
+                        :form="$getLivewire()->getTableFiltersForm()"
+                        :reset-action-position="$vueTableFiltersTable->getFiltersResetActionPosition()"
+                    />
+                </div>
+            </div>
         </div>
     @endif
 </div>

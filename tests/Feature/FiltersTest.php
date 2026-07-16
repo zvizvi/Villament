@@ -72,6 +72,20 @@ describe('filter schema serialization', function (): void {
             ->toContain('applyTableFilters');
     });
 
+    it('reconstructs the .fi-ta-ctn > .fi-ta-filters-dropdown chain so stock filter CSS applies', function (): void {
+        // The panel lives outside the Vue-owned .fi-ta-ctn, so the stock
+        // grid/gap/padding rules (scoped to that ancestor chain) only apply
+        // because the island rebuilds the chain with display:contents wrappers.
+        $html = livewire(VueListUsers::class)->html();
+
+        preg_match('/data-vue-table-filters-panel.*?<\/x-filament-tables::filters>|data-vue-table-filters-panel.*?fi-ta-filters-heading/s', $html, $matches);
+        $panel = $matches[0] ?? '';
+
+        expect($panel)
+            ->toContain('class="fi-ta-ctn" style="display: contents"')
+            ->toContain('class="fi-ta-filters-dropdown" style="display: contents"');
+    });
+
     it('sizes the panel from filtersFormColumns, including responsive arrays', function (): void {
         // The fixture defines filtersFormColumns(['sm' => 2, 'md' => 3,
         // 'lg' => 4]) — the panel width follows the largest breakpoint via
