@@ -7,9 +7,13 @@ namespace Zvizvi\FilamentVueTable\Support;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkAction;
+use Filament\Support\View\Components\ButtonComponent;
+use Filament\Support\View\Components\DropdownComponent\ItemComponent;
+use Filament\Support\View\Components\DropdownComponent\ItemComponent\IconComponent;
 use Filament\Tables\Table;
 
 use function Filament\Support\generate_icon_html;
+use function Filament\Support\get_component_color_classes;
 
 /**
  * Serializes the table's action STRUCTURE (names, grouping, bulk actions).
@@ -72,9 +76,9 @@ final class ActionSerializer
 
             foreach ($item->getFlatActions() as $action) {
                 if ($action instanceof BulkAction) {
-                    $bulkChildren[] = $this->serializeBulkAction($action);
+                    $bulkChildren[] = $this->serializeBulkAction($action, grouped: true);
                 } elseif ($action->isVisible()) {
-                    $toolbarChildren[] = $this->serializeToolbarAction($action);
+                    $toolbarChildren[] = $this->serializeToolbarAction($action, grouped: true);
                 }
             }
 
@@ -106,7 +110,7 @@ final class ActionSerializer
      *
      * @return array<string, mixed>
      */
-    private function serializeToolbarAction(Action $action): array
+    private function serializeToolbarAction(Action $action, bool $grouped = false): array
     {
         $color = $action->getColor();
         $color = is_string($color) ? $color : null;
@@ -117,6 +121,7 @@ final class ActionSerializer
             'name' => $action->getName(),
             'label' => $this->stringable($action->getLabel()),
             'color' => $color,
+            ...$this->colorClasses($color, $grouped),
             'iconHtml' => $this->iconHtml($action->getIcon(default: $action->getTable() !== null ? $action->getTableIcon() : null)),
             'disabled' => $action->isDisabled(),
             'url' => $url,
@@ -127,15 +132,43 @@ final class ActionSerializer
     /**
      * @return array<string, mixed>
      */
-    private function serializeBulkAction(BulkAction $action): array
+    private function serializeBulkAction(BulkAction $action, bool $grouped = false): array
     {
         $color = $action->getColor();
+        $color = is_string($color) ? $color : null;
 
         return [
             'name' => $action->getName(),
             'label' => $this->stringable($action->getLabel()),
-            'color' => is_string($color) ? $color : null,
+            'color' => $color,
+            ...$this->colorClasses($color, $grouped),
             'iconHtml' => $this->iconHtml($action->getIcon()),
+        ];
+    }
+
+    /**
+     * The Filament-computed color classes for an action, chosen by render
+     * context: a standalone action is a `fi-btn` (ButtonComponent — includes
+     * the background/text shades), a grouped one is a dropdown list item
+     * (ItemComponent — text shades only, gray by default). A null/gray color
+     * yields empty strings so the element keeps its default styling.
+     *
+     * @return array{colorClasses: string, iconColorClasses: string}
+     */
+    private function colorClasses(?string $color, bool $grouped): array
+    {
+        if ($grouped) {
+            // Dropdown items default to gray (HasDefaultGrayColor) → no classes.
+            return [
+                'colorClasses' => implode(' ', get_component_color_classes(ItemComponent::class, $color)),
+                'iconColorClasses' => implode(' ', get_component_color_classes(IconComponent::class, $color)),
+            ];
+        }
+
+        // Standalone action buttons default to primary (the blade prop default).
+        return [
+            'colorClasses' => implode(' ', get_component_color_classes(ButtonComponent::class, $color ?? 'primary')),
+            'iconColorClasses' => '',
         ];
     }
 

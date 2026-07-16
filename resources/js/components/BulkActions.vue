@@ -68,53 +68,34 @@ function onActionClick(name) {
 }
 
 /**
- * Stock toolbar action button classes (toolbar actions keep the plain
- * `BUTTON_VIEW`, default color primary).
+ * Standalone action button classes. `action.colorClasses` is the exact
+ * ButtonComponent color string Filament computes server-side (bg + text
+ * shades per palette); empty for a null/gray color.
  *
  * @param {object} action
- * @returns {string[]}
+ * @returns {(string[]|string)[]}
  */
 function buttonClasses(action) {
-    return ['fi-btn', 'fi-size-md', 'fi-color', `fi-color-${action.color ?? 'primary'}`]
+    return ['fi-btn', 'fi-size-md', action.colorClasses || '']
 }
 
 /**
- * Stock grouped-action dropdown item classes (`Action::toGroupedActionHtml()`
- * → `fi-ac-grouped-action`). Gray is the item's default and renders NO color
- * classes (`ItemComponent` implements `HasDefaultGrayColor`); a real color
- * adds `fi-color fi-color-{color}` plus the text-shade quartet Filament
- * computes for the `text` / `hover:text` / `dark:*` slots.
+ * Grouped-action dropdown item classes. `action.colorClasses` is the
+ * ItemComponent color string (text shades only; empty for gray/default).
  *
  * @param {object} action
- * @returns {string[]}
+ * @returns {(string[]|string)[]}
  */
 function itemClasses(action) {
-    if (! action.color || action.color === 'gray') {
-        return ['fi-dropdown-list-item', 'fi-ac-grouped-action']
-    }
-
-    return [
-        'fi-color',
-        `fi-color-${action.color}`,
-        'fi-text-color-600',
-        'hover:fi-text-color-700',
-        'dark:fi-text-color-400',
-        'dark:hover:fi-text-color-400',
-        'fi-dropdown-list-item',
-        'fi-ac-grouped-action',
-    ]
+    return ['fi-dropdown-list-item', 'fi-ac-grouped-action', action.colorClasses || '']
 }
 
 /**
  * @param {object} action
- * @returns {string[]} Color classes stock appends to the item's icon svg.
+ * @returns {string} Server-computed color classes for the item's icon svg.
  */
 function itemIconClasses(action) {
-    if (! action.color || action.color === 'gray') {
-        return []
-    }
-
-    return ['fi-color', `fi-color-${action.color}`]
+    return action.iconColorClasses || ''
 }
 </script>
 

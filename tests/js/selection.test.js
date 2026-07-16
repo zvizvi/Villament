@@ -32,7 +32,7 @@ function makeConfig() {
                         label: null,
                         iconHtml: '<svg data-icon="bulk-group" class="fi-icon fi-size-md" viewBox="0 0 20 20"><path d="M3 10h14" /></svg>',
                         actions: [
-                            { name: 'delete', label: 'Delete selected', color: 'danger', iconHtml: null },
+                            { name: 'delete', label: 'Delete selected', color: 'danger', colorClasses: 'fi-color fi-color-danger fi-text-color-600', iconColorClasses: 'fi-color fi-color-danger', iconHtml: null },
                         ],
                     },
                 ],

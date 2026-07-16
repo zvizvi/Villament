@@ -27,6 +27,18 @@ describe('action structure serialization', function (): void {
             ->and($config['schema']['actions']['bulk'][0]['actions'][0]['label'])->toBe('Delete selected');
     });
 
+    it('computes full button color classes for standalone bulk/toolbar actions', function (): void {
+        $toolbar = collect(vueTableConfig()['schema']['actions']['toolbar'])->keyBy('name');
+
+        // A primary standalone action must carry the ButtonComponent bg+text
+        // shade classes, not just fi-color-primary — otherwise the button
+        // renders without its fill.
+        expect($toolbar->get('announce')['colorClasses'])
+            ->toContain('fi-color fi-color-primary')
+            ->toContain('fi-bg-color-')
+            ->toContain('fi-text-color-');
+    });
+
     it('ships column manager state and UI vocabulary', function (): void {
         $config = vueTableConfig();
 
