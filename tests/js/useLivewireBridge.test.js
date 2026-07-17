@@ -209,10 +209,11 @@ describe('useLivewireBridge', () => {
         bridge.toggleFiltersPanel()
         expect(container.classList.contains('villament-filters-modal-open')).toBe(true)
         expect(container.classList.contains('villament-filters-panel-open')).toBe(false)
-        // A backdrop is inserted as a sibling before the panel.
+        // A backdrop is appended to <body> (so a filter commit's morph, scoped
+        // to the Livewire component, can't delete it out from under the modal).
         const backdrop = document.querySelector('.villament-filters-backdrop')
         expect(backdrop).not.toBeNull()
-        expect(backdrop.nextElementSibling).toBe(container)
+        expect(backdrop.parentElement).toBe(document.body)
 
         bridge.toggleFiltersPanel()
         expect(container.classList.contains('villament-filters-modal-open')).toBe(false)

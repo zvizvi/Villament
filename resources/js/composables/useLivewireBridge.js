@@ -186,10 +186,15 @@ export function useLivewireBridge(options) {
         container.classList.add(...(isModal ? FILTERS_MODAL_OPEN_CLASSES : FILTERS_DROPDOWN_OPEN_CLASSES))
 
         // Modal presentation: a full-screen backdrop behind the centered panel.
+        // Appended to <body>, NOT next to the panel — a filter commit (reset /
+        // apply) morphs the Livewire component and would delete a backdrop
+        // rendered inside it (it's not in the server HTML), leaving the modal
+        // open with no backdrop. In <body> it survives morphs; only
+        // hideFiltersPanel removes it, so panel + backdrop stay in lockstep.
         if (isModal) {
             filtersBackdrop = document.createElement('div')
             filtersBackdrop.className = 'villament-filters-backdrop'
-            container.parentElement?.insertBefore(filtersBackdrop, container)
+            document.body.appendChild(filtersBackdrop)
         }
 
         isFiltersPanelVisible.value = true
