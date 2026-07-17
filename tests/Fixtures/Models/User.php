@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Zvizvi\FilamentVueTable\Tests\Fixtures\Models;
+namespace Zvizvi\Villament\Tests\Fixtures\Models;
 
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Models\Contracts\HasTenants;
@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Support\Collection;
-use Zvizvi\FilamentVueTable\Tests\Fixtures\Database\Factories\UserFactory;
+use Zvizvi\Villament\Tests\Fixtures\Database\Factories\UserFactory;
 
 class User extends Authenticatable implements FilamentUser, HasTenants
 {

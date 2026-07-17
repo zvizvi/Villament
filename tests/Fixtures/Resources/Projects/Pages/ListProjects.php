@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Zvizvi\FilamentVueTable\Tests\Fixtures\Resources\Projects\Pages;
+namespace Zvizvi\Villament\Tests\Fixtures\Resources\Projects\Pages;
 
-use Zvizvi\FilamentVueTable\Pages\VueListRecords;
-use Zvizvi\FilamentVueTable\Tests\Fixtures\Resources\Projects\ProjectResource;
+use Zvizvi\Villament\Pages\VillamentListRecords;
+use Zvizvi\Villament\Tests\Fixtures\Resources\Projects\ProjectResource;
 
-class ListProjects extends VueListRecords
+class ListProjects extends VillamentListRecords
 {
     protected static string $resource = ProjectResource::class;
 }

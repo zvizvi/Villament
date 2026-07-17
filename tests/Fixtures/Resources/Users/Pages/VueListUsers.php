@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Zvizvi\FilamentVueTable\Tests\Fixtures\Resources\Users\Pages;
+namespace Zvizvi\Villament\Tests\Fixtures\Resources\Users\Pages;
 
-use Zvizvi\FilamentVueTable\Pages\VueListRecords;
-use Zvizvi\FilamentVueTable\Tests\Fixtures\Resources\Users\UserResource;
+use Zvizvi\Villament\Pages\VillamentListRecords;
+use Zvizvi\Villament\Tests\Fixtures\Resources\Users\UserResource;
 
-class VueListUsers extends VueListRecords
+class VueListUsers extends VillamentListRecords
 {
     protected static string $resource = UserResource::class;
 }

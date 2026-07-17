@@ -1,5 +1,5 @@
 /*
- * filament-vue-table glue styles — intentionally near-zero.
+ * villament glue styles — intentionally near-zero.
  *
  * Every visual (table shell, toolbar, inputs, badges, icons, pagination,
  * dropdown panels, indicator chips, empty state, buttons, dark mode, RTL)
@@ -15,14 +15,14 @@
  * plugin, via inline styles. The island has no Alpine, so panels are
  * anchored in pure CSS instead: relative wrapper + logical inset (end edge),
  * which mirrors Filament's `placement="bottom-end"` in both LTR and RTL.
- * `fi-vue-ta-dropdown` marks every island dropdown (filters, column
+ * `villament-dropdown` marks every island dropdown (filters, column
  * manager, action groups).
  */
-.fi-vue-ta .fi-vue-ta-dropdown {
+.villament-table .villament-dropdown {
     position: relative;
 }
 
-.fi-vue-ta .fi-vue-ta-dropdown > .fi-dropdown-panel {
+.villament-table .villament-dropdown > .fi-dropdown-panel {
     inset-block-start: calc(100% + 0.5rem);
     inset-inline-end: 0;
 }
@@ -33,7 +33,7 @@
  * left in RTL) to stay inside the table — mirrors Filament's
  * `placement="bottom-start"` for that dropdown.
  */
-.fi-vue-ta .fi-vue-ta-dropdown-start > .fi-dropdown-panel {
+.villament-table .villament-dropdown-start > .fi-dropdown-panel {
     inset-inline-start: 0;
     inset-inline-end: auto;
 }
@@ -46,11 +46,11 @@
  * server-rendered `fi-width-*` class (filtersFormWidth/filtersFormColumns);
  * only the anchor point has no native equivalent.
  */
-.fi-vue-table {
+.villament {
     position: relative;
 }
 
-.fi-vue-table > [data-vue-table-filters-panel].fi-vue-ta-filters-panel-open {
+.villament > [data-villament-filters-panel].villament-filters-panel-open {
     inset-block-start: 4rem;
     inset-inline-end: 1.5rem;
 }
@@ -61,7 +61,7 @@
  * runtime) — no Filament class exists; Vue's TransitionGroup applies this
  * class while items travel to their new slot.
  */
-.fi-vue-ta-col-manager-move {
+.villament-col-manager-move {
     transition: transform 300ms ease;
 
     /* An item mid-flight must not intercept dragover — the source would

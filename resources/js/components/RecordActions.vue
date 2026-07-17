@@ -194,7 +194,7 @@ function onActionClick(name, action) {
             <!-- Group: dropdown, rendered only when any of its actions is visible. -->
             <div
                 v-else-if="visibleGroupActions(item).length > 0"
-                class="fi-dropdown fi-vue-ta-dropdown fi-vue-ta-actions-group"
+                class="fi-dropdown villament-dropdown villament-actions-group"
             >
                 <div
                     class="fi-dropdown-trigger"

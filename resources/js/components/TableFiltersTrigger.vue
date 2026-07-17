@@ -35,7 +35,7 @@ const emit = defineEmits(['toggle'])
         own filters component (rendered in Blade, Livewire-morphable). No
         filter UI exists in Vue.
     -->
-    <div class="fi-dropdown fi-ta-filters-dropdown fi-vue-ta-filters-trigger">
+    <div class="fi-dropdown fi-ta-filters-dropdown villament-filters-trigger">
         <div class="fi-dropdown-trigger">
             <button
                 type="button"

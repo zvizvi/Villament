@@ -33,9 +33,9 @@ const props = defineProps({
         required: true,
     },
     /**
-     * The `[data-vue-table]` island element (passed by the bootstrapper).
+     * The `[data-villament]` island element (passed by the bootstrapper).
      * Used by the Livewire bridge to locate the hidden native filters panel
-     * rendered as a sibling inside the same `.fi-vue-table` wrapper.
+     * rendered as a sibling inside the same `.villament` wrapper.
      */
     rootElement: {
         type: Object,
@@ -526,7 +526,7 @@ function recordCellClasses(column) {
 </script>
 
 <template>
-    <div class="fi-ta fi-vue-ta">
+    <div class="fi-ta villament-table">
         <div
             class="fi-ta-ctn fi-ta-ctn-with-footer"
             :class="{
@@ -610,7 +610,7 @@ function recordCellClasses(column) {
                 <!-- Error state reuses Filament's own empty-state styling. -->
                 <div
                     v-if="error"
-                    class="fi-ta-empty-state fi-vue-ta-error"
+                    class="fi-ta-empty-state villament-error"
                 >
                     <div class="fi-ta-empty-state-content">
                         <h4 class="fi-ta-empty-state-heading">

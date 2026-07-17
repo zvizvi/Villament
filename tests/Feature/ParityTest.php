@@ -3,8 +3,8 @@
 declare(strict_types=1);
 
 use Livewire\Features\SupportTesting\Testable;
-use Zvizvi\FilamentVueTable\Tests\Fixtures\Models\User;
-use Zvizvi\FilamentVueTable\Tests\Fixtures\Resources\Users\Pages\ListUsers;
+use Zvizvi\Villament\Tests\Fixtures\Models\User;
+use Zvizvi\Villament\Tests\Fixtures\Resources\Users\Pages\ListUsers;
 
 use function Pest\Laravel\actingAs;
 use function Pest\Laravel\getJson;
@@ -44,7 +44,7 @@ function stockTableRecordKeys(Testable $livewire): array
  */
 function endpointRecordKeys(string $queryString = ''): array
 {
-    $response = getJson('/admin/filament-vue-table/users/data'.($queryString ? "?{$queryString}" : ''))->assertOk();
+    $response = getJson('/admin/villament/users/data'.($queryString ? "?{$queryString}" : ''))->assertOk();
 
     return array_column($response->json('records'), 'key');
 }

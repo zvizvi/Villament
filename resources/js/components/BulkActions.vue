@@ -139,7 +139,7 @@ function itemIconClasses(action) {
             -->
             <div
                 v-else
-                class="fi-dropdown fi-vue-ta-dropdown fi-vue-ta-dropdown-start fi-vue-ta-actions-group"
+                class="fi-dropdown villament-dropdown villament-dropdown-start villament-actions-group"
             >
                 <div
                     class="fi-dropdown-trigger"

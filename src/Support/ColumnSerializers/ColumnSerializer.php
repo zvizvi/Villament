@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Zvizvi\FilamentVueTable\Support\ColumnSerializers;
+namespace Zvizvi\Villament\Support\ColumnSerializers;
 
 use Filament\Tables\Columns\Column;
 
@@ -18,7 +18,7 @@ interface ColumnSerializer
     /**
      * The schema-level cell `type` for this column. The Vue island resolves
      * it to a cell component (custom types via
-     * `window.FilamentVueTable.registerCellComponent(type, component)`).
+     * `window.Villament.registerCellComponent(type, component)`).
      */
     public function type(Column $column): string;
 

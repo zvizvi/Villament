@@ -59,7 +59,7 @@ const selectAllLabel = computed(
                 <button
                     v-if="canSelectAll"
                     type="button"
-                    class="fi-link fi-size-md fi-color fi-color-primary fi-text-color-600 dark:fi-text-color-400 fi-vue-ta-select-all-btn"
+                    class="fi-link fi-size-md fi-color fi-color-primary fi-text-color-600 dark:fi-text-color-400 villament-select-all-btn"
                     @click="emit('selectAll')"
                 >
                     {{ selectAllLabel }}
@@ -67,7 +67,7 @@ const selectAllLabel = computed(
 
                 <button
                     type="button"
-                    class="fi-link fi-size-md fi-color fi-color-danger fi-text-color-600 dark:fi-text-color-400 fi-vue-ta-deselect-all-btn"
+                    class="fi-link fi-size-md fi-color fi-color-danger fi-text-color-600 dark:fi-text-color-400 villament-deselect-all-btn"
                     @click="emit('deselectAll')"
                 >
                     {{ strings.deselectAll }}

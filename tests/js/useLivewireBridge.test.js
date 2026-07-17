@@ -70,9 +70,9 @@ describe('useLivewireBridge', () => {
         }
 
         document.body.innerHTML = `
-            <div class="fi-vue-table">
-                <div data-vue-table></div>
-                <div data-vue-table-filters-panel style="display: none;"></div>
+            <div class="villament">
+                <div data-villament></div>
+                <div data-villament-filters-panel style="display: none;"></div>
             </div>
         `
     })
@@ -93,7 +93,7 @@ describe('useLivewireBridge', () => {
     function makeBridge(options = {}) {
         const bridge = useLivewireBridge({
             livewireId: LIVEWIRE_ID,
-            islandElement: document.querySelector('[data-vue-table]'),
+            islandElement: document.querySelector('[data-villament]'),
             initialFilters: wireState.tableFilters,
             ...options,
         })
@@ -185,24 +185,24 @@ describe('useLivewireBridge', () => {
 
     it('toggles the hidden native filters panel container', () => {
         const bridge = makeBridge()
-        const container = document.querySelector('[data-vue-table-filters-panel]')
+        const container = document.querySelector('[data-villament-filters-panel]')
 
         expect(container.style.display).toBe('none')
 
         bridge.toggleFiltersPanel()
         expect(container.style.display).toBe('')
-        expect(container.classList.contains('fi-vue-ta-filters-panel-open')).toBe(true)
+        expect(container.classList.contains('villament-filters-panel-open')).toBe(true)
         expect(bridge.isFiltersPanelVisible.value).toBe(true)
 
         bridge.toggleFiltersPanel()
         expect(container.style.display).toBe('none')
-        expect(container.classList.contains('fi-vue-ta-filters-panel-open')).toBe(false)
+        expect(container.classList.contains('villament-filters-panel-open')).toBe(false)
         expect(bridge.isFiltersPanelVisible.value).toBe(false)
     })
 
     it('hides the filters panel after an applyTableFilters commit', () => {
         const bridge = makeBridge({ onFiltersChanged: vi.fn() })
-        const container = document.querySelector('[data-vue-table-filters-panel]')
+        const container = document.querySelector('[data-villament-filters-panel]')
 
         bridge.toggleFiltersPanel()
         expect(container.style.display).toBe('')
@@ -216,7 +216,7 @@ describe('useLivewireBridge', () => {
 
     it('keeps the filters panel open on ordinary (non-apply) commits', () => {
         const bridge = makeBridge({ onFiltersChanged: vi.fn() })
-        const container = document.querySelector('[data-vue-table-filters-panel]')
+        const container = document.querySelector('[data-villament-filters-panel]')
 
         bridge.toggleFiltersPanel()
         fireCommit()
@@ -226,7 +226,7 @@ describe('useLivewireBridge', () => {
 
     it('closes the filters panel on an outside pointerdown, like the stock dropdown', () => {
         const bridge = makeBridge()
-        const container = document.querySelector('[data-vue-table-filters-panel]')
+        const container = document.querySelector('[data-villament-filters-panel]')
 
         bridge.toggleFiltersPanel()
         expect(container.style.display).toBe('')
@@ -238,13 +238,13 @@ describe('useLivewireBridge', () => {
     })
 
     it('keeps the panel open when the pointerdown lands inside it or on the trigger', () => {
-        const wrapper = document.querySelector('.fi-vue-table')
+        const wrapper = document.querySelector('.villament')
         const trigger = document.createElement('div')
-        trigger.className = 'fi-vue-ta-filters-trigger'
+        trigger.className = 'villament-filters-trigger'
         wrapper.appendChild(trigger)
 
         const bridge = makeBridge()
-        const container = document.querySelector('[data-vue-table-filters-panel]')
+        const container = document.querySelector('[data-villament-filters-panel]')
         const inner = document.createElement('input')
         container.appendChild(inner)
 
@@ -260,7 +260,7 @@ describe('useLivewireBridge', () => {
 
     it('stops listening for outside clicks once the panel is closed', () => {
         const bridge = makeBridge()
-        const container = document.querySelector('[data-vue-table-filters-panel]')
+        const container = document.querySelector('[data-villament-filters-panel]')
 
         bridge.toggleFiltersPanel()
         bridge.toggleFiltersPanel()

@@ -2,19 +2,19 @@
 
 declare(strict_types=1);
 
-namespace Zvizvi\FilamentVueTable\Concerns;
+namespace Zvizvi\Villament\Concerns;
 
 use Filament\Facades\Filament;
 use Filament\Schemas\Components\RenderHook;
 use Filament\Schemas\Schema;
 use Filament\View\PanelsRenderHook;
 use Illuminate\Validation\ValidationException;
-use Zvizvi\FilamentVueTable\Schemas\VueTableIsland;
-use Zvizvi\FilamentVueTable\Support\FilterIndicatorSerializer;
-use Zvizvi\FilamentVueTable\Support\RecordSerializer;
-use Zvizvi\FilamentVueTable\Support\RequestStateValidator;
-use Zvizvi\FilamentVueTable\Support\SchemaSerializer;
-use Zvizvi\FilamentVueTable\Support\SummarySerializer;
+use Zvizvi\Villament\Schemas\VillamentIsland;
+use Zvizvi\Villament\Support\FilterIndicatorSerializer;
+use Zvizvi\Villament\Support\RecordSerializer;
+use Zvizvi\Villament\Support\RequestStateValidator;
+use Zvizvi\Villament\Support\SchemaSerializer;
+use Zvizvi\Villament\Support\SummarySerializer;
 
 /**
  * Swaps the embedded Livewire table on a ListRecords page for the Vue island
@@ -22,17 +22,17 @@ use Zvizvi\FilamentVueTable\Support\SummarySerializer;
  * stay untouched Filament output, and the Livewire page component keeps its
  * full table state (needed for the actions bridge and the native filters panel).
  */
-trait HasVueTable
+trait HasVillamentTable
 {
     public function content(Schema $schema): Schema
     {
-        $config = $this->getVueTableConfig();
+        $config = $this->getVillamentTableConfig();
 
         return $schema
             ->components([
                 $this->getTabsContentComponent(),
                 RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_BEFORE),
-                VueTableIsland::make($config, withNativeFilters: (bool) ($config['schema']['hasFilters'] ?? false)),
+                VillamentIsland::make($config, withNativeFilters: (bool) ($config['schema']['hasFilters'] ?? false)),
                 RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_AFTER),
             ]);
     }
@@ -45,7 +45,7 @@ trait HasVueTable
      * URL promises — otherwise a reload with `?perPage=5` would paint the
      * default page size until the first AJAX interaction.
      */
-    protected function applyVueTableUrlState(): void
+    protected function applyVillamentTableUrlState(): void
     {
         $request = request();
 
@@ -89,9 +89,9 @@ trait HasVueTable
     /**
      * @return array<string, mixed>
      */
-    public function getVueTableConfig(): array
+    public function getVillamentTableConfig(): array
     {
-        $this->applyVueTableUrlState();
+        $this->applyVillamentTableUrlState();
 
         $schemaSerializer = app(SchemaSerializer::class);
         $recordSerializer = app(RecordSerializer::class);
@@ -112,7 +112,7 @@ trait HasVueTable
         }
 
         return [
-            'endpoint' => $panel->route('filament-vue-table.data', $endpointParameters),
+            'endpoint' => $panel->route('villament.data', $endpointParameters),
             'livewireId' => $this->getId(),
             'schemaVersion' => $schemaSerializer->version($schema),
             'schema' => $schema,

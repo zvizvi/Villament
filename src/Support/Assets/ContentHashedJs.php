@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Zvizvi\FilamentVueTable\Support\Assets;
+namespace Zvizvi\Villament\Support\Assets;
 
 use Filament\Support\Assets\Js;
 

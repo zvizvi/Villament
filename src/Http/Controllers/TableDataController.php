@@ -2,18 +2,18 @@
 
 declare(strict_types=1);
 
-namespace Zvizvi\FilamentVueTable\Http\Controllers;
+namespace Zvizvi\Villament\Http\Controllers;
 
 use Filament\Facades\Filament;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Zvizvi\FilamentVueTable\Support\FilterIndicatorSerializer;
-use Zvizvi\FilamentVueTable\Support\HeadlessTableHarness;
-use Zvizvi\FilamentVueTable\Support\RecordSerializer;
-use Zvizvi\FilamentVueTable\Support\RequestStateValidator;
-use Zvizvi\FilamentVueTable\Support\ResourceRegistry;
-use Zvizvi\FilamentVueTable\Support\SchemaSerializer;
-use Zvizvi\FilamentVueTable\Support\SummarySerializer;
+use Zvizvi\Villament\Support\FilterIndicatorSerializer;
+use Zvizvi\Villament\Support\HeadlessTableHarness;
+use Zvizvi\Villament\Support\RecordSerializer;
+use Zvizvi\Villament\Support\RequestStateValidator;
+use Zvizvi\Villament\Support\ResourceRegistry;
+use Zvizvi\Villament\Support\SchemaSerializer;
+use Zvizvi\Villament\Support\SummarySerializer;
 
 final class TableDataController
 {
@@ -57,7 +57,7 @@ final class TableDataController
         $records = $this->harness->getRecords();
         $schema = $this->schemaSerializer->serialize($table);
 
-        $cacheTtl = (int) config('filament-vue-table.cache_ttl', 0);
+        $cacheTtl = (int) config('villament.cache_ttl', 0);
 
         $response = response()->json([
             'records' => $this->recordSerializer->serialize(

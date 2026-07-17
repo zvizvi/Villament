@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-use Zvizvi\FilamentVueTable\Tests\Fixtures\Models\User;
-use Zvizvi\FilamentVueTable\Tests\Fixtures\Resources\Users\Pages\VueListUsers;
+use Zvizvi\Villament\Tests\Fixtures\Models\User;
+use Zvizvi\Villament\Tests\Fixtures\Resources\Users\Pages\VueListUsers;
 
 use function Pest\Laravel\actingAs;
 use function Pest\Laravel\get;
@@ -18,8 +18,8 @@ it('renders the island mount point instead of the stock table', function (): voi
 
     $response = get('/admin/users/vue')->assertOk();
 
-    $response->assertSee('data-vue-table', escape: false)
-        ->assertSee('data-vue-table-config', escape: false)
+    $response->assertSee('data-villament', escape: false)
+        ->assertSee('data-villament-config', escape: false)
         ->assertDontSee('fi-ta-table', escape: false);
 });
 
@@ -28,12 +28,12 @@ it('inlines schema and initial records so first paint needs zero extra requests'
 
     $html = livewire(VueListUsers::class)->html();
 
-    preg_match('/<script type="application\/json" data-vue-table-config>(.*?)<\/script>/s', $html, $matches);
+    preg_match('/<script type="application\/json" data-villament-config>(.*?)<\/script>/s', $html, $matches);
     expect($matches)->toHaveCount(2);
 
     $config = json_decode($matches[1], true, flags: JSON_THROW_ON_ERROR);
 
-    expect($config['endpoint'])->toContain('/admin/filament-vue-table/users/data')
+    expect($config['endpoint'])->toContain('/admin/villament/users/data')
         ->and($config['livewireId'])->toBeString()->not->toBeEmpty()
         ->and($config['schemaVersion'])->toBeString()
         ->and(array_column($config['schema']['columns'], 'key'))->toBe(['name', 'status', 'is_admin', 'avatar_url', 'email', 'logins_count', 'created_at'])

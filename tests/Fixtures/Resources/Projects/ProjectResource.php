@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace Zvizvi\FilamentVueTable\Tests\Fixtures\Resources\Projects;
+namespace Zvizvi\Villament\Tests\Fixtures\Resources\Projects;
 
 use Filament\Resources\Pages\PageRegistration;
 use Filament\Resources\Resource;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
-use Zvizvi\FilamentVueTable\Tests\Fixtures\Models\Project;
-use Zvizvi\FilamentVueTable\Tests\Fixtures\Resources\Projects\Pages\ListProjects;
-use Zvizvi\FilamentVueTable\Tests\Fixtures\Resources\Projects\Pages\ViewProject;
+use Zvizvi\Villament\Tests\Fixtures\Models\Project;
+use Zvizvi\Villament\Tests\Fixtures\Resources\Projects\Pages\ListProjects;
+use Zvizvi\Villament\Tests\Fixtures\Resources\Projects\Pages\ViewProject;
 
 class ProjectResource extends Resource
 {

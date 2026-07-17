@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Zvizvi\FilamentVueTable\Tests\Fixtures;
+namespace Zvizvi\Villament\Tests\Fixtures;
 
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -13,9 +13,9 @@ use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
-use Zvizvi\FilamentVueTable\FilamentVueTablePlugin;
-use Zvizvi\FilamentVueTable\Tests\Fixtures\Models\Team;
-use Zvizvi\FilamentVueTable\Tests\Fixtures\Resources\Projects\ProjectResource;
+use Zvizvi\Villament\Tests\Fixtures\Models\Team;
+use Zvizvi\Villament\Tests\Fixtures\Resources\Projects\ProjectResource;
+use Zvizvi\Villament\VillamentPlugin;
 
 class TenantPanelProvider extends PanelProvider
 {
@@ -40,6 +40,6 @@ class TenantPanelProvider extends PanelProvider
             ->authMiddleware([
                 Authenticate::class,
             ])
-            ->plugin(FilamentVueTablePlugin::make());
+            ->plugin(VillamentPlugin::make());
     }
 }

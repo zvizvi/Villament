@@ -1,6 +1,6 @@
-<div class="fi-vue-table">
-    <div data-vue-table wire:ignore>
-        <script type="application/json" data-vue-table-config>{!! json_encode($config, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) !!}</script>
+<div class="villament">
+    <div data-villament wire:ignore>
+        <script type="application/json" data-villament-config>{!! json_encode($config, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) !!}</script>
     </div>
 
     {{--
@@ -76,7 +76,7 @@
         @endphp
 
         <div
-            data-vue-table-filters-panel
+            data-villament-filters-panel
             wire:key="{{ $getLivewire()->getId() }}.vue-table-filters-panel"
             {{--
                 The bridge toggles this panel open by mutating its inline style
@@ -90,7 +90,7 @@
             --}}
             wire:ignore.self
             @class([
-                'fi-vue-table-filters-panel',
+                'villament-filters-panel',
                 ($vueTableFiltersWidth instanceof \Filament\Support\Enums\Width) ? "fi-width-{$vueTableFiltersWidth->value}" : $vueTableFiltersWidth,
                 'fi-scrollable' => $vueTableFiltersMaxHeight,
             ])

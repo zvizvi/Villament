@@ -81,13 +81,13 @@ const hasRemovableIndicators = computed(
             `fi-icon-btn fi-size-sm fi-ac-icon-btn-action` (no `fi-color` — the
             icon-button's default gray applies), with Filament's own Alpine
             `x-tooltip` (Tippy) bound as an attribute so Alpine inits it on
-            insertion. The `fi-vue-ta-*` class is our click/test hook.
+            insertion. The `villament-*` class is our click/test hook.
         -->
         <button
             v-if="hasRemovableIndicators"
             :x-tooltip="filamentTooltip(strings.filtersRemoveAll)"
             type="button"
-            class="fi-icon-btn fi-size-sm fi-ac-icon-btn-action fi-vue-ta-remove-all-filters-btn"
+            class="fi-icon-btn fi-size-sm fi-ac-icon-btn-action villament-remove-all-filters-btn"
             :aria-label="strings.filtersRemoveAll"
             @click="emit('removeAll')"
         >

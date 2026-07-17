@@ -2,17 +2,17 @@
 
 declare(strict_types=1);
 
-namespace Zvizvi\FilamentVueTable;
+namespace Zvizvi\Villament;
 
 use Filament\Support\Facades\FilamentAsset;
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
-use Zvizvi\FilamentVueTable\Support\RecordSerializer;
-use Zvizvi\FilamentVueTable\Support\SchemaSerializer;
+use Zvizvi\Villament\Support\RecordSerializer;
+use Zvizvi\Villament\Support\SchemaSerializer;
 
-final class FilamentVueTableServiceProvider extends PackageServiceProvider
+final class VillamentServiceProvider extends PackageServiceProvider
 {
-    public static string $name = 'filament-vue-table';
+    public static string $name = 'villament';
 
     public function configurePackage(Package $package): void
     {
@@ -27,7 +27,7 @@ final class FilamentVueTableServiceProvider extends PackageServiceProvider
         $this->app->bind(SchemaSerializer::class, function (): SchemaSerializer {
             return new SchemaSerializer(
                 columnSerializers: $this->columnSerializerChain(),
-                debounceMs: (int) config('filament-vue-table.debounce_ms', 300),
+                debounceMs: (int) config('villament.debounce_ms', 300),
             );
         });
 
@@ -42,7 +42,7 @@ final class FilamentVueTableServiceProvider extends PackageServiceProvider
     private function columnSerializerChain(): array
     {
         return [
-            ...array_map(app(...), config('filament-vue-table.column_serializers', [])),
+            ...array_map(app(...), config('villament.column_serializers', [])),
             new Support\ColumnSerializers\IconColumnSerializer,
             new Support\ColumnSerializers\ImageColumnSerializer,
             new Support\ColumnSerializers\TextColumnSerializer,
@@ -56,7 +56,7 @@ final class FilamentVueTableServiceProvider extends PackageServiceProvider
             // Content-hashed version so a rebuilt bundle busts the browser
             // cache automatically (the default `?v=` is the composer package
             // version, stable for dev-main installs — see ContentHashedJs).
-            Support\Assets\ContentHashedJs::make('filament-vue-table', __DIR__.'/../dist/filament-vue-table.js'),
-        ], package: 'zvizvi/filament-vue-table');
+            Support\Assets\ContentHashedJs::make('villament', __DIR__.'/../dist/villament.js'),
+        ], package: 'zvizvi/villament');
     }
 }

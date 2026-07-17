@@ -15,13 +15,13 @@ export default defineConfig({
         emptyOutDir: true,
         lib: {
             entry: resolve(__dirname, 'resources/js/index.js'),
-            name: 'FilamentVueTable',
+            name: 'Villament',
             formats: ['iife'],
-            fileName: () => 'filament-vue-table.js',
+            fileName: () => 'villament.js',
         },
         rollupOptions: {
             output: {
-                assetFileNames: 'filament-vue-table.[ext]',
+                assetFileNames: 'villament.[ext]',
             },
         },
     },

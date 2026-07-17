@@ -257,7 +257,7 @@ function createDragPreview(row, event) {
     dragOffsetY = event.clientY - rect.top
 
     const shell = document.createElement('div')
-    shell.className = 'fi-ta-col-manager fi-vue-ta-drag-preview'
+    shell.className = 'fi-ta-col-manager villament-drag-preview'
     shell.dir = document.documentElement.dir || 'ltr'
     shell.style.position = 'fixed'
     shell.style.top = '0'
@@ -389,7 +389,7 @@ function onReset() {
     <div
         v-if="hasToggleableColumns"
         ref="root"
-        class="fi-dropdown fi-ta-col-manager-dropdown fi-vue-ta-dropdown fi-vue-ta-column-manager"
+        class="fi-dropdown fi-ta-col-manager-dropdown villament-dropdown villament-column-manager"
     >
         <div
             class="fi-dropdown-trigger"
@@ -430,7 +430,7 @@ function onReset() {
                 <TransitionGroup
                     tag="div"
                     class="fi-ta-col-manager-items fi-grid fi-grid-direction-col lg:fi-grid-cols"
-                    move-class="fi-vue-ta-col-manager-move"
+                    move-class="villament-col-manager-move"
                 >
                     <template v-for="item in items">
                         <div
@@ -460,7 +460,7 @@ function onReset() {
                             <TransitionGroup
                                 tag="div"
                                 class="fi-ta-col-manager-group-items"
-                                move-class="fi-vue-ta-col-manager-move"
+                                move-class="villament-col-manager-move"
                             >
                                 <div
                                     v-for="column in item.columns"

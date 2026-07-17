@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Zvizvi\FilamentVueTable\Tests\Fixtures\Database\Factories;
+namespace Zvizvi\Villament\Tests\Fixtures\Database\Factories;
 
 use Illuminate\Database\Eloquent\Factories\Factory;
-use Zvizvi\FilamentVueTable\Tests\Fixtures\Models\User;
+use Zvizvi\Villament\Tests\Fixtures\Models\User;
 
 /**
  * @extends Factory<User>

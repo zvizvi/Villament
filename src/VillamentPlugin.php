@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace Zvizvi\FilamentVueTable;
+namespace Zvizvi\Villament;
 
 use Filament\Contracts\Plugin;
 use Filament\Panel;
 use Illuminate\Support\Facades\Route;
-use Zvizvi\FilamentVueTable\Http\Controllers\TableDataController;
+use Zvizvi\Villament\Http\Controllers\TableDataController;
 
-final class FilamentVueTablePlugin implements Plugin
+final class VillamentPlugin implements Plugin
 {
     public static function make(): static
     {
@@ -18,15 +18,15 @@ final class FilamentVueTablePlugin implements Plugin
 
     public function getId(): string
     {
-        return 'filament-vue-table';
+        return 'villament';
     }
 
     public function register(Panel $panel): void
     {
         $registerRoute = function (Panel $panel): void {
-            Route::get('filament-vue-table/{resource}/data', TableDataController::class)
+            Route::get('villament/{resource}/data', TableDataController::class)
                 ->where('resource', '[^/]+')
-                ->name('filament-vue-table.data');
+                ->name('villament.data');
         };
 
         // Tenant panels: register inside the `{tenant}`-prefixed group so the

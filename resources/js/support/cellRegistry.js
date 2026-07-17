@@ -2,7 +2,7 @@ import { shallowReactive } from 'vue'
 
 /**
  * Custom cell components, registered by host apps via
- * `window.FilamentVueTable.registerCellComponent(type, component)` — paired
+ * `window.Villament.registerCellComponent(type, component)` — paired
  * with a PHP ColumnSerializer emitting that cell `type`.
  *
  * @type {Object<string, object>}

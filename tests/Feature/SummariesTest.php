@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use Zvizvi\FilamentVueTable\Tests\Fixtures\Models\User;
+use Zvizvi\Villament\Tests\Fixtures\Models\User;
 
 use function Pest\Laravel\actingAs;
 use function Pest\Laravel\getJson;

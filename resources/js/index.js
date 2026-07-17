@@ -1,8 +1,8 @@
 /**
- * filament-vue-table island bootstrapper.
+ * villament island bootstrapper.
  *
- * Scans the document for `[data-vue-table]` mount points, parses the embedded
- * `script[data-vue-table-config]` JSON, and mounts one Vue app per island.
+ * Scans the document for `[data-villament]` mount points, parses the embedded
+ * `script[data-villament-config]` JSON, and mounts one Vue app per island.
  * Survives `wire:navigate` by re-scanning on `livewire:navigated` and tearing
  * down apps whose mount point left the DOM.
  */
@@ -22,12 +22,12 @@ const mountedIslands = new Map()
  * @returns {void}
  */
 function injectStyles() {
-    if (document.querySelector('style[data-vue-table-styles]')) {
+    if (document.querySelector('style[data-villament-styles]')) {
         return
     }
 
     const style = document.createElement('style')
-    style.setAttribute('data-vue-table-styles', '')
+    style.setAttribute('data-villament-styles', '')
     style.textContent = tableStyles
     document.head.appendChild(style)
 }
@@ -35,14 +35,14 @@ function injectStyles() {
 /**
  * Parses the island's embedded config JSON.
  *
- * @param {Element} element The `[data-vue-table]` island element.
+ * @param {Element} element The `[data-villament]` island element.
  * @returns {?object} The config object, or null when missing/invalid.
  */
 function parseConfig(element) {
-    const script = element.querySelector('script[data-vue-table-config]')
+    const script = element.querySelector('script[data-villament-config]')
 
     if (! script) {
-        console.error('[filament-vue-table] Missing [data-vue-table-config] script in island.', element)
+        console.error('[villament] Missing [data-villament-config] script in island.', element)
 
         return null
     }
@@ -50,7 +50,7 @@ function parseConfig(element) {
     try {
         return JSON.parse(script.textContent)
     } catch (error) {
-        console.error('[filament-vue-table] Invalid island config JSON.', error)
+        console.error('[villament] Invalid island config JSON.', error)
 
         return null
     }
@@ -60,7 +60,7 @@ function parseConfig(element) {
 function scan() {
     injectStyles()
 
-    document.querySelectorAll('[data-vue-table]').forEach((element) => {
+    document.querySelectorAll('[data-villament]').forEach((element) => {
         if (mountedIslands.has(element)) {
             return
         }
@@ -95,7 +95,7 @@ function teardownOrphans() {
 
 // Public extension API — host apps register custom cell components (paired
 // with PHP ColumnSerializers) before or after islands mount (reactive).
-window.FilamentVueTable = Object.assign(window.FilamentVueTable ?? {}, {
+window.Villament = Object.assign(window.Villament ?? {}, {
     registerCellComponent,
 })
 

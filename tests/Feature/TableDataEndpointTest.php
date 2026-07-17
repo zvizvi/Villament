@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-use Zvizvi\FilamentVueTable\Tests\Fixtures\Models\User;
-use Zvizvi\FilamentVueTable\Tests\Fixtures\Resources\Users\UserResource;
+use Zvizvi\Villament\Tests\Fixtures\Models\User;
+use Zvizvi\Villament\Tests\Fixtures\Resources\Users\UserResource;
 
 use function Pest\Laravel\actingAs;
 use function Pest\Laravel\getJson;
 
-const ENDPOINT = '/admin/filament-vue-table/users/data';
+const ENDPOINT = '/admin/villament/users/data';
 
 beforeEach(function (): void {
     $this->actor = User::factory()->admin()->create(['name' => 'Acting User', 'status' => 'active']);
@@ -24,7 +24,7 @@ describe('security', function (): void {
     });
 
     it('returns 404 for an unknown resource slug', function (): void {
-        getJson('/admin/filament-vue-table/nonexistent/data')->assertNotFound();
+        getJson('/admin/villament/nonexistent/data')->assertNotFound();
     });
 
     it('returns 403 when the user fails canViewAny', function (): void {

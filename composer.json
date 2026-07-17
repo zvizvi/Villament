@@ -1,5 +1,5 @@
 {
-    "name": "zvizvi/filament-vue-table",
+    "name": "zvizvi/villament",
     "description": "Replace the Livewire-rendered table on a Filament v5 Resource List page with a Vue 3 island, fed by the existing table() schema.",
     "keywords": [
         "filament",
@@ -8,7 +8,7 @@
         "table",
         "filament-plugin"
     ],
-    "homepage": "https://github.com/zvizvi/filament-vue-table",
+    "homepage": "https://github.com/zvizvi/villament",
     "license": "MIT",
     "type": "library",
     "authors": [
@@ -32,13 +32,13 @@
     },
     "autoload": {
         "psr-4": {
-            "Zvizvi\\FilamentVueTable\\": "src/"
+            "Zvizvi\\Villament\\": "src/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "Zvizvi\\FilamentVueTable\\Tests\\": "tests/",
-            "Zvizvi\\FilamentVueTable\\Tests\\Fixtures\\Database\\Factories\\": "tests/Fixtures/database/factories/"
+            "Zvizvi\\Villament\\Tests\\": "tests/",
+            "Zvizvi\\Villament\\Tests\\Fixtures\\Database\\Factories\\": "tests/Fixtures/database/factories/"
         }
     },
     "scripts": {
@@ -49,7 +49,7 @@
     "extra": {
         "laravel": {
             "providers": [
-                "Zvizvi\\FilamentVueTable\\FilamentVueTableServiceProvider"
+                "Zvizvi\\Villament\\VillamentServiceProvider"
             ]
         }
     },

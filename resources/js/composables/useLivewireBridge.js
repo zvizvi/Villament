@@ -6,7 +6,7 @@ import { ref } from 'vue'
  *
  * The Blade island view keeps Filament's own complete filters panel mounted
  * (and Livewire-morphable) in a hidden sibling container
- * `[data-vue-table-filters-panel]` inside the same `.fi-vue-table` wrapper.
+ * `[data-villament-filters-panel]` inside the same `.villament` wrapper.
  * This composable:
  *
  * - toggles that container open/closed as a floating panel;
@@ -59,7 +59,7 @@ import { ref } from 'vue'
  * @property {() => void} destroy
  */
 
-const FILTERS_PANEL_SELECTOR = '[data-vue-table-filters-panel]'
+const FILTERS_PANEL_SELECTOR = '[data-villament-filters-panel]'
 
 /**
  * Host-component methods whose successful commit means the table data may
@@ -76,7 +76,7 @@ const REFRESH_COMMIT_METHODS = [
 ]
 
 /**
- * `fi-vue-ta-filters-panel-open` anchors the panel (package CSS);
+ * `villament-filters-panel-open` anchors the panel (package CSS);
  * `fi-dropdown-panel` is Filament's own — it provides the full panel surface
  * (absolute positioning, z-index, background, ring, shadow, radius)
  * natively, exactly like the stock filters dropdown. The width class
@@ -84,7 +84,7 @@ const REFRESH_COMMIT_METHODS = [
  * rendered server-side on the container by the Blade island view.
  */
 const FILTERS_PANEL_OPEN_CLASSES = [
-    'fi-vue-ta-filters-panel-open',
+    'villament-filters-panel-open',
     'fi-dropdown-panel',
 ]
 
@@ -128,7 +128,7 @@ function wireFor(livewireId) {
  *     onFiltersChanged?: (filters: Object<string, *>) => void,
  *     onActionCompleted?: (methods: string[]) => void,
  *     onDeselectAll?: () => void,
- * }} options `islandElement` is the `[data-vue-table]` mount point; the
+ * }} options `islandElement` is the `[data-villament]` mount point; the
  *     filters panel container is looked up among its siblings.
  * @returns {LivewireBridge}
  */
@@ -150,16 +150,16 @@ export function useLivewireBridge(options) {
 
     /** @returns {?HTMLElement} */
     function filtersPanelContainer() {
-        const wrapper = islandElement?.closest('.fi-vue-table') ?? islandElement?.parentElement
+        const wrapper = islandElement?.closest('.villament') ?? islandElement?.parentElement
 
         return wrapper?.querySelector(FILTERS_PANEL_SELECTOR) ?? null
     }
 
     /** @returns {?HTMLElement} The Vue-rendered funnel trigger, if present. */
     function filtersTriggerElement() {
-        const wrapper = islandElement?.closest('.fi-vue-table') ?? islandElement?.parentElement
+        const wrapper = islandElement?.closest('.villament') ?? islandElement?.parentElement
 
-        return wrapper?.querySelector('.fi-vue-ta-filters-trigger') ?? null
+        return wrapper?.querySelector('.villament-filters-trigger') ?? null
     }
 
     /** @returns {void} */

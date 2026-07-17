@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Zvizvi\FilamentVueTable\Tests\Fixtures\Resources\Users\Pages;
+namespace Zvizvi\Villament\Tests\Fixtures\Resources\Users\Pages;
 
 use Filament\Resources\Pages\ListRecords;
-use Zvizvi\FilamentVueTable\Tests\Fixtures\Resources\Users\UserResource;
+use Zvizvi\Villament\Tests\Fixtures\Resources\Users\UserResource;
 
 class ListUsers extends ListRecords
 {

@@ -3,7 +3,7 @@ import { mount } from '@vue/test-utils'
 import VueTable from '../../resources/js/components/VueTable.vue'
 import { makeWireProxy } from './support/livewireProxyMock.js'
 
-const ENDPOINT = 'https://host.test/admin/filament-vue-table/users/data'
+const ENDPOINT = 'https://host.test/admin/villament/users/data'
 const LIVEWIRE_ID = 'lw-users'
 
 const EDIT_URL = 'https://host.test/admin/users/1/edit'
@@ -196,7 +196,7 @@ describe('VueTable record actions', () => {
         // `edit` is in the structure but not evaluated for record 2.
         expect(secondRowActions.text()).not.toContain('Edit')
         // The `More` group has no visible actions for record 2 → no trigger.
-        expect(secondRowActions.find('.fi-vue-ta-actions-group').exists()).toBe(false)
+        expect(secondRowActions.find('.villament-actions-group').exists()).toBe(false)
     })
 
     it('renders disabled actions with the disabled attribute and never mounts them', async () => {
@@ -217,7 +217,7 @@ describe('VueTable record actions', () => {
     it('renders groups as dropdowns of the record-visible actions and mounts from items', async () => {
         const wrapper = mountTable()
 
-        const group = wrapper.findAll('tbody tr.fi-ta-row')[0].get('.fi-vue-ta-actions-group')
+        const group = wrapper.findAll('tbody tr.fi-ta-row')[0].get('.villament-actions-group')
         const trigger = group.get('.fi-dropdown-trigger button')
 
         // Trigger icon comes from the group iconHtml — a DIRECT svg child.

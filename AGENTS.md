@@ -1,4 +1,4 @@
-# AGENT INSTRUCTIONS — `filament-vue-table` Package
+# AGENT INSTRUCTIONS — `villament` Package
 
 > **Read this entire file before writing any code.** Work phase by phase. Do not start a phase before the previous phase's Definition of Done passes. When in doubt, prefer *reusing Filament internals* over reimplementing them.
 
@@ -6,7 +6,7 @@
 
 ## 1. Mission
 
-Build a Composer package named `filament-vue-table` that replaces the built-in Livewire-rendered table on a Filament v5 Resource List page with a **Vue 3 island**, while keeping **100% of the data pipeline in Filament's PHP layer**.
+Build a Composer package named `villament` that replaces the built-in Livewire-rendered table on a Filament v5 Resource List page with a **Vue 3 island**, while keeping **100% of the data pipeline in Filament's PHP layer**.
 
 After the initial page load, all table interactions — **sorting, pagination, global & per-column search, filtering** — are performed via lightweight AJAX (JSON) requests instead of Livewire roundtrips.
 
@@ -35,20 +35,20 @@ The Vue table must be fed from the Resource's **existing `table()` schema**. A d
 | Table logic (JS) | `@tanstack/vue-table` (headless) |
 | Tests | Pest + Orchestra Testbench; Vitest for JS units |
 
-Package namespace: `Zvizvi\FilamentVueTable` (make vendor configurable via a single find-replace token `Zvizvi`). MIT license.
+Package namespace: `Zvizvi\Villament` (make vendor configurable via a single find-replace token `Zvizvi`). MIT license.
 
 ---
 
 ## 3. Repository layout (create exactly this)
 
 ```
-filament-vue-table/
+villament/
 ├── composer.json
 ├── package.json                  # builds resources/js → dist
 ├── vite.config.js
 ├── src/
-│   ├── FilamentVueTablePlugin.php        # Filament Plugin (registers assets + routes)
-│   ├── FilamentVueTableServiceProvider.php
+│   ├── VillamentPlugin.php        # Filament Plugin (registers assets + routes)
+│   ├── VillamentServiceProvider.php
 │   ├── Http/
 │   │   ├── Controllers/TableDataController.php
 │   │   └── Middleware/ResolvePanelContext.php
@@ -61,11 +61,11 @@ filament-vue-table/
 │   │       ├── SelectFilterSerializer.php
 │   │       ├── TernaryFilterSerializer.php
 │   │       └── FallbackFilterSerializer.php   # marks filter as "livewire-fallback"
-│   ├── Pages/VueListRecords.php          # drop-in ListRecords replacement
-│   └── Concerns/HasVueTable.php          # optional trait alternative to VueListRecords
+│   ├── Pages/VillamentListRecords.php          # drop-in ListRecords replacement
+│   └── Concerns/HasVillamentTable.php          # optional trait alternative to VillamentListRecords
 ├── resources/
 │   ├── js/
-│   │   ├── index.js                      # island bootstrapper (scans [data-vue-table])
+│   │   ├── index.js                      # island bootstrapper (scans [data-villament])
 │   │   ├── components/
 │   │   │   ├── VueTable.vue
 │   │   │   ├── TableHeader.vue           # sort indicators, column toggles
@@ -153,7 +153,7 @@ On the server, incoming filter values are applied by writing them into the harne
 ### 4.5 Data endpoint
 
 ```
-GET /filament-vue-table/{panel}/{resource}/data
+GET /villament/{panel}/{resource}/data
 ```
 
 Registered by the Plugin using the panel's route configuration so it inherits **the panel's full middleware stack** (auth, tenancy, etc.). Additional guards in the controller:
@@ -167,17 +167,17 @@ Rate-limit friendly: the endpoint must be side-effect free and cacheable per use
 
 ### 4.6 Page integration
 
-`VueListRecords extends ListRecords`:
+`VillamentListRecords extends ListRecords`:
 
 - Overrides only the table rendering region of the view; header actions, widgets, tabs, breadcrumbs remain untouched Filament output.
-- Renders `resources/views/vue-list-records.blade.php`: a `<div data-vue-table data-config='…json…'>` mount point.
+- Renders `resources/views/vue-list-records.blade.php`: a `<div data-villament data-config='…json…'>` mount point.
 - Keeps the Livewire page component fully functional (needed for Phase 3 actions and filter fallback).
 
-Adoption = one line in the Resource's `getPages()`: swap `ListRecords` for `VueListRecords` (or apply the `HasVueTable` trait to a custom List page).
+Adoption = one line in the Resource's `getPages()`: swap `ListRecords` for `VillamentListRecords` (or apply the `HasVillamentTable` trait to a custom List page).
 
 ### 4.7 Frontend behavior
 
-- **Island bootstrap**: `index.js` scans for `[data-vue-table]`, mounts one Vue app per island. Must survive `wire:navigate` (re-scan on Livewire navigation hooks) and tear down cleanly.
+- **Island bootstrap**: `index.js` scans for `[data-villament]`, mounts one Vue app per island. Must survive `wire:navigate` (re-scan on Livewire navigation hooks) and tear down cleanly.
 - **Search**: 300ms debounce; every fetch uses an `AbortController` that cancels the in-flight request. Show a subtle loading bar, never blank the table while fetching (keep stale rows, dim them).
 - **Sorting**: click header → toggle asc/desc/none; single-column sort in v1.
 - **Pagination**: support both offset and cursor from `meta`. Cursor mode hides "jump to page" and total counts (no `COUNT(*)`).
@@ -206,7 +206,7 @@ Work strictly in order. Each phase ends with: all tests green, `composer analyse
 - **DoD**: fixture panel renders the *stock* Filament table in a Testbench browser test.
 
 ### Phase 1 — MVP data path
-- Harness, SchemaSerializer, RecordSerializer, RequestStateValidator, endpoint, VueListRecords, Vue island with text/badge/icon/image/html cells, global + per-column search, sorting, offset pagination, URL sync.
+- Harness, SchemaSerializer, RecordSerializer, RequestStateValidator, endpoint, VillamentListRecords, Vue island with text/badge/icon/image/html cells, global + per-column search, sorting, offset pagination, URL sync.
 - **DoD tests (minimum)**:
   - Endpoint respects the fixture's global scope (record outside scope never appears, even when requested by search).
   - 403 when user fails `canViewAny`; 422 on non-sortable sort key, unknown filter key, illegal perPage.

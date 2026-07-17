@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Zvizvi\FilamentVueTable\Tests\Fixtures\Resources\CursorUsers\Pages;
+namespace Zvizvi\Villament\Tests\Fixtures\Resources\CursorUsers\Pages;
 
 use Filament\Resources\Pages\ListRecords;
-use Zvizvi\FilamentVueTable\Tests\Fixtures\Resources\CursorUsers\CursorUserResource;
+use Zvizvi\Villament\Tests\Fixtures\Resources\CursorUsers\CursorUserResource;
 
 class StockCursorListUsers extends ListRecords
 {

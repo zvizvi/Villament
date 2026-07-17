@@ -3,8 +3,8 @@
 declare(strict_types=1);
 
 use Filament\Actions\Testing\TestAction;
-use Zvizvi\FilamentVueTable\Tests\Fixtures\Models\User;
-use Zvizvi\FilamentVueTable\Tests\Fixtures\Resources\Users\Pages\VueListUsers;
+use Zvizvi\Villament\Tests\Fixtures\Models\User;
+use Zvizvi\Villament\Tests\Fixtures\Resources\Users\Pages\VueListUsers;
 
 use function Pest\Laravel\actingAs;
 use function Pest\Laravel\assertDatabaseHas;
@@ -18,7 +18,7 @@ beforeEach(function (): void {
 
 describe('action structure serialization', function (): void {
     it('serializes record action names and bulk action groups into the schema', function (): void {
-        $config = vueTableConfig();
+        $config = VillamentTableConfig();
 
         expect(array_column($config['schema']['actions']['record'], 'name'))->toBe(['edit', 'delete'])
             ->and($config['schema']['actions']['bulk'])->toHaveCount(1)
@@ -28,7 +28,7 @@ describe('action structure serialization', function (): void {
     });
 
     it('computes full button color classes for standalone bulk/toolbar actions', function (): void {
-        $toolbar = collect(vueTableConfig()['schema']['actions']['toolbar'])->keyBy('name');
+        $toolbar = collect(VillamentTableConfig()['schema']['actions']['toolbar'])->keyBy('name');
 
         // A primary standalone action must carry the ButtonComponent bg+text
         // shade classes, not just fi-color-primary — otherwise the button
@@ -40,7 +40,7 @@ describe('action structure serialization', function (): void {
     });
 
     it('ships column manager state and UI vocabulary', function (): void {
-        $config = vueTableConfig();
+        $config = VillamentTableConfig();
 
         $createdAt = collect($config['state']['columns'])->firstWhere('name', 'created_at');
 
@@ -54,7 +54,7 @@ describe('action structure serialization', function (): void {
 
 describe('toolbar (non-bulk) actions', function (): void {
     it('serializes toolbar actions — url actions and mountable actions', function (): void {
-        $toolbar = collect(vueTableConfig()['schema']['actions']['toolbar'])->keyBy('name');
+        $toolbar = collect(VillamentTableConfig()['schema']['actions']['toolbar'])->keyBy('name');
 
         expect($toolbar->get('announce'))->toMatchArray([
             'type' => 'action',
@@ -92,7 +92,7 @@ describe('per-record action evaluation', function (): void {
         $user = User::factory()->create(['name' => 'Row Link Target', 'is_admin' => false]);
 
         $record = getJson(ENDPOINT.'?columnSearches[name]=Row+Link+Target')->assertOk()->json('records.0');
-        $config = vueTableConfig();
+        $config = VillamentTableConfig();
 
         // ListRecords wires recordUrl to the edit/view page by default.
         expect($record['url'])->toContain("/admin/users/{$user->id}/edit")
@@ -181,7 +181,7 @@ describe('actions bridge wire path (DoD)', function (): void {
 
 describe('column manager server path (DoD)', function (): void {
     it('exposes the reorderable flag and the reorder handle icon', function (): void {
-        $config = vueTableConfig();
+        $config = VillamentTableConfig();
 
         expect($config['schema']['reorderableColumns'])->toBeTrue()
             ->and($config['schema']['icons']['reorderHandle'])->toContain('<svg');
@@ -215,7 +215,7 @@ describe('column manager server path (DoD)', function (): void {
         $component->call('applyTableColumnManager', $state, true);
 
         // A fresh page render reads the session-persisted order back.
-        $config = vueTableConfig();
+        $config = VillamentTableConfig();
 
         expect($config['state']['columns'][0]['name'])->toBe($movedToFront);
     });

@@ -3,14 +3,14 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\DB;
-use Zvizvi\FilamentVueTable\Tests\Fixtures\Models\User;
-use Zvizvi\FilamentVueTable\Tests\Fixtures\Resources\CursorUsers\Pages\StockCursorListUsers;
+use Zvizvi\Villament\Tests\Fixtures\Models\User;
+use Zvizvi\Villament\Tests\Fixtures\Resources\CursorUsers\Pages\StockCursorListUsers;
 
 use function Pest\Laravel\actingAs;
 use function Pest\Laravel\getJson;
 use function Pest\Livewire\livewire;
 
-const CURSOR_ENDPOINT = '/admin/filament-vue-table/cursor-users/data';
+const CURSOR_ENDPOINT = '/admin/villament/cursor-users/data';
 
 beforeEach(function (): void {
     actingAs(User::factory()->admin()->create(['name' => 'Acting User', 'status' => 'active']));

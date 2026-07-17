@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use Zvizvi\FilamentVueTable\Tests\Fixtures\Models\User;
+use Zvizvi\Villament\Tests\Fixtures\Models\User;
 
 use function Pest\Laravel\actingAs;
 use function Pest\Laravel\get;
@@ -20,7 +20,7 @@ use function Pest\Laravel\get;
 function islandConfigFromUrl(string $url): array
 {
     $html = get($url)->assertOk()->getContent();
-    preg_match('/<script type="application\/json" data-vue-table-config>(.*?)<\/script>/s', $html, $matches);
+    preg_match('/<script type="application\/json" data-villament-config>(.*?)<\/script>/s', $html, $matches);
 
     return json_decode(html_entity_decode($matches[1]), true, flags: JSON_THROW_ON_ERROR);
 }

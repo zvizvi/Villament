@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Zvizvi\FilamentVueTable\Support;
+namespace Zvizvi\Villament\Support;
 
 use Filament\Resources\Resource;
 use Filament\Support\Enums\IconSize;

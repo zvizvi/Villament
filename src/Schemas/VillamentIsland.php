@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Zvizvi\FilamentVueTable\Schemas;
+namespace Zvizvi\Villament\Schemas;
 
 use Filament\Schemas\Components\Component;
 
@@ -12,9 +12,9 @@ use Filament\Schemas\Components\Component;
  * also renders the page's original Livewire filter form in a hidden
  * container that the island toggles.
  */
-final class VueTableIsland extends Component
+final class VillamentIsland extends Component
 {
-    protected string $view = 'filament-vue-table::vue-table-island';
+    protected string $view = 'villament::villament-island';
 
     /**
      * @param  array<string, mixed>  $config

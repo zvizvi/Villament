@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Zvizvi\FilamentVueTable\Support\ColumnSerializers;
+namespace Zvizvi\Villament\Support\ColumnSerializers;
 
 use Filament\Support\Enums\IconSize;
 use Filament\Support\View\Components\BadgeComponent;

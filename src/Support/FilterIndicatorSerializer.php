@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Zvizvi\FilamentVueTable\Support;
+namespace Zvizvi\Villament\Support;
 
 use Filament\Support\View\Components\BadgeComponent;
 use Filament\Tables\Table;

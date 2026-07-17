@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-use Zvizvi\FilamentVueTable\Tests\Fixtures\Models\Project;
-use Zvizvi\FilamentVueTable\Tests\Fixtures\Models\Team;
-use Zvizvi\FilamentVueTable\Tests\Fixtures\Models\User;
-use Zvizvi\FilamentVueTable\Tests\Fixtures\Resources\Projects\Pages\ListProjects;
+use Zvizvi\Villament\Tests\Fixtures\Models\Project;
+use Zvizvi\Villament\Tests\Fixtures\Models\Team;
+use Zvizvi\Villament\Tests\Fixtures\Models\User;
+use Zvizvi\Villament\Tests\Fixtures\Resources\Projects\Pages\ListProjects;
 
 use function Pest\Laravel\actingAs;
 use function Pest\Laravel\getJson;
@@ -26,7 +26,7 @@ beforeEach(function (): void {
 
 function tenantEndpoint(Team $team): string
 {
-    return "/tenant-app/{$team->slug}/filament-vue-table/projects/data";
+    return "/tenant-app/{$team->slug}/villament/projects/data";
 }
 
 it('scopes endpoint records to the current tenant (no cross-tenant leak)', function (): void {
@@ -50,8 +50,8 @@ it('inlines a tenant-scoped endpoint URL into the island config', function (): v
     filament()->setTenant($this->teamA);
 
     $html = livewire(ListProjects::class)->html();
-    preg_match('/<script type="application\/json" data-vue-table-config>(.*?)<\/script>/s', $html, $matches);
+    preg_match('/<script type="application\/json" data-villament-config>(.*?)<\/script>/s', $html, $matches);
     $config = json_decode($matches[1], true, flags: JSON_THROW_ON_ERROR);
 
-    expect($config['endpoint'])->toContain("/tenant-app/{$this->teamA->slug}/filament-vue-table/projects/data");
+    expect($config['endpoint'])->toContain("/tenant-app/{$this->teamA->slug}/villament/projects/data");
 });

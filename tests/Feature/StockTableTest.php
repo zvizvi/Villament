@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-use Zvizvi\FilamentVueTable\Tests\Fixtures\Models\User;
-use Zvizvi\FilamentVueTable\Tests\Fixtures\Resources\Users\Pages\ListUsers;
-use Zvizvi\FilamentVueTable\Tests\Fixtures\Resources\Users\UserResource;
+use Zvizvi\Villament\Tests\Fixtures\Models\User;
+use Zvizvi\Villament\Tests\Fixtures\Resources\Users\Pages\ListUsers;
+use Zvizvi\Villament\Tests\Fixtures\Resources\Users\UserResource;
 
 use function Pest\Laravel\actingAs;
 use function Pest\Laravel\get;

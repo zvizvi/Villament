@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-use Zvizvi\FilamentVueTable\Tests\Fixtures\Models\User;
-use Zvizvi\FilamentVueTable\Tests\Fixtures\Resources\Users\Pages\ListUsers;
-use Zvizvi\FilamentVueTable\Tests\Fixtures\Resources\Users\Pages\VueListUsers;
+use Zvizvi\Villament\Tests\Fixtures\Models\User;
+use Zvizvi\Villament\Tests\Fixtures\Resources\Users\Pages\ListUsers;
+use Zvizvi\Villament\Tests\Fixtures\Resources\Users\Pages\VueListUsers;
 
 use function Pest\Laravel\actingAs;
 use function Pest\Laravel\getJson;
@@ -17,24 +17,24 @@ beforeEach(function (): void {
 /**
  * @return array<string, mixed>
  */
-function vueTableConfig(): array
+function VillamentTableConfig(): array
 {
     $html = livewire(VueListUsers::class)->html();
-    preg_match('/<script type="application\/json" data-vue-table-config>(.*?)<\/script>/s', $html, $matches);
+    preg_match('/<script type="application\/json" data-villament-config>(.*?)<\/script>/s', $html, $matches);
 
     return json_decode($matches[1], true, flags: JSON_THROW_ON_ERROR);
 }
 
 describe('filter schema serialization', function (): void {
     it('ships only a hasFilters flag — the panel itself is native Livewire, never serialized', function (): void {
-        $schema = vueTableConfig()['schema'];
+        $schema = VillamentTableConfig()['schema'];
 
         expect($schema['hasFilters'])->toBeTrue()
             ->and($schema)->not->toHaveKey('filters');
     });
 
     it('includes localized UI strings in the schema', function (): void {
-        $strings = vueTableConfig()['schema']['strings'];
+        $strings = VillamentTableConfig()['schema']['strings'];
 
         expect($strings['filtersHeading'])->toBe('Filters')
             ->and($strings['filtersRemoveAll'])->toBe('Remove all filters')
@@ -43,7 +43,7 @@ describe('filter schema serialization', function (): void {
     });
 
     it('ships server-rendered UI icons matching the stock markup variants', function (): void {
-        $icons = vueTableConfig()['schema']['icons'];
+        $icons = VillamentTableConfig()['schema']['icons'];
 
         // Header sort chevrons are the mini (20px, filled) heroicon variant —
         // exactly what Filament's header-cell blade emits.
@@ -66,7 +66,7 @@ describe('filter schema serialization', function (): void {
         // The hidden, Livewire-morphable container holds the stock filters
         // component — heading, native fields, and the reset action — not a
         // Vue reimplementation.
-        expect($html)->toContain('data-vue-table-filters-panel')
+        expect($html)->toContain('data-villament-filters-panel')
             ->toContain('fi-ta-filters-heading')
             ->toContain('resetTableFiltersForm')
             ->toContain('applyTableFilters');
@@ -79,7 +79,7 @@ describe('filter schema serialization', function (): void {
         // the filter fields inside.
         $html = livewire(VueListUsers::class)->html();
 
-        preg_match('/<div\s+data-vue-table-filters-panel.*?>/s', $html, $matches);
+        preg_match('/<div\s+data-villament-filters-panel.*?>/s', $html, $matches);
 
         expect($matches[0] ?? '')->toContain('wire:ignore.self');
     });
@@ -92,7 +92,7 @@ describe('filter schema serialization', function (): void {
         // island rebuilds the exact chain with display:contents wrappers.
         $html = livewire(VueListUsers::class)->html();
 
-        preg_match('/data-vue-table-filters-panel.*?fi-ta-filters-heading/s', $html, $matches);
+        preg_match('/data-villament-filters-panel.*?fi-ta-filters-heading/s', $html, $matches);
         $panel = $matches[0] ?? '';
 
         expect($panel)
@@ -108,7 +108,7 @@ describe('filter schema serialization', function (): void {
         // ints only and silently falls back to ExtraSmall for arrays.
         $html = livewire(VueListUsers::class)->html();
 
-        preg_match('/data-vue-table-filters-panel[^>]*class="([^"]*)"/s', $html, $matches);
+        preg_match('/data-villament-filters-panel[^>]*class="([^"]*)"/s', $html, $matches);
 
         expect($matches[1] ?? '')->toContain('fi-width-6xl');
     });
@@ -119,7 +119,7 @@ describe('endpoint filter application', function (): void {
         User::factory()->count(3)->create(['status' => 'active']);
         User::factory()->count(2)->create(['status' => 'archived']);
 
-        $response = getJson('/admin/filament-vue-table/users/data?filters[status][value]=archived')->assertOk();
+        $response = getJson('/admin/villament/users/data?filters[status][value]=archived')->assertOk();
 
         expect($response->json('meta.total'))->toBe(2)
             ->and($response->json('indicators.0.filter'))->toBe('status')
@@ -131,7 +131,7 @@ describe('endpoint filter application', function (): void {
         User::factory()->count(2)->create(['status' => 'archived']);
         $total = User::query()->where('is_banned', false)->count();
 
-        $response = getJson('/admin/filament-vue-table/users/data?filters[status][value]=')->assertOk();
+        $response = getJson('/admin/villament/users/data?filters[status][value]=')->assertOk();
 
         expect($response->json('meta.total'))->toBe($total)
             ->and($response->json('indicators'))->toBeEmpty();
@@ -140,8 +140,8 @@ describe('endpoint filter application', function (): void {
     it('emits search indicators for global and per-column searches, like stock', function (): void {
         User::factory()->create(['name' => 'Indicator Target']);
 
-        $global = getJson('/admin/filament-vue-table/users/data?search=hello')->assertOk()->json('indicators.0');
-        $column = getJson('/admin/filament-vue-table/users/data?columnSearches[name]=world')->assertOk()->json('indicators.0');
+        $global = getJson('/admin/villament/users/data?search=hello')->assertOk()->json('indicators.0');
+        $column = getJson('/admin/villament/users/data?columnSearches[name]=world')->assertOk()->json('indicators.0');
 
         expect($global['type'])->toBe('search')
             ->and($global['label'])->toBe('Search: hello')
@@ -154,7 +154,7 @@ describe('endpoint filter application', function (): void {
     it('evaluates custom indicateUsing labels server-side', function (): void {
         User::factory()->create();
 
-        $response = getJson('/admin/filament-vue-table/users/data?filters[created_from][created_from]=2026-01-01')->assertOk();
+        $response = getJson('/admin/villament/users/data?filters[created_from][created_from]=2026-01-01')->assertOk();
 
         expect($response->json('indicators.0.label'))->toBe('Created from 2026-01-01');
     });
@@ -252,7 +252,7 @@ describe('native filters panel path', function (): void {
 
         expect($instance->tableFilters['status']['value'] ?? null)->toBe('archived')
             ->and(count($instance->getTableRecords()))->toBe(2)
-            ->and($instance->getVueTableConfig()['state']['filters']['status']['value'] ?? null)->toBe('archived');
+            ->and($instance->getVillamentTableConfig()['state']['filters']['status']['value'] ?? null)->toBe('archived');
     });
 
     it('remove-all clears applied filters via removeTableFilters (the method the island calls)', function (): void {

@@ -3,7 +3,7 @@ import { mount } from '@vue/test-utils'
 import VueTable from '../../resources/js/components/VueTable.vue'
 import { makeWireProxy } from './support/livewireProxyMock.js'
 
-const ENDPOINT = 'https://host.test/admin/filament-vue-table/users/data'
+const ENDPOINT = 'https://host.test/admin/villament/users/data'
 const LIVEWIRE_ID = 'lw-users'
 
 const COLUMN_MANAGER_ICON = '<svg data-icon="column-manager" class="fi-icon fi-size-md" viewBox="0 0 20 20"><path d="M3 3h14v14H3z" /></svg>'
@@ -214,7 +214,7 @@ describe('VueTable column manager + post-action refresh', () => {
     it('renders the trigger with the server icon and lists only toggleable columns', async () => {
         const wrapper = mountTable()
 
-        const manager = wrapper.get('.fi-vue-ta-column-manager')
+        const manager = wrapper.get('.villament-column-manager')
         const trigger = manager.get('.fi-dropdown-trigger button')
 
         expect(trigger.attributes('aria-label')).toBe('Columns')
@@ -241,7 +241,7 @@ describe('VueTable column manager + post-action refresh', () => {
     it('apply sends the FULL state array and refetches once after the commit', async () => {
         const wrapper = mountTable()
 
-        await wrapper.get('.fi-vue-ta-column-manager .fi-dropdown-trigger button').trigger('click')
+        await wrapper.get('.villament-column-manager .fi-dropdown-trigger button').trigger('click')
         await wrapper.get('.fi-ta-col-manager-item input[data-column="created_at"]').setValue(true)
 
         const expectedState = makeColumnsState()
@@ -273,7 +273,7 @@ describe('VueTable column manager + post-action refresh', () => {
     it('reset calls resetTableColumnManager and adopts the authoritative state from Livewire', async () => {
         const wrapper = mountTable()
 
-        await wrapper.get('.fi-vue-ta-column-manager .fi-dropdown-trigger button').trigger('click')
+        await wrapper.get('.villament-column-manager .fi-dropdown-trigger button').trigger('click')
         await wrapper.get('.fi-ta-col-manager-header .fi-link').trigger('click')
 
         expect(wireCalls).toEqual([
@@ -331,16 +331,16 @@ describe('VueTable column manager + post-action refresh', () => {
 
         wrapper = mount(VueTable, { props: { config }, attachTo: document.body })
 
-        expect(wrapper.find('.fi-vue-ta-column-manager').exists()).toBe(false)
+        expect(wrapper.find('.villament-column-manager').exists()).toBe(false)
     })
 
     it('drag-reorders columns, applies with wasReordered=true, and reorders the table headers', async () => {
         const wrapper = mountTable()
 
-        const trigger = wrapper.get('.fi-vue-ta-column-manager .fi-dropdown-trigger button')
+        const trigger = wrapper.get('.villament-column-manager .fi-dropdown-trigger button')
         await trigger.trigger('click')
 
-        const manager = wrapper.get('.fi-vue-ta-column-manager')
+        const manager = wrapper.get('.villament-column-manager')
         const itemsBefore = manager.findAll('.fi-ta-col-manager-items > .fi-ta-col-manager-item')
         expect(itemsBefore.map((item) => item.get('input').attributes('data-column'))).toEqual(['name', 'created_at'])
 
@@ -367,7 +367,7 @@ describe('VueTable column manager + post-action refresh', () => {
     it('suppresses the native ghost and moves a live full-row preview with the cursor', async () => {
         const wrapper = mountTable()
 
-        await wrapper.get('.fi-vue-ta-column-manager .fi-dropdown-trigger button').trigger('click')
+        await wrapper.get('.villament-column-manager .fi-dropdown-trigger button').trigger('click')
 
         const item = wrapper.findAll('.fi-ta-col-manager-item')[0]
         const setDragImage = vi.fn()
@@ -389,7 +389,7 @@ describe('VueTable column manager + post-action refresh', () => {
         // The live preview: manager-context shell, OPAQUE with a soft
         // drop-shadow (stock look), row clone WITH its reorder handle; the
         // source row dims in place as the placeholder.
-        const preview = document.body.querySelector('.fi-vue-ta-drag-preview')
+        const preview = document.body.querySelector('.villament-drag-preview')
         expect(preview).not.toBeNull()
         expect(preview.style.opacity).toBe('')
         expect(preview.style.filter).toContain('drop-shadow')
@@ -401,7 +401,7 @@ describe('VueTable column manager + post-action refresh', () => {
         expect(preview.style.transform).toContain('translate3d(50px, 80px, 0)')
 
         await item.trigger('dragend')
-        expect(document.body.querySelector('.fi-vue-ta-drag-preview')).toBeNull()
+        expect(document.body.querySelector('.villament-drag-preview')).toBeNull()
         expect(item.element.style.opacity).toBe('')
     })
 })

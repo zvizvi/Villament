@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Zvizvi\FilamentVueTable\Tests;
+namespace Zvizvi\Villament\Tests;
 
 use BladeUI\Heroicons\BladeHeroiconsServiceProvider;
 use BladeUI\Icons\BladeIconsServiceProvider;
@@ -18,8 +18,8 @@ use Filament\Widgets\WidgetsServiceProvider;
 use Illuminate\Support\Facades\Gate;
 use Livewire\LivewireServiceProvider;
 use Orchestra\Testbench\TestCase as Orchestra;
-use Zvizvi\FilamentVueTable\FilamentVueTableServiceProvider;
-use Zvizvi\FilamentVueTable\Tests\Fixtures\AdminPanelProvider;
+use Zvizvi\Villament\Tests\Fixtures\AdminPanelProvider;
+use Zvizvi\Villament\VillamentServiceProvider;
 
 abstract class TestCase extends Orchestra
 {
@@ -47,7 +47,7 @@ abstract class TestCase extends Orchestra
             TablesServiceProvider::class,
             WidgetsServiceProvider::class,
             NotificationsServiceProvider::class,
-            FilamentVueTableServiceProvider::class,
+            VillamentServiceProvider::class,
             AdminPanelProvider::class,
             Fixtures\TenantPanelProvider::class,
         ];

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Zvizvi\FilamentVueTable\Tests\Fixtures\Resources\Users;
+namespace Zvizvi\Villament\Tests\Fixtures\Resources\Users;
 
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
@@ -25,10 +25,10 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use Zvizvi\FilamentVueTable\Tests\Fixtures\Models\User;
-use Zvizvi\FilamentVueTable\Tests\Fixtures\Resources\Users\Pages\EditUser;
-use Zvizvi\FilamentVueTable\Tests\Fixtures\Resources\Users\Pages\ListUsers;
-use Zvizvi\FilamentVueTable\Tests\Fixtures\Resources\Users\Pages\VueListUsers;
+use Zvizvi\Villament\Tests\Fixtures\Models\User;
+use Zvizvi\Villament\Tests\Fixtures\Resources\Users\Pages\EditUser;
+use Zvizvi\Villament\Tests\Fixtures\Resources\Users\Pages\ListUsers;
+use Zvizvi\Villament\Tests\Fixtures\Resources\Users\Pages\VueListUsers;
 
 class UserResource extends Resource
 {

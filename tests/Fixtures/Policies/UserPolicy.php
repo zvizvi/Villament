@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Zvizvi\FilamentVueTable\Tests\Fixtures\Policies;
+namespace Zvizvi\Villament\Tests\Fixtures\Policies;
 
-use Zvizvi\FilamentVueTable\Tests\Fixtures\Models\User;
+use Zvizvi\Villament\Tests\Fixtures\Models\User;
 
 class UserPolicy
 {

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Zvizvi\FilamentVueTable\Support\ColumnSerializers;
+namespace Zvizvi\Villament\Support\ColumnSerializers;
 
 use Filament\Tables\Columns\Column;
 

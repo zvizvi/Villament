@@ -3,7 +3,7 @@ import { mount } from '@vue/test-utils'
 import VueTable from '../../resources/js/components/VueTable.vue'
 import { makeWireProxy } from './support/livewireProxyMock.js'
 
-const ENDPOINT = 'https://host.test/admin/filament-vue-table/users/data'
+const ENDPOINT = 'https://host.test/admin/villament/users/data'
 
 /**
  * @param {object} [overrides]
@@ -160,11 +160,11 @@ describe('VueTable filters (native Livewire panel) + indicators', () => {
 
     it('renders only the funnel trigger (no Vue filter fields) and toggles the native panel', async () => {
         document.body.innerHTML = `
-            <div class="fi-vue-table">
-                <div data-vue-table></div>
-                <div data-vue-table-filters-panel style="display: none;"></div>
+            <div class="villament">
+                <div data-villament></div>
+                <div data-villament-filters-panel style="display: none;"></div>
             </div>`
-        const island = document.querySelector('[data-vue-table]')
+        const island = document.querySelector('[data-villament]')
 
         wrapper = mount(VueTable, {
             props: { config: makeConfig(), rootElement: island },
@@ -172,21 +172,22 @@ describe('VueTable filters (native Livewire panel) + indicators', () => {
         })
 
         // The funnel trigger renders; no Vue-rendered filter panel exists.
-        expect(wrapper.find('.fi-vue-ta-filters-trigger').exists()).toBe(true)
-        expect(wrapper.find('.fi-vue-ta-filters-trigger .fi-dropdown-panel').exists()).toBe(false)
+        expect(wrapper.find('.villament-filters-trigger').exists()).toBe(true)
+        expect(wrapper.find('.villament-filters-trigger .fi-dropdown-panel').exists()).toBe(false)
 
-        // The native Filament tooltip is a bound x-tooltip attribute (present
-        // at insertion, so Alpine's observer initializes it) — not a title.
-        const triggerBtn = wrapper.get('.fi-vue-ta-filters-trigger button')
-        expect(triggerBtn.attributes('x-tooltip')).toContain('theme: $store.theme')
-        expect(triggerBtn.attributes('title')).toBeUndefined()
+        // Stock's filters trigger is a label-only icon button, so it carries a
+        // native `title` (not Filament's Alpine x-tooltip, which only the
+        // remove-all action — with an explicit ->tooltip() — gets).
+        const triggerBtn = wrapper.get('.villament-filters-trigger button')
+        expect(triggerBtn.attributes('title')).toBe('Filters')
+        expect(triggerBtn.attributes('x-tooltip')).toBeUndefined()
 
-        const panel = document.querySelector('[data-vue-table-filters-panel]')
+        const panel = document.querySelector('[data-villament-filters-panel]')
         expect(panel.style.display).toBe('none')
 
-        await wrapper.get('.fi-vue-ta-filters-trigger button').trigger('click')
+        await wrapper.get('.villament-filters-trigger button').trigger('click')
         expect(panel.style.display).not.toBe('none')
-        expect(panel.classList.contains('fi-vue-ta-filters-panel-open')).toBe(true)
+        expect(panel.classList.contains('villament-filters-panel-open')).toBe(true)
     })
 
     it('hides the funnel trigger when the table defines no filters', () => {
@@ -195,7 +196,7 @@ describe('VueTable filters (native Livewire panel) + indicators', () => {
 
         wrapper = mount(VueTable, { props: { config }, attachTo: document.body })
 
-        expect(wrapper.find('.fi-vue-ta-filters-trigger').exists()).toBe(false)
+        expect(wrapper.find('.villament-filters-trigger').exists()).toBe(false)
     })
 
     it('removes a filter indicator through Livewire (removeTableFilter), not Vue state', async () => {
@@ -219,7 +220,7 @@ describe('VueTable filters (native Livewire panel) + indicators', () => {
             },
         })
 
-        const removeAll = wrapper.get('.fi-vue-ta-remove-all-filters-btn')
+        const removeAll = wrapper.get('.villament-remove-all-filters-btn')
 
         // Mirrors the stock remove-all action icon-button (no fi-color-gray).
         expect(removeAll.classes()).toContain('fi-ac-icon-btn-action')

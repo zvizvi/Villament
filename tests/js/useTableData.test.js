@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
 import { useTableData } from '../../resources/js/composables/useTableData.js'
 
-const ENDPOINT = 'https://host.test/admin/filament-vue-table/users/data'
+const ENDPOINT = 'https://host.test/admin/villament/users/data'
 
 /**
  * @returns {import('../../resources/js/composables/useTableState.js').TableState}

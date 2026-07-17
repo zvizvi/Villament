@@ -3,7 +3,7 @@ import { mount } from '@vue/test-utils'
 import VueTable from '../../resources/js/components/VueTable.vue'
 import { makeWireProxy } from './support/livewireProxyMock.js'
 
-const ENDPOINT = 'https://host.test/admin/filament-vue-table/users/data'
+const ENDPOINT = 'https://host.test/admin/villament/users/data'
 const LIVEWIRE_ID = 'lw-users'
 
 /**
@@ -204,14 +204,14 @@ describe('VueTable selection + bulk actions', () => {
         // Select the page, then everything matching the query (total = 5).
         await wrapper.get('thead input.fi-ta-page-checkbox').trigger('change')
 
-        const selectAllButton = wrapper.get('.fi-vue-ta-select-all-btn')
+        const selectAllButton = wrapper.get('.villament-select-all-btn')
         expect(selectAllButton.text()).toBe('Select all 5')
 
         await selectAllButton.trigger('click')
 
         expect(wrapper.get('.fi-ta-selection-indicator').text()).toContain('5 records selected')
         // Fully selected → the select-all affordance disappears.
-        expect(wrapper.find('.fi-vue-ta-select-all-btn').exists()).toBe(false)
+        expect(wrapper.find('.villament-select-all-btn').exists()).toBe(false)
 
         // Unchecking a record in all-matching mode tracks it as deselected.
         await wrapper.findAll('tbody input.fi-ta-record-checkbox')[0].setValue(false)
@@ -235,8 +235,8 @@ describe('VueTable selection + bulk actions', () => {
         const wrapper = mountTable()
 
         await wrapper.get('thead input.fi-ta-page-checkbox').trigger('change')
-        await wrapper.get('.fi-vue-ta-select-all-btn').trigger('click')
-        await wrapper.get('.fi-vue-ta-deselect-all-btn').trigger('click')
+        await wrapper.get('.villament-select-all-btn').trigger('click')
+        await wrapper.get('.villament-deselect-all-btn').trigger('click')
 
         expect(wrapper.find('.fi-ta-selection-indicator').exists()).toBe(false)
         expect(wrapper.findAll('tbody input.fi-ta-record-checkbox').some((checkbox) => checkbox.element.checked)).toBe(false)
@@ -272,7 +272,7 @@ describe('VueTable selection + bulk actions', () => {
 
         await wrapper.findAll('tbody input.fi-ta-record-checkbox')[0].setValue(true)
 
-        const group = wrapper.get('.fi-ta-header-toolbar .fi-vue-ta-actions-group')
+        const group = wrapper.get('.fi-ta-header-toolbar .villament-actions-group')
         // aria-expanded lives on the trigger DIV (stock markup); the button inside opens it.
         expect(group.get('.fi-dropdown-trigger').attributes('aria-expanded')).toBe('false')
         await group.get('.fi-dropdown-trigger button').trigger('click')

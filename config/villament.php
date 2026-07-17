@@ -19,9 +19,9 @@ return [
     /*
      * Custom column serializers, PREPENDED to the built-in chain
      * (text/badge, icon, image, html fallback). Each class must implement
-     * \Zvizvi\FilamentVueTable\Support\ColumnSerializers\ColumnSerializer.
+     * \Zvizvi\Villament\Support\ColumnSerializers\ColumnSerializer.
      * Pair each custom cell `type` with a JS component registered via
-     * `window.FilamentVueTable.registerCellComponent(type, component)`.
+     * `window.Villament.registerCellComponent(type, component)`.
      */
     'column_serializers' => [],
 

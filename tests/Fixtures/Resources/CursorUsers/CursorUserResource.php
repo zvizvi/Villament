@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace Zvizvi\FilamentVueTable\Tests\Fixtures\Resources\CursorUsers;
+namespace Zvizvi\Villament\Tests\Fixtures\Resources\CursorUsers;
 
 use Filament\Resources\Pages\PageRegistration;
 use Filament\Resources\Resource;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Enums\PaginationMode;
 use Filament\Tables\Table;
-use Zvizvi\FilamentVueTable\Tests\Fixtures\Models\User;
-use Zvizvi\FilamentVueTable\Tests\Fixtures\Resources\CursorUsers\Pages\CursorListUsers;
-use Zvizvi\FilamentVueTable\Tests\Fixtures\Resources\CursorUsers\Pages\StockCursorListUsers;
+use Zvizvi\Villament\Tests\Fixtures\Models\User;
+use Zvizvi\Villament\Tests\Fixtures\Resources\CursorUsers\Pages\CursorListUsers;
+use Zvizvi\Villament\Tests\Fixtures\Resources\CursorUsers\Pages\StockCursorListUsers;
 
 class CursorUserResource extends Resource
 {

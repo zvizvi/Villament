@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Zvizvi\FilamentVueTable\Tests\Fixtures\Resources\CursorUsers\Pages;
+namespace Zvizvi\Villament\Tests\Fixtures\Resources\CursorUsers\Pages;
 
-use Zvizvi\FilamentVueTable\Pages\VueListRecords;
-use Zvizvi\FilamentVueTable\Tests\Fixtures\Resources\CursorUsers\CursorUserResource;
+use Zvizvi\Villament\Pages\VillamentListRecords;
+use Zvizvi\Villament\Tests\Fixtures\Resources\CursorUsers\CursorUserResource;
 
-class CursorListUsers extends VueListRecords
+class CursorListUsers extends VillamentListRecords
 {
     protected static string $resource = CursorUserResource::class;
 }
