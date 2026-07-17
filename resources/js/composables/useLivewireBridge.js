@@ -119,30 +119,6 @@ export function useLivewireBridge(options) {
     let lastKnownFiltersJson = JSON.stringify(options.initialFilters ?? {})
 
     /**
-     * Calls the page component's `#[Json]` `villamentData()` method — the
-     * island's preferred data channel. Livewire skips rendering for the call
-     * (no Blade, no morph) and resolves with the payload directly. Returns
-     * null when the wire is unavailable so the caller can fall back to the
-     * GET endpoint.
-     *
-     * @param {string} queryString The island's state query string (no `?`).
-     * @returns {?Promise<object>}
-     */
-    function callTableData(queryString) {
-        const wire = wireFor(livewireId)
-
-        if (! wire) {
-            return null
-        }
-
-        try {
-            return wire.villamentData(queryString)
-        } catch {
-            return null
-        }
-    }
-
-    /**
      * Removes one active filter via Filament's own `removeTableFilter`. The
      * resulting commit is caught by the filters watcher, which refetches —
      * so removal, indicators and data stay in sync.
@@ -402,7 +378,6 @@ export function useLivewireBridge(options) {
     }
 
     return {
-        callTableData,
         removeFilter,
         removeAllFilters,
         mountRecordAction,

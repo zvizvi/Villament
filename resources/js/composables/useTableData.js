@@ -125,41 +125,20 @@ export function useTableData(endpoint, state, options = {}) {
         isLoading.value = true
 
         try {
-            const url = buildUrl()
-            let payload = null
+            const response = await fetch(buildUrl(), {
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                credentials: 'same-origin',
+                signal: controller.signal,
+            })
 
-            // Preferred channel: the page component's #[Json] villamentData()
-            // Livewire method (skips rendering server-side; returns this
-            // payload directly). Same query string, same validator — the GET
-            // endpoint below is the fallback when the wire is unavailable
-            // (e.g. mid-teardown under wire:navigate).
-            if (options.transport) {
-                payload = await options.transport(new URL(url, window.location.origin).search.slice(1))
-
-                // Structural guard: a dead/mid-teardown wire, a Livewire
-                // error (SupportJson returns null on exceptions), or any
-                // malformed value falls through to the GET endpoint.
-                if (! payload || typeof payload !== 'object' || ! Array.isArray(payload.records)) {
-                    payload = null
-                }
+            if (! response.ok) {
+                throw new Error(`Table data request failed with status ${response.status}.`)
             }
 
-            if (payload === null || payload === undefined) {
-                const response = await fetch(url, {
-                    headers: {
-                        'Accept': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest',
-                    },
-                    credentials: 'same-origin',
-                    signal: controller.signal,
-                })
-
-                if (! response.ok) {
-                    throw new Error(`Table data request failed with status ${response.status}.`)
-                }
-
-                payload = await response.json()
-            }
+            const payload = await response.json()
 
             if (requestId !== latestRequestId) {
                 return
