@@ -133,6 +133,9 @@ final class SchemaSerializer
             'searchPlaceholder' => __('filament-tables::table.fields.search.placeholder'),
             'searchLabel' => __('filament-tables::table.fields.search.label'),
             'filtersHeading' => __('filament-tables::table.filters.heading'),
+            // The funnel trigger button's tooltip/aria is the FILTER ACTION
+            // label (e.g. "Filter"), not the panel heading ("Filters").
+            'filtersTrigger' => __('filament-tables::table.actions.filter.label'),
             'filtersIndicator' => __('filament-tables::table.filters.indicator'),
             'filtersRemove' => __('filament-tables::table.filters.actions.remove.label'),
             'filtersRemoveAll' => __('filament-tables::table.filters.actions.remove_all.label'),
@@ -144,6 +147,9 @@ final class SchemaSerializer
             'previousLabel' => __('filament::components/pagination.actions.previous.label'),
             'nextLabel' => __('filament::components/pagination.actions.next.label'),
             'columnManagerHeading' => __('filament-tables::table.column_manager.heading'),
+            // The trigger button's tooltip/aria is the ACTION label (e.g.
+            // "Column manager" / "הצג עמודות"), not the panel heading.
+            'columnManagerTrigger' => __('filament-tables::table.actions.column_manager.label'),
             'columnManagerReset' => __('filament-tables::table.column_manager.actions.reset.label'),
             'bulkSelectPage' => __('filament-tables::table.fields.bulk_select_page.label'),
             'bulkSelectRecord' => __('filament-tables::table.fields.bulk_select_record.label'),

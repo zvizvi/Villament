@@ -40,8 +40,8 @@ const emit = defineEmits(['toggle'])
             <button
                 type="button"
                 class="fi-icon-btn fi-size-md fi-ac-icon-btn-action fi-force-enabled"
-                :title="strings.filtersHeading"
-                :aria-label="strings.filtersHeading"
+                :title="strings.filtersTrigger"
+                :aria-label="strings.filtersTrigger"
                 @click="emit('toggle')"
             >
                 <TrustedIcon :html="icons.filters" />

@@ -39,6 +39,8 @@ function makeConfig() {
             pagination: { mode: 'offset', pageOptions: [10], defaultPerPage: 10 },
             actions: { record: [], bulk: [] },
             strings: {
+                // Trigger label ("Show columns") is distinct from the panel
+                columnManagerTrigger: 'Show columns',
                 columnManagerHeading: 'Columns',
                 columnManagerReset: 'Reset',
             },
@@ -217,7 +219,9 @@ describe('VueTable column manager + post-action refresh', () => {
         const manager = wrapper.get('.villament-column-manager')
         const trigger = manager.get('.fi-dropdown-trigger button')
 
-        expect(trigger.attributes('aria-label')).toBe('Columns')
+        // Trigger uses the ACTION label; the panel heading (below) uses the heading.
+        expect(trigger.attributes('aria-label')).toBe('Show columns')
+        expect(trigger.attributes('title')).toBe('Show columns')
         // Wrapperless icon: the svg is a DIRECT child of the trigger button.
         expect(trigger.find(':scope > svg[data-icon="column-manager"]').exists()).toBe(true)
 

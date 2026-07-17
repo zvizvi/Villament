@@ -37,6 +37,10 @@ describe('filter schema serialization', function (): void {
         $strings = VillamentTableConfig()['schema']['strings'];
 
         expect($strings['filtersHeading'])->toBe('Filters')
+            // Trigger buttons use the ACTION label, distinct from the heading.
+            ->and($strings['filtersTrigger'])->toBe('Filter')
+            ->and($strings['columnManagerTrigger'])->toBe('Column manager')
+            ->and($strings['columnManagerHeading'])->toBe('Columns')
             ->and($strings['filtersRemoveAll'])->toBe('Remove all filters')
             ->and($strings['searchPlaceholder'])->toBe('Search')
             ->and($strings['paginationOverview'])->toContain(':first');

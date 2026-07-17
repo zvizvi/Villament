@@ -178,8 +178,9 @@ describe('VueTable filters (native Livewire panel) + indicators', () => {
         // Stock's filters trigger is a label-only icon button, so it carries a
         // native `title` (not Filament's Alpine x-tooltip, which only the
         // remove-all action — with an explicit ->tooltip() — gets).
+        // Title is the FILTER ACTION label ("Filter"), not the panel heading.
         const triggerBtn = wrapper.get('.villament-filters-trigger button')
-        expect(triggerBtn.attributes('title')).toBe('Filters')
+        expect(triggerBtn.attributes('title')).toBe('Filter')
         expect(triggerBtn.attributes('x-tooltip')).toBeUndefined()
 
         const panel = document.querySelector('[data-villament-filters-panel]')

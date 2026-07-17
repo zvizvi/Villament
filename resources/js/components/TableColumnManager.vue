@@ -398,8 +398,8 @@ function onReset() {
             <button
                 type="button"
                 class="fi-icon-btn fi-size-md fi-ac-icon-btn-action fi-force-enabled"
-                :title="strings.columnManagerHeading"
-                :aria-label="strings.columnManagerHeading"
+                :title="strings.columnManagerTrigger"
+                :aria-label="strings.columnManagerTrigger"
                 @click="isOpen = ! isOpen"
             >
                 <TrustedIcon :html="icons.columnManager" />
