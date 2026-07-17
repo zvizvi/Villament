@@ -7,13 +7,10 @@ namespace Zvizvi\Villament\Http\Controllers;
 use Filament\Facades\Filament;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Zvizvi\Villament\Support\FilterIndicatorSerializer;
 use Zvizvi\Villament\Support\HeadlessTableHarness;
-use Zvizvi\Villament\Support\RecordSerializer;
 use Zvizvi\Villament\Support\RequestStateValidator;
 use Zvizvi\Villament\Support\ResourceRegistry;
-use Zvizvi\Villament\Support\SchemaSerializer;
-use Zvizvi\Villament\Support\SummarySerializer;
+use Zvizvi\Villament\Support\TablePayload;
 
 final class TableDataController
 {
@@ -21,9 +18,7 @@ final class TableDataController
         private readonly ResourceRegistry $registry,
         private readonly HeadlessTableHarness $harness,
         private readonly RequestStateValidator $validator,
-        private readonly SchemaSerializer $schemaSerializer,
-        private readonly RecordSerializer $recordSerializer,
-        private readonly FilterIndicatorSerializer $indicatorSerializer,
+        private readonly TablePayload $payload,
     ) {}
 
     public function __invoke(Request $request): JsonResponse
@@ -54,22 +49,11 @@ final class TableDataController
         $state = $this->validator->validate($request, $table);
         $this->harness->applyState($state);
 
-        $records = $this->harness->getRecords();
-        $schema = $this->schemaSerializer->serialize($table);
-
         $cacheTtl = (int) config('villament.cache_ttl', 0);
 
-        $response = response()->json([
-            'records' => $this->recordSerializer->serialize(
-                $this->harness->getComponent(),
-                $resourceClass,
-                $records,
-            ),
-            'meta' => $this->recordSerializer->meta($records),
-            'indicators' => $this->indicatorSerializer->serialize($table),
-            'summaries' => app(SummarySerializer::class)->serialize($this->harness->getComponent()),
-            'schemaVersion' => $this->schemaSerializer->version($schema),
-        ]);
+        $response = response()->json(
+            $this->payload->for($this->harness->getComponent(), $resourceClass),
+        );
 
         if ($cacheTtl > 0) {
             $response->header('Cache-Control', "private, max-age={$cacheTtl}");

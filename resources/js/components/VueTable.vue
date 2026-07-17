@@ -138,6 +138,10 @@ const { records, meta, indicators, summaries, isLoading, error, retry, fetchNow,
         initialData: props.config.initialData,
         schemaVersion: props.config.schemaVersion,
         debounceMs: schema.debounceMs ?? 300,
+        // NOTE: the #[Json] villamentData channel exists (bridge.callTableData
+        // + the `transport` option below), but benchmarks put it at ~1.8x the
+        // GET endpoint's server time (full Livewire hydration vs the headless
+        // harness), so the endpoint stays the primary channel. See DECISIONS.
     },
 )
 

@@ -273,12 +273,9 @@ describe('VueTable column manager + post-action refresh', () => {
         wireState.tableColumns = expectedState
         fireCommit(['applyTableColumnManager'])
 
-        expect(fetchMock).toHaveBeenCalledTimes(1)
+        await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
 
-        // Until the refetch resolves, the newly toggled column shows an empty
-        // cell (cells for it were never sent); the data fills in afterwards.
-        expect(wrapper.get('.fi-ta-cell-created-at').text()).toBe('')
-
+        // The refetch (already awaited above) fills the new column in.
         await vi.waitFor(() => {
             expect(wrapper.get('.fi-ta-cell-created-at').text()).toContain('2026-01-01')
         })
@@ -301,21 +298,21 @@ describe('VueTable column manager + post-action refresh', () => {
 
         fireCommit(['resetTableColumnManager'])
 
-        expect(fetchMock).toHaveBeenCalledTimes(1)
+        await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
 
         await vi.waitFor(() => {
             expect(wrapper.findAll('thead th.fi-ta-header-cell')).toHaveLength(2)
         })
     })
 
-    it('a post-action commit (mountAction/callMountedAction) refetches exactly once', () => {
+    it('a post-action commit (mountAction/callMountedAction) refetches exactly once', async () => {
         mountTable()
 
         fireCommit(['mountAction'])
-        expect(fetchMock).toHaveBeenCalledTimes(1)
+        await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
 
         fireCommit(['callMountedAction', 'unmountAction'])
-        expect(fetchMock).toHaveBeenCalledTimes(2)
+        await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
     })
 
     it('ignores commits without action or column manager calls', () => {
@@ -327,14 +324,14 @@ describe('VueTable column manager + post-action refresh', () => {
         expect(fetchMock).not.toHaveBeenCalled()
     })
 
-    it('does not double-fetch when the same commit also changed the filters', () => {
+    it('does not double-fetch when the same commit also changed the filters', async () => {
         mountTable()
 
         wireState.tableFilters = { status: { value: 'active' } }
         fireCommit(['callMountedAction'])
 
         // The filters watcher performed the (single) refetch.
-        expect(fetchMock).toHaveBeenCalledTimes(1)
+        await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
     })
 
     it('non-deferred (deferColumnManager false): a toggle applies immediately, no apply button', async () => {

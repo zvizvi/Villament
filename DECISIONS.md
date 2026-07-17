@@ -94,6 +94,20 @@ Owner decision: the ENTIRE filter panel is Filament's original Livewire UI, not 
 - The schema ships only `hasFilters: bool` (show the trigger or not) — filter definitions never leave the server.
 - Trade-off accepted: applying a filter is one Livewire commit (small form) + one Vue refetch. High-frequency interactions (search/sort/pagination) stay Vue/AJAX. Panel positioning uses the existing CSS anchor (no floating-ui); the trigger button is the one filter element Vue-rendered (pixel-identical) to avoid teleporting a native dropdown into the wire:ignore toolbar.
 
+## 2026-07-17 — Data-channel evaluation: `#[Json]` vs the GET endpoint (Stage 1 of the Livewire-4 pivot exploration)
+
+Implemented `#[Json] villamentData(string $query)` on `HasVillamentTable` — the island's query string parsed with `parse_str()` into the SAME `RequestStateValidator`, state applied to the LIVE page component (no harness), response assembled by the shared `Support\TablePayload` (also used by the controller — the channels cannot drift, parity-tested). The JS side gained a `transport` option in `useTableData` (with a structural-payload guard + fetch fallback) and `bridge.callTableData()`.
+
+Benchmark (2k rows, page 2 @ 50/page, sorted, in-process medians over 9 runs — treat as relative):
+
+| Channel | server time | payload |
+|---|---|---|
+| stock (commit + Blade render) | 66.5ms | ~960KB |
+| Villament GET endpoint (headless harness) | **38.7ms** | 145KB |
+| `#[Json]` through the Livewire pipe | 70.8ms | 145KB |
+
+Verdict: `#[Json]` matches the endpoint's payload win (×6.6 vs stock) but its server time is ~stock-level — full Filament-page hydration through the Livewire pipe (snapshot decode/verify, boot, dehydrate) costs about what the skipped Blade render saves. The headless harness avoids all of it. **The GET endpoint stays the primary channel** (perf is the product); `villamentData` remains in the package — parity-tested, tiny — as the natural channel for the Stage-2 Alpine-rendering prototype and as a wired-but-unused fetch fallback (`transport` option). Side benefit kept: calling it persists table state into the Livewire snapshot (state coherence).
+
 ## Verified Filament v5 internal API map (§4.1, §4.8)
 
 Verified against **filament/filament v5.6.8** + **livewire/livewire v4.3.3** by reading installed vendor source on 2026-07-15. Paths relative to `vendor/filament/`.

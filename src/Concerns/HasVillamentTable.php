@@ -8,13 +8,19 @@ use Filament\Facades\Filament;
 use Filament\Schemas\Components\RenderHook;
 use Filament\Schemas\Schema;
 use Filament\View\PanelsRenderHook;
+use Illuminate\Http\Request;
+use Illuminate\Pagination\AbstractCursorPaginator;
+use Illuminate\Pagination\AbstractPaginator;
+use Illuminate\Pagination\Cursor;
 use Illuminate\Validation\ValidationException;
+use Livewire\Attributes\Json;
 use Zvizvi\Villament\Schemas\VillamentIsland;
 use Zvizvi\Villament\Support\FilterIndicatorSerializer;
 use Zvizvi\Villament\Support\RecordSerializer;
 use Zvizvi\Villament\Support\RequestStateValidator;
 use Zvizvi\Villament\Support\SchemaSerializer;
 use Zvizvi\Villament\Support\SummarySerializer;
+use Zvizvi\Villament\Support\TablePayload;
 
 /**
  * Swaps the embedded Livewire table on a ListRecords page for the Vue island
@@ -35,6 +41,57 @@ trait HasVillamentTable
                 VillamentIsland::make($config, withNativeFilters: (bool) ($config['schema']['hasFilters'] ?? false)),
                 RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_AFTER),
             ]);
+    }
+
+    /**
+     * The island's data channel, as a Livewire `#[Json]` method: the call
+     * skips rendering entirely (no Blade, no morph payload) and returns this
+     * array straight to the island — while running ON the live page
+     * component, so panel auth, tenancy and table state need no re-plumbing.
+     *
+     * `$query` is the island's regular query string (identical to the GET
+     * endpoint's), parsed with parse_str() into the SAME validator — the two
+     * channels cannot drift.
+     *
+     * @return array<string, mixed>
+     */
+    #[Json]
+    public function villamentData(string $query = ''): array
+    {
+        abort_unless(static::getResource()::canViewAny(), 403);
+
+        parse_str($query, $params);
+
+        $table = $this->getTable();
+        $state = app(RequestStateValidator::class)->validate(new Request($params), $table);
+
+        $this->tableSort = $state->sort;
+        $this->tableSearch = $state->search;
+        $this->tableColumnSearches = $state->columnSearches;
+
+        if ($state->filters !== null) {
+            $this->tableFilters = array_replace($this->tableFilters ?? [], $state->filters);
+        }
+
+        $this->tableRecordsPerPage = $state->perPage ?? $table->getDefaultPaginationPageOption();
+
+        $pageName = $this->getTablePaginationPageName();
+        $this->setPage($state->page, $pageName);
+
+        AbstractPaginator::currentPageResolver(
+            fn (string $currentPageName = 'page'): int => $currentPageName === $pageName ? $state->page : 1,
+        );
+
+        AbstractCursorPaginator::currentCursorResolver(
+            fn (string $cursorName = 'cursor'): ?Cursor => ($cursorName === $pageName && $state->cursor !== null)
+                ? Cursor::fromEncoded($state->cursor)
+                : null,
+        );
+
+        // The page may have cached records from its own mount/render.
+        $this->flushCachedTableRecords();
+
+        return app(TablePayload::class)->for($this, static::getResource());
     }
 
     /**
