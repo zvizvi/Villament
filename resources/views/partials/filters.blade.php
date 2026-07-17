@@ -116,13 +116,14 @@
                         'fi-ta-filters-above-content-ctn',
                     ])
                 >
+                    {{-- Blade component tags don't allow @if inside the
+                         attribute list — stock's own trick: a null-valued
+                         bound attribute is dropped from the bag entirely. --}}
                     <x-filament-tables::filters
                         :apply-action="$vfApply"
                         :form="$vfForm"
-                        @if ($vfIsCollapsible)
-                            x-cloak
-                            x-show="areFiltersOpen"
-                        @endif
+                        x-cloak
+                        :x-show="$vfIsCollapsible ? 'areFiltersOpen' : null"
                         :reset-action-position="$vfResetPosition"
                     />
 
