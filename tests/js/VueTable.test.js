@@ -98,6 +98,7 @@ describe('VueTable filters (native Livewire panel) + indicators', () => {
                 set: (...args) => wireCalls.push(['set', args]),
                 removeTableFilter: (...args) => wireCalls.push(['removeTableFilter', args]),
                 resetTableFiltersForm: (...args) => wireCalls.push(['resetTableFiltersForm', args]),
+                removeTableFilters: (...args) => wireCalls.push(['removeTableFilters', args]),
                 $on: () => {},
             },
         }
@@ -210,7 +211,7 @@ describe('VueTable filters (native Livewire panel) + indicators', () => {
         expect(wireCalls).toContainEqual(['removeTableFilter', ['status', null]])
     })
 
-    it('remove-all resets filters through Livewire (resetTableFiltersForm)', async () => {
+    it('remove-all clears every filter incl. defaults through Livewire (removeTableFilters)', async () => {
         const wrapper = mountTable({
             initialData: {
                 ...makeConfig().initialData,
@@ -226,7 +227,7 @@ describe('VueTable filters (native Livewire panel) + indicators', () => {
 
         await removeAll.trigger('click')
 
-        expect(wireCalls).toContainEqual(['resetTableFiltersForm', []])
+        expect(wireCalls).toContainEqual(['removeTableFilters', []])
     })
 
     it('uses the localized empty state heading', async () => {

@@ -254,4 +254,22 @@ describe('native filters panel path', function (): void {
             ->and(count($instance->getTableRecords()))->toBe(2)
             ->and($instance->getVueTableConfig()['state']['filters']['status']['value'] ?? null)->toBe('archived');
     });
+
+    it('remove-all clears applied filters via removeTableFilters (the method the island calls)', function (): void {
+        User::factory()->count(2)->create(['status' => 'active']);
+        User::factory()->count(3)->create(['status' => 'archived']);
+
+        $component = livewire(VueListUsers::class)
+            ->set('tableDeferredFilters.status.value', 'archived')
+            ->call('applyTableFilters');
+
+        expect($component->instance()->tableFilters['status']['value'] ?? null)->toBe('archived');
+
+        // The island's "remove all" button calls removeTableFilters (NOT
+        // resetTableFiltersForm) — it empties every filter to its reset state,
+        // so filters configured with a ->default() are cleared too.
+        $component->call('removeTableFilters');
+
+        expect($component->instance()->tableFilters['status']['value'] ?? null)->toBeIn([null, '']);
+    });
 });

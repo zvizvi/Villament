@@ -476,13 +476,27 @@ function onRemoveIndicator(indicator) {
 }
 
 /**
- * Clears every filter ("remove all" on the indicators bar), through
- * Livewire's own filters form.
+ * "Remove all" on the indicators bar. Mirrors stock's `removeTableFilters`:
+ * clears every removable filter — INCLUDING ones with a `->default()` (it
+ * empties to each filter's reset state, not the form defaults) — plus the
+ * global search and per-column searches. Filters are cleared through Livewire
+ * (the commit refetches); search and column searches are Vue-owned, reset here.
  *
  * @returns {void}
  */
 function onRemoveAllFilters() {
-    bridge.resetFilters()
+    // Only reset when non-empty, so we don't kick off a spurious refetch with
+    // the still-current filters; the removeAllFilters commit refetches with the
+    // cleared state (and wins the race via the request-id guard) either way.
+    if (state.search.value !== '') {
+        state.search.value = ''
+    }
+
+    if (Object.keys(state.columnSearches.value ?? {}).length > 0) {
+        state.columnSearches.value = {}
+    }
+
+    bridge.removeAllFilters()
 }
 
 /**

@@ -182,7 +182,7 @@ describe('VueTable column manager + post-action refresh', () => {
     function fireCommit(methods) {
         for (const handler of [...commitHandlers]) {
             /** @type {Array<() => void>} */
-            const succeedCallbacks = []
+            const respondCallbacks = []
 
             handler({
                 component,
@@ -191,12 +191,12 @@ describe('VueTable column manager + post-action refresh', () => {
                     updates: {},
                     calls: methods.map((method) => ({ method, params: [], metadata: {} })),
                 },
-                respond: () => {},
-                succeed: (callback) => succeedCallbacks.push(callback),
+                respond: (callback) => respondCallbacks.push(callback),
+                succeed: () => {},
                 fail: () => {},
             })
 
-            for (const callback of succeedCallbacks) {
+            for (const callback of respondCallbacks) {
                 callback({ snapshot: '{}', effects: {} })
             }
         }

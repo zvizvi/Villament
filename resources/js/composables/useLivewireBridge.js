@@ -22,9 +22,11 @@ import { ref } from 'vue'
  *
  * Verified against livewire/livewire v4 `dist/livewire.esm.js`:
  * - `Livewire.hook('commit', ({ component, commit, respond, succeed, fail }) => ...)`,
- *   where `commit` is `{ snapshot, updates, calls: [{ method, params, metadata }] }`
- *   and `succeed(callback)` runs the callback after a successful roundtrip.
- *   `Livewire.hook()` returns an unregister function.
+ *   where `commit` is `{ snapshot, updates, calls: [{ method, params, metadata }] }`.
+ *   We use `respond(callback)` (fires on the request's onFinish, after the new
+ *   snapshot is applied) rather than `succeed` — `succeed` only fires when the
+ *   component re-renders (onSuccess → onRender), which a `wire:ignore` island
+ *   page usually doesn't. `Livewire.hook()` returns an unregister function.
  * - `component.$wire.get(property)` reads reactive state.
  * - `component.$wire.set(property, value, live = true)`: `live = false`
  *   defers the update without triggering a network request.
@@ -237,8 +239,16 @@ export function useLivewireBridge(options) {
         }
     }
 
-    /** Resets every filter via Filament's own filters form. @returns {void} */
-    function resetFilters() {
+    /**
+     * Clears EVERY removable filter via Filament's own `removeTableFilters` —
+     * the "remove all filters" action. Unlike `resetTableFiltersForm` (which
+     * refills the form with each filter's `->default()`), this empties filters
+     * to their reset state, so filters configured with a default are removed
+     * too, matching stock. The resulting commit drives the Vue refetch.
+     *
+     * @returns {void}
+     */
+    function removeAllFilters() {
         const wire = wireFor(livewireId)
 
         if (! wire) {
@@ -246,7 +256,7 @@ export function useLivewireBridge(options) {
         }
 
         try {
-            wire.resetTableFiltersForm()
+            wire.removeTableFilters()
         } catch {
             // Never break the island on a mid-teardown component.
         }
@@ -412,8 +422,16 @@ export function useLivewireBridge(options) {
     let forgetCommitHook = null
 
     if (livewire() && typeof livewire().hook === 'function') {
-        forgetCommitHook = livewire().hook('commit', ({ component, commit, succeed }) => {
-            succeed(() => {
+        // `respond` (fires on the request's onFinish), NOT `succeed`. In
+        // Livewire v4 `succeed` only fires via onSuccess → onRender, i.e. when
+        // the component actually re-renders. This page's table is a
+        // `wire:ignore` Vue island and the filters panel is `wire:ignore.self`,
+        // so filter/search/column-manager commits usually morph nothing and
+        // never reach onRender — `succeed` would never fire and the island
+        // would never sync. `respond` fires after every finished request, with
+        // the new snapshot already applied to `$wire`.
+        forgetCommitHook = livewire().hook('commit', ({ component, commit, respond }) => {
+            respond(() => {
                 if (component.id !== livewireId) {
                     return
                 }
@@ -467,7 +485,7 @@ export function useLivewireBridge(options) {
         toggleFiltersPanel,
         hideFiltersPanel,
         removeFilter,
-        resetFilters,
+        removeAllFilters,
         mountRecordAction,
         mountBulkAction,
         mountTableAction,

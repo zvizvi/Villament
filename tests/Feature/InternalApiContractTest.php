@@ -38,6 +38,7 @@ $methodContract = [
     [ListRecords::class, 'getTableSummarySelectedState'],
     [ListRecords::class, 'removeTableFilter'],
     [ListRecords::class, 'resetTableFiltersForm'],
+    [ListRecords::class, 'removeTableFilters'],
     [Table::class, 'getFiltersApplyAction'],
     [Table::class, 'getFiltersResetActionPosition'],
     [Table::class, 'getFiltersFormWidth'],

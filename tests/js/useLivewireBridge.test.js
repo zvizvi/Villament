@@ -52,6 +52,7 @@ describe('useLivewireBridge', () => {
                 set: wireSet,
                 removeTableFilter: (...args) => wireCalls.push(['removeTableFilter', args]),
                 resetTableFiltersForm: (...args) => wireCalls.push(['resetTableFiltersForm', args]),
+                removeTableFilters: (...args) => wireCalls.push(['removeTableFilters', args]),
             },
         }
 
@@ -111,17 +112,17 @@ describe('useLivewireBridge', () => {
     function fireCommit({ commitComponent = component, calls = [] } = {}) {
         for (const handler of [...commitHandlers]) {
             /** @type {Array<() => void>} */
-            const succeedCallbacks = []
+            const respondCallbacks = []
 
             handler({
                 component: commitComponent,
                 commit: { snapshot: '{}', updates: {}, calls },
-                respond: () => {},
-                succeed: (callback) => succeedCallbacks.push(callback),
+                respond: (callback) => respondCallbacks.push(callback),
+                succeed: () => {},
                 fail: () => {},
             })
 
-            for (const callback of succeedCallbacks) {
+            for (const callback of respondCallbacks) {
                 callback({ snapshot: '{}', effects: {} })
             }
         }
@@ -172,12 +173,14 @@ describe('useLivewireBridge', () => {
         expect(wireCalls).toContainEqual(['removeTableFilter', ['created_from', 'created_from']])
     })
 
-    it("resets all filters through Filament's own resetTableFiltersForm", () => {
+    it("removes ALL filters (incl. defaults) through Filament's own removeTableFilters", () => {
         const bridge = makeBridge()
 
-        bridge.resetFilters()
+        bridge.removeAllFilters()
 
-        expect(wireCalls).toContainEqual(['resetTableFiltersForm', []])
+        // removeTableFilters empties every filter to its reset state (not the
+        // ->default()), so a default-configured filter is cleared too.
+        expect(wireCalls).toContainEqual(['removeTableFilters', []])
     })
 
     it('toggles the hidden native filters panel container', () => {
@@ -284,7 +287,7 @@ describe('useLivewireBridge', () => {
 
         expect(() => {
             bridge.removeFilter('status')
-            bridge.resetFilters()
+            bridge.removeAllFilters()
             bridge.toggleFiltersPanel()
             bridge.destroy()
         }).not.toThrow()
