@@ -67,37 +67,96 @@
 @endphp
 
 @if ($vfInlineSlot !== null)
-    {{-- Inline layouts: teleport the native filters into the positional slot. --}}
-    <template x-teleport="[data-villament-filters-slot='{{ $vfInlineSlot }}']">
-        <div
-            @if ($vfIsCollapsible) x-data="{ open: false }" @endif
-            class="fi-ta-filters-{{ $vfInlineSlot }}-content-ctn"
-        >
-            @if ($vfIsCollapsible)
-                <span class="fi-ta-filters-trigger-action-ctn" x-on:click="open = ! open">
+    {{--
+        Inline layouts — STOCK markup verbatim (tables/index.blade.php):
+
+        - BelowContent: the filters component directly, no wrapper, with the
+          `fi-ta-filters-below-content` class (border-top + padding).
+        - AboveContent(+Collapsible): `fi-ta-filters-above-content-ctn`; the
+          collapsible variant toggles `fi-open` and holds the trigger inside.
+        - Before/AfterContent(+Collapsible): `...-content-ctn` with
+          `wire:ignore.self`, the fi-width class and `lg:fi-open` (open at lg+
+          when not collapsible); the TRIGGER teleports into the TOOLBAR slot
+          (`lg:fi-hidden` when not collapsible — mobile-only toggle).
+
+        Stock keeps `areFiltersOpen` on the table root's Alpine scope; here a
+        display:contents x-data wrapper around the teleport templates provides
+        it — Alpine teleport clones inherit the scope of the template's source
+        location, so the toolbar trigger and the content container share state.
+    --}}
+    <div x-data="{ areFiltersOpen: false }" style="display: contents">
+        @if ($vfIsBefore || $vfIsAfter)
+            <template x-teleport="[data-villament-filters-slot='toolbar']">
+                <span
+                    x-on:click="areFiltersOpen = ! areFiltersOpen"
+                    @class([
+                        'fi-ta-filters-trigger-action-ctn',
+                        'lg:fi-hidden' => ! $vfIsCollapsible,
+                    ])
+                >
                     {{ $vfTrigger->badge($vfTable->getActiveFiltersCount()) }}
                 </span>
+            </template>
+        @endif
 
-                <div x-show="open" x-collapse>
-                    <div class="fi-ta-ctn" style="display: contents">
-                        <x-filament-tables::filters
-                            :apply-action="$vfApply"
-                            :form="$vfForm"
-                            :reset-action-position="$vfResetPosition"
-                        />
-                    </div>
-                </div>
-            @else
-                <div class="fi-ta-ctn" style="display: contents">
+        <template x-teleport="[data-villament-filters-slot='{{ $vfInlineSlot }}']">
+            @if ($vfIsBelow)
+                <x-filament-tables::filters
+                    :apply-action="$vfApply"
+                    :form="$vfForm"
+                    class="fi-ta-filters-below-content"
+                    :reset-action-position="$vfResetPosition"
+                />
+            @elseif ($vfIsAbove)
+                <div
+                    @if ($vfIsCollapsible)
+                        x-bind:class="{ 'fi-open': areFiltersOpen }"
+                    @endif
+                    @class([
+                        'fi-ta-filters-above-content-ctn',
+                    ])
+                >
                     <x-filament-tables::filters
                         :apply-action="$vfApply"
                         :form="$vfForm"
+                        @if ($vfIsCollapsible)
+                            x-cloak
+                            x-show="areFiltersOpen"
+                        @endif
+                        :reset-action-position="$vfResetPosition"
+                    />
+
+                    @if ($vfIsCollapsible)
+                        <span
+                            x-on:click="areFiltersOpen = ! areFiltersOpen"
+                            class="fi-ta-filters-trigger-action-ctn"
+                        >
+                            {{ $vfTrigger->badge($vfTable->getActiveFiltersCount()) }}
+                        </span>
+                    @endif
+                </div>
+            @else
+                <div
+                    wire:ignore.self
+                    x-transition:enter-start="fi-opacity-0"
+                    x-transition:leave-end="fi-opacity-0"
+                    x-bind:class="{ 'fi-open': areFiltersOpen }"
+                    @class([
+                        'fi-ta-filters-'.$vfInlineSlot.'-content-ctn',
+                        'lg:fi-open' => ! $vfIsCollapsible,
+                        ($vfWidth instanceof Width) ? "fi-width-{$vfWidth->value}" : (is_string($vfWidth) ? $vfWidth : null),
+                    ])
+                >
+                    <x-filament-tables::filters
+                        :apply-action="$vfApply"
+                        :form="$vfForm"
+                        class="fi-ta-filters-{{ $vfInlineSlot }}-content"
                         :reset-action-position="$vfResetPosition"
                     />
                 </div>
             @endif
-        </div>
-    </template>
+        </template>
+    </div>
 @else
     {{-- Dialog layouts (Dropdown + Modal): the STOCK trigger + dialog,
          teleported into the Vue toolbar slot. --}}

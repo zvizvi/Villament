@@ -179,6 +179,18 @@ describe('VueTable filters (native Livewire panel) + indicators', () => {
         expect(wrapper.find('[data-villament-filters-slot="toolbar"]').exists()).toBe(false)
     })
 
+    it('Before/AfterContent render BOTH the positional slot and the toolbar slot (stock trigger)', () => {
+        const config = makeConfig()
+        config.schema.filtersLayout = 'BeforeContent'
+
+        wrapper = mount(VueTable, { props: { config }, attachTo: document.body })
+
+        // Stock puts the before/after content OUTSIDE the toolbar and its
+        // trigger IN the toolbar (mobile-only for non-collapsible).
+        expect(wrapper.find('[data-villament-filters-slot="before"]').exists()).toBe(true)
+        expect(wrapper.find('[data-villament-filters-slot="toolbar"]').exists()).toBe(true)
+    })
+
     it('renders no filters slot when the table defines no filters (or layout Hidden)', () => {
         const config = makeConfig()
         config.schema.hasFilters = false

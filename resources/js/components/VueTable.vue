@@ -66,6 +66,26 @@ const hasFilters = computed(() => Boolean(schema.hasFilters))
  *   collapsible), teleported into a positional slot.
  * - `null`: Hidden — no UI.
  */
+/**
+ * Whether the toolbar renders the filters slot: dialog layouts teleport the
+ * whole trigger+dialog there; Before/After teleport just their trigger there
+ * (stock shows it `lg:fi-hidden` for non-collapsible — a mobile-only toggle).
+ */
+const filtersToolbarSlot = computed(() => {
+    if (! hasFilters.value) {
+        return false
+    }
+
+    return [
+        'Dropdown',
+        'Modal',
+        'BeforeContent',
+        'BeforeContentCollapsible',
+        'AfterContent',
+        'AfterContentCollapsible',
+    ].includes(schema.filtersLayout)
+})
+
 const filtersSlot = computed(() => {
     if (! hasFilters.value) {
         return null
@@ -559,14 +579,17 @@ function recordCellClasses(column) {
                 'fi-loading': isLoading,
             }"
         >
-            <div class="fi-ta-main">
-                <!-- BeforeContent filters teleport here. -->
-                <div v-if="filtersSlot === 'before'" data-villament-filters-slot="before" />
+            <!-- BeforeContent filters teleport here (stock: sibling before .fi-ta-main). -->
+            <div v-if="filtersSlot === 'before'" data-villament-filters-slot="before" />
 
+            <div class="fi-ta-main">
                 <div
                     v-if="hasHeaderToolbar"
                     class="fi-ta-header-ctn"
                 >
+                    <!-- AboveContent filters teleport here (stock: inside the header ctn, before the toolbar). -->
+                    <div v-if="filtersSlot === 'above'" data-villament-filters-slot="above" />
+
                     <div class="fi-ta-header-toolbar">
                         <BulkActions
                             v-if="hasBulkActionsBar"
@@ -602,7 +625,7 @@ function recordCellClasses(column) {
                                 included. Vue renders only this slot.
                             -->
                             <div
-                                v-if="filtersSlot === 'toolbar'"
+                                v-if="filtersToolbarSlot"
                                 data-villament-filters-slot="toolbar"
                             />
 
@@ -638,9 +661,6 @@ function recordCellClasses(column) {
                     @remove="onRemoveIndicator"
                     @remove-all="onRemoveAllFilters"
                 />
-
-                <!-- AboveContent filters teleport here. -->
-                <div v-if="filtersSlot === 'above'" data-villament-filters-slot="above" />
 
                 <!-- Error state reuses Filament's own empty-state styling. -->
                 <div
@@ -849,10 +869,12 @@ function recordCellClasses(column) {
                     />
                 </template>
 
-                <!-- BelowContent / AfterContent filters teleport here. -->
+                <!-- BelowContent filters teleport here (stock: end of the main region, after pagination). -->
                 <div v-if="filtersSlot === 'below'" data-villament-filters-slot="below" />
-                <div v-if="filtersSlot === 'after'" data-villament-filters-slot="after" />
             </div>
+
+            <!-- AfterContent filters teleport here (stock: sibling after .fi-ta-main). -->
+            <div v-if="filtersSlot === 'after'" data-villament-filters-slot="after" />
         </div>
     </div>
 </template>
