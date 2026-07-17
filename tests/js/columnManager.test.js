@@ -242,11 +242,18 @@ describe('VueTable column manager + post-action refresh', () => {
         expect(toggleable.element.disabled).toBe(false)
     })
 
-    it('apply sends the FULL state array and refetches once after the commit', async () => {
+    it('deferred (stock default): a toggle stages, "Apply columns" commits the FULL state + refetches once', async () => {
         const wrapper = mountTable()
 
         await wrapper.get('.villament-column-manager .fi-dropdown-trigger button').trigger('click')
         await wrapper.get('.fi-ta-col-manager-item input[data-column="created_at"]').setValue(true)
+
+        // Deferred: the toggle is staged only — no wire call, table unchanged.
+        expect(wireCalls).toEqual([])
+        expect(wrapper.findAll('thead th.fi-ta-header-cell')).toHaveLength(1)
+
+        // "Apply columns" pushes the staged state.
+        await wrapper.get('.fi-ta-col-manager-actions-ctn button').trigger('click')
 
         const expectedState = makeColumnsState()
         expectedState[1].isToggled = true
@@ -255,7 +262,7 @@ describe('VueTable column manager + post-action refresh', () => {
             ['applyTableColumnManager', [expectedState, false]],
         ])
 
-        // Optimistic visibility: the new column renders (empty cells) before any refetch.
+        // Optimistic visibility after apply: the new column renders (empty cells) before any refetch.
         expect(wrapper.findAll('thead th.fi-ta-header-cell')).toHaveLength(2)
         expect(fetchMock).toHaveBeenCalledTimes(0)
 
@@ -327,6 +334,24 @@ describe('VueTable column manager + post-action refresh', () => {
         expect(fetchMock).toHaveBeenCalledTimes(1)
     })
 
+    it('non-deferred (deferColumnManager false): a toggle applies immediately, no apply button', async () => {
+        const config = makeConfig()
+        config.schema.columnManagerDeferred = false
+
+        wrapper = mount(VueTable, { props: { config }, attachTo: document.body })
+
+        await wrapper.get('.villament-column-manager .fi-dropdown-trigger button').trigger('click')
+
+        // No "Apply columns" button in immediate mode.
+        expect(wrapper.find('.fi-ta-col-manager-actions-ctn').exists()).toBe(false)
+
+        await wrapper.get('.fi-ta-col-manager-item input[data-column="created_at"]').setValue(true)
+
+        const applied = wireCalls.filter(([method]) => method === 'applyTableColumnManager').pop()
+        expect(applied).toBeDefined()
+        expect(applied[1][1]).toBe(false)
+    })
+
     it('renders no column manager trigger when nothing is toggleable', () => {
         const config = makeConfig()
         config.state.columns = [
@@ -355,6 +380,11 @@ describe('VueTable column manager + post-action refresh', () => {
         await itemsBefore[1].trigger('dragstart')
         await itemsBefore[0].trigger('dragover')
         await itemsBefore[0].trigger('drop')
+
+        // Deferred: the reorder is staged; nothing commits until "Apply columns".
+        expect(wireCalls.filter(([method]) => method === 'applyTableColumnManager')).toEqual([])
+
+        await manager.get('.fi-ta-col-manager-actions-ctn button').trigger('click')
 
         const applied = wireCalls.filter(([method]) => method === 'applyTableColumnManager').pop()
         expect(applied).toBeDefined()

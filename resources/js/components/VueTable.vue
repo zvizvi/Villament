@@ -580,6 +580,8 @@ function recordCellClasses(column) {
                                 v-if="hasColumnManager"
                                 :columns="columnsState"
                                 :reorderable="Boolean(schema.reorderableColumns)"
+                                :deferred="schema.columnManagerDeferred !== false"
+                                :apply-classes="schema.columnManagerApplyClasses ?? ''"
                                 :strings="strings"
                                 :icons="icons"
                                 @apply="onApplyColumnManager"

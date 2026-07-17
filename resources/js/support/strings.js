@@ -25,6 +25,7 @@ export const defaultStrings = Object.freeze({
     nextLabel: 'Next',
     columnManagerHeading: 'Columns',
     columnManagerTrigger: 'Column manager',
+    columnManagerApply: 'Apply columns',
     columnManagerReset: 'Reset',
     bulkSelectPage: 'Select/deselect all items for bulk actions.',
     bulkSelectRecord: 'Select/deselect item :key for bulk actions.',

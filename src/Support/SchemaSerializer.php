@@ -7,6 +7,7 @@ namespace Zvizvi\Villament\Support;
 use Filament\Support\Enums\Alignment;
 use Filament\Support\Enums\IconSize;
 use Filament\Support\Icons\Heroicon;
+use Filament\Support\View\Components\ButtonComponent;
 use Filament\Support\View\SupportIconAlias;
 use Filament\Tables\Columns\Column;
 use Filament\Tables\Enums\PaginationMode;
@@ -14,6 +15,7 @@ use Filament\Tables\Table;
 use Filament\Tables\View\TablesIconAlias;
 
 use function Filament\Support\generate_icon_html;
+use function Filament\Support\get_component_color_classes;
 
 /**
  * Serializes a Filament Table definition into the JSON schema payload the Vue
@@ -68,6 +70,11 @@ final class SchemaSerializer
             'globallySearchable' => $table->isSearchable(),
             'striped' => $table->isStriped(),
             'reorderableColumns' => $table->hasReorderableColumns(),
+            // Deferred (stock default): column toggles/reorders stage in the
+            // panel and only hit the table on "Apply columns". Non-deferred:
+            // each change applies immediately.
+            'columnManagerDeferred' => $table->hasDeferredColumnManager(),
+            'columnManagerApplyClasses' => implode(' ', get_component_color_classes(ButtonComponent::class, 'primary')),
             // The filter panel itself is Filament's native Livewire dropdown
             // (rendered in Blade); the island only needs to know whether to
             // show the funnel trigger.
@@ -150,6 +157,7 @@ final class SchemaSerializer
             // The trigger button's tooltip/aria is the ACTION label (e.g.
             // "Column manager" / "הצג עמודות"), not the panel heading.
             'columnManagerTrigger' => __('filament-tables::table.actions.column_manager.label'),
+            'columnManagerApply' => __('filament-tables::table.column_manager.actions.apply.label'),
             'columnManagerReset' => __('filament-tables::table.column_manager.actions.reset.label'),
             'bulkSelectPage' => __('filament-tables::table.fields.bulk_select_page.label'),
             'bulkSelectRecord' => __('filament-tables::table.fields.bulk_select_record.label'),

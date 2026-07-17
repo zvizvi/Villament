@@ -187,6 +187,14 @@ describe('column manager server path (DoD)', function (): void {
             ->and($config['schema']['icons']['reorderHandle'])->toContain('<svg');
     });
 
+    it('ships the deferred flag (stock default true) + the apply button label and primary classes', function (): void {
+        $schema = VillamentTableConfig()['schema'];
+
+        expect($schema['columnManagerDeferred'])->toBeTrue()
+            ->and($schema['columnManagerApplyClasses'])->toContain('fi-color-primary')
+            ->and($schema['strings']['columnManagerApply'])->toBe('Apply columns');
+    });
+
     it('keeps schemaVersion stable across a reorder — no drift-detector page reload', function (): void {
         User::factory()->create(['name' => 'Version Target']);
 

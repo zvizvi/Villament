@@ -23,6 +23,23 @@ const props = defineProps({
         default: false,
     },
     /**
+     * Deferred mode (`Table::hasDeferredColumnManager()`, stock default true):
+     * toggles/reorders stage in the panel and only apply to the table on the
+     * "Apply columns" button. When false, every change applies immediately.
+     */
+    deferred: {
+        type: Boolean,
+        default: true,
+    },
+    /**
+     * Server-computed color classes for the "Apply columns" primary button
+     * (`schema.columnManagerApplyClasses`), so it matches stock exactly.
+     */
+    applyClasses: {
+        type: String,
+        default: '',
+    },
+    /**
      * Localized UI strings (already resolved with English fallbacks).
      */
     strings: {
@@ -152,12 +169,20 @@ function onToggle(name, group = null) {
 
     entry.isToggled = ! entry.isToggled
 
+    // Deferred: stage in the draft; the table changes only on "Apply columns".
+    if (props.deferred) {
+        return
+    }
+
     emit('apply', JSON.parse(JSON.stringify(draft.value)), false)
 }
 
 /** @type {import('vue').Ref<?{scope: string, type: string, name: string}>} */
 const dragSource = ref(null)
 const hasReordered = ref(false)
+
+/** Deferred mode: whether any staged change includes a reorder (for the apply). */
+const pendingReorder = ref(false)
 
 /**
  * @param {string} scope `'top'` or a group scope key.
@@ -372,15 +397,33 @@ function onDragEnd() {
     destroyDragPreview()
 
     if (dragSource.value && hasReordered.value) {
-        emit('apply', JSON.parse(JSON.stringify(draft.value)), true)
+        if (props.deferred) {
+            // Stage the reorder; "Apply columns" commits it.
+            pendingReorder.value = true
+        } else {
+            emit('apply', JSON.parse(JSON.stringify(draft.value)), true)
+        }
     }
 
     dragSource.value = null
     hasReordered.value = false
 }
 
+/**
+ * "Apply columns" (deferred mode): push the staged draft to the table and
+ * close the panel — mirrors stock's `applyTableColumnManager`.
+ *
+ * @returns {void}
+ */
+function onApply() {
+    emit('apply', JSON.parse(JSON.stringify(draft.value)), pendingReorder.value)
+    pendingReorder.value = false
+    isOpen.value = false
+}
+
 /** @returns {void} */
 function onReset() {
+    pendingReorder.value = false
     emit('reset')
 }
 </script>
@@ -531,6 +574,24 @@ function onReset() {
                         </div>
                     </template>
                 </TransitionGroup>
+
+                <!--
+                    Deferred mode (stock default): staged toggles/reorders only
+                    reach the table on this button. Matches stock's
+                    `fi-ta-col-manager-actions-ctn` + primary apply button.
+                -->
+                <div
+                    v-if="deferred"
+                    class="fi-ta-col-manager-actions-ctn"
+                >
+                    <button
+                        type="button"
+                        :class="[applyClasses, 'fi-btn fi-size-md fi-ac-btn-action']"
+                        @click="onApply"
+                    >
+                        {{ strings.columnManagerApply }}
+                    </button>
+                </div>
             </div>
         </div>
     </div>
