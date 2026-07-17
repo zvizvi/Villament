@@ -99,40 +99,60 @@
         </div>
     </template>
 @else
-    {{-- Dialog layouts (Dropdown + Modal): the native filters CONTENT, hidden;
-         the Vue funnel toggles it via the bridge. WE own show/hide, presenting
-         it as a floating dropdown or a centered modal per
-         `data-villament-filters-presentation`. The panel sizes itself via
-         Filament's own `fi-dropdown-panel` (width:100vw capped by fi-width),
-         added by the bridge on open — no custom width. --}}
-    <div
-        data-villament-filters-panel
-        data-villament-filters-presentation="{{ $vfIsModal ? 'modal' : 'dropdown' }}"
-        wire:key="{{ $vfLivewire->getId() }}.villament-filters-panel"
-        wire:ignore.self
-        @class([
-            'villament-filters-panel',
-            ($vfWidth instanceof Width) ? "fi-width-{$vfWidth->value}" : $vfWidth,
-            'fi-scrollable' => $vfMaxHeight,
-        ])
-        @style([
-            'display: none',
-            ('max-height: '.e($vfMaxHeight)) => $vfMaxHeight,
-        ])
-    >
-        {{-- Reconstruct the stock ancestor chain (.fi-ta-ctn >
-             .fi-ta-header-toolbar > .fi-ta-filters-dropdown) with display:
-             contents wrappers so the scoped stock filter CSS applies here. --}}
-        <div class="fi-ta-ctn" style="display: contents">
-            <div class="fi-ta-header-toolbar" style="display: contents">
-                <div class="fi-ta-filters-dropdown" style="display: contents">
-                    <x-filament-tables::filters
-                        :apply-action="$vfApply"
-                        :form="$vfForm"
-                        :reset-action-position="$vfResetPosition"
-                    />
-                </div>
-            </div>
-        </div>
-    </div>
+    {{-- Dialog layouts (Dropdown + Modal): the STOCK trigger + dialog,
+         teleported into the Vue toolbar slot. --}}
+    <template x-teleport="[data-villament-filters-slot='toolbar']">
+        @if ($vfIsModal || $vfTrigger->isModalSlideOver())
+            <x-filament::modal
+                :alignment="$vfTrigger->getModalAlignment()"
+                :autofocus="$vfTrigger->isModalAutofocused()"
+                :close-button="$vfTrigger->hasModalCloseButton()"
+                :close-by-clicking-away="$vfTrigger->isModalClosedByClickingAway()"
+                :close-by-escaping="$vfTrigger->isModalClosedByEscaping()"
+                :description="$vfTrigger->getModalDescription()"
+                :footer-actions="$vfTrigger->getVisibleModalFooterActions()"
+                :footer-actions-alignment="$vfTrigger->getModalFooterActionsAlignment()"
+                :heading="$vfTrigger->getCustomModalHeading() ?? __('filament-tables::table.filters.heading')"
+                :icon="$vfTrigger->getModalIcon()"
+                :icon-color="$vfTrigger->getModalIconColor()"
+                :slide-over="$vfTrigger->isModalSlideOver()"
+                :slide-over-position="$vfTrigger->getModalSlideOverPosition()"
+                :sticky-footer="$vfTrigger->isModalFooterSticky()"
+                :sticky-header="$vfTrigger->isModalHeaderSticky()"
+                :width="$vfWidth"
+                :wire:key="$vfLivewire->getId() . '.table.filters'"
+                class="fi-ta-filters-modal"
+            >
+                <x-slot name="trigger">
+                    {{ $vfTrigger->badge($vfTable->getActiveFiltersCount()) }}
+                </x-slot>
+
+                {{ $vfTrigger->getModalContent() }}
+
+                {{ $vfForm }}
+
+                {{ $vfTrigger->getModalContentFooter() }}
+            </x-filament::modal>
+        @else
+            <x-filament::dropdown
+                :max-height="$vfMaxHeight"
+                placement="bottom-end"
+                shift
+                :flip="false"
+                :width="$vfWidth ?? Width::ExtraSmall"
+                :wire:key="$vfLivewire->getId() . '.table.filters'"
+                class="fi-ta-filters-dropdown"
+            >
+                <x-slot name="trigger">
+                    {{ $vfTrigger->badge($vfTable->getActiveFiltersCount()) }}
+                </x-slot>
+
+                <x-filament-tables::filters
+                    :apply-action="$vfApply"
+                    :form="$vfForm"
+                    :reset-action-position="$vfResetPosition"
+                />
+            </x-filament::dropdown>
+        @endif
+    </template>
 @endif

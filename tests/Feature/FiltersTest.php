@@ -65,57 +65,30 @@ describe('filter schema serialization', function (): void {
             ->and($icons['badgeDelete'])->toContain('fi-size-xs')->toContain('viewBox="0 0 16 16"');
     });
 
-    it('renders Filament\'s full native filters panel (heading + form + reset) for the island', function (): void {
+    it('teleports the STOCK Filament dropdown (trigger + panel) into the Vue toolbar slot', function (): void {
         $html = livewire(VueListUsers::class)->html();
 
-        // The hidden, Livewire-morphable container holds the stock filters
-        // component — heading, native fields, and the reset action — not a
-        // Vue reimplementation.
-        expect($html)->toContain('data-villament-filters-panel')
+        // The island Blade renders a `<template x-teleport>` targeting the Vue
+        // toolbar slot, containing Filament's own dropdown component: the
+        // stock trigger action (with the active-count badge) and the stock
+        // filters content (heading + fields + apply + reset). No Vue filter UI.
+        expect($html)->toContain('x-teleport="[data-villament-filters-slot=\'toolbar\']"')
+            ->toContain('fi-ta-filters-dropdown')
+            ->toContain('x-data="filamentDropdown"')
             ->toContain('fi-ta-filters-heading')
             ->toContain('resetTableFiltersForm')
             ->toContain('applyTableFilters');
     });
 
-    it('marks the filters panel wire:ignore.self so live commits do not snap it shut', function (): void {
-        // The bridge owns the panel's open/closed state via runtime style +
-        // classes; wire:ignore.self freezes the container's own attributes
-        // across morphs (e.g. under deferFilters(false)) while still morphing
-        // the filter fields inside.
-        $html = livewire(VueListUsers::class)->html();
-
-        preg_match('/<div\s+data-villament-filters-panel.*?>/s', $html, $matches);
-
-        expect($matches[0] ?? '')->toContain('wire:ignore.self');
-    });
-
-    it('reconstructs the full .fi-ta-ctn > .fi-ta-header-toolbar > .fi-ta-filters-dropdown chain so stock filter CSS applies', function (): void {
-        // The panel lives outside the Vue-owned .fi-ta-ctn, so the stock
-        // grid/gap rules (scoped to .fi-ta-ctn) and the p-6 padding rule
-        // (scoped one level deeper, .fi-ta-ctn .fi-ta-header-toolbar
-        // .fi-ta-filters-dropdown .fi-ta-filters) only apply because the
-        // island rebuilds the exact chain with display:contents wrappers.
-        $html = livewire(VueListUsers::class)->html();
-
-        preg_match('/data-villament-filters-panel.*?fi-ta-filters-heading/s', $html, $matches);
-        $panel = $matches[0] ?? '';
-
-        expect($panel)
-            ->toContain('class="fi-ta-ctn" style="display: contents"')
-            ->toContain('class="fi-ta-header-toolbar" style="display: contents"')
-            ->toContain('class="fi-ta-filters-dropdown" style="display: contents"');
-    });
-
-    it('sizes the panel from filtersFormColumns, including responsive arrays', function (): void {
+    it('sizes the native dropdown panel from filtersFormColumns, including responsive arrays', function (): void {
         // The fixture defines filtersFormColumns(['sm' => 2, 'md' => 3,
-        // 'lg' => 4]) — the panel width follows the largest breakpoint via
-        // stock's own columns→width mapping (4 => 6xl). Stock itself maps
-        // ints only and silently falls back to ExtraSmall for arrays.
+        // 'lg' => 4]) — the resolved width (largest breakpoint → 6xl) is
+        // passed to the stock dropdown component, which puts fi-width-6xl on
+        // its panel. Stock itself maps ints only and falls back to ExtraSmall
+        // for arrays.
         $html = livewire(VueListUsers::class)->html();
 
-        preg_match('/data-villament-filters-panel[^>]*class="([^"]*)"/s', $html, $matches);
-
-        expect($matches[1] ?? '')->toContain('fi-width-6xl');
+        expect($html)->toContain('fi-width-6xl');
     });
 });
 

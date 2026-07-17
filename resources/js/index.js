@@ -99,6 +99,13 @@ window.Villament = Object.assign(window.Villament ?? {}, {
     registerCellComponent,
 })
 
+// Mount during `alpine:init` when possible: Alpine dispatches it synchronously
+// inside Alpine.start() BEFORE walking the DOM, so the island's teleport slots
+// (e.g. the native filters dropdown target) exist by the time Alpine processes
+// the Blade `<template x-teleport>` elements. `scan()` is idempotent, so the
+// DOMContentLoaded fallback below is harmless when both fire.
+document.addEventListener('alpine:init', scan)
+
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', scan)
 } else {

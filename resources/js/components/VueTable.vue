@@ -10,7 +10,6 @@ import { resolveCellComponent } from '../support/cellRegistry.js'
 import TrustedIcon from './TrustedIcon.js'
 import TableHeader from './TableHeader.vue'
 import TableSearch from './TableSearch.vue'
-import TableFiltersTrigger from './TableFiltersTrigger.vue'
 import TableFilterIndicators from './TableFilterIndicators.vue'
 import TableColumnManager from './TableColumnManager.vue'
 import TablePagination from './TablePagination.vue'
@@ -34,8 +33,7 @@ const props = defineProps({
     },
     /**
      * The `[data-villament]` island element (passed by the bootstrapper).
-     * Used by the Livewire bridge to locate the hidden native filters panel
-     * rendered as a sibling inside the same `.villament` wrapper.
+     * Currently unused by the component itself; kept for extensions.
      */
     rootElement: {
         type: Object,
@@ -126,7 +124,6 @@ const { records, meta, indicators, summaries, isLoading, error, retry, fetchNow,
 
 const bridge = useLivewireBridge({
     livewireId: props.config.livewireId,
-    islandElement: props.rootElement,
     initialFilters: props.config.state?.filters ?? {},
     onFiltersChanged: (filters) => {
         // Livewire owns filter state (native panel commit); merge it into the
@@ -154,11 +151,6 @@ const bridge = useLivewireBridge({
     },
     onDeselectAll: () => selection.deselectAll(),
 })
-
-/** Funnel badge counts filter indicators only (not search/column-search). */
-const activeFilterCount = computed(
-    () => indicators.value.filter((indicator) => indicator.type === 'filter').length,
-)
 
 onBeforeUnmount(() => {
     bridge.destroy()
@@ -604,13 +596,15 @@ function recordCellClasses(column) {
                                 @update:model-value="state.search.value = $event"
                             />
 
-                            <!-- Dialog layouts (Dropdown/Modal): the funnel; the bridge presents the native panel. -->
-                            <TableFiltersTrigger
+                            <!--
+                                Dialog layouts (Dropdown/Modal): the STOCK
+                                Filament trigger + dialog teleport here from
+                                the Blade partial — fully native, badge
+                                included. Vue renders only this slot.
+                            -->
+                            <div
                                 v-if="filtersSlot === 'toolbar'"
-                                :active-count="activeFilterCount"
-                                :strings="strings"
-                                :icons="icons"
-                                @toggle="bridge.toggleFiltersPanel()"
+                                data-villament-filters-slot="toolbar"
                             />
 
                             <TableColumnManager

@@ -72,7 +72,6 @@ describe('useLivewireBridge', () => {
         document.body.innerHTML = `
             <div class="villament">
                 <div data-villament></div>
-                <div data-villament-filters-panel style="display: none;"></div>
             </div>
         `
     })
@@ -93,7 +92,6 @@ describe('useLivewireBridge', () => {
     function makeBridge(options = {}) {
         const bridge = useLivewireBridge({
             livewireId: LIVEWIRE_ID,
-            islandElement: document.querySelector('[data-villament]'),
             initialFilters: wireState.tableFilters,
             ...options,
         })
@@ -183,113 +181,6 @@ describe('useLivewireBridge', () => {
         expect(wireCalls).toContainEqual(['removeTableFilters', []])
     })
 
-    it('toggles the hidden native filters panel container', () => {
-        const bridge = makeBridge()
-        const container = document.querySelector('[data-villament-filters-panel]')
-
-        expect(container.style.display).toBe('none')
-
-        bridge.toggleFiltersPanel()
-        expect(container.style.display).toBe('')
-        expect(container.classList.contains('villament-filters-panel-open')).toBe(true)
-        expect(bridge.isFiltersPanelVisible.value).toBe(true)
-
-        bridge.toggleFiltersPanel()
-        expect(container.style.display).toBe('none')
-        expect(container.classList.contains('villament-filters-panel-open')).toBe(false)
-        expect(bridge.isFiltersPanelVisible.value).toBe(false)
-    })
-
-    it('presents the panel as a modal (with a backdrop) when the layout is Modal', () => {
-        const container = document.querySelector('[data-villament-filters-panel]')
-        container.setAttribute('data-villament-filters-presentation', 'modal')
-
-        const bridge = makeBridge()
-
-        bridge.toggleFiltersPanel()
-        expect(container.classList.contains('villament-filters-modal-open')).toBe(true)
-        expect(container.classList.contains('villament-filters-panel-open')).toBe(false)
-        // A backdrop is appended to <body> (so a filter commit's morph, scoped
-        // to the Livewire component, can't delete it out from under the modal).
-        const backdrop = document.querySelector('.villament-filters-backdrop')
-        expect(backdrop).not.toBeNull()
-        expect(backdrop.parentElement).toBe(document.body)
-
-        bridge.toggleFiltersPanel()
-        expect(container.classList.contains('villament-filters-modal-open')).toBe(false)
-        expect(document.querySelector('.villament-filters-backdrop')).toBeNull()
-    })
-
-    it('hides the filters panel after an applyTableFilters commit', () => {
-        const bridge = makeBridge({ onFiltersChanged: vi.fn() })
-        const container = document.querySelector('[data-villament-filters-panel]')
-
-        bridge.toggleFiltersPanel()
-        expect(container.style.display).toBe('')
-
-        wireState.tableFilters = { created_from: { created_from: '2026-01-01' } }
-        fireCommit({ calls: [{ method: 'applyTableFilters', params: [], metadata: {} }] })
-
-        expect(container.style.display).toBe('none')
-        expect(bridge.isFiltersPanelVisible.value).toBe(false)
-    })
-
-    it('keeps the filters panel open on ordinary (non-apply) commits', () => {
-        const bridge = makeBridge({ onFiltersChanged: vi.fn() })
-        const container = document.querySelector('[data-villament-filters-panel]')
-
-        bridge.toggleFiltersPanel()
-        fireCommit()
-
-        expect(container.style.display).toBe('')
-    })
-
-    it('closes the filters panel on an outside pointerdown, like the stock dropdown', () => {
-        const bridge = makeBridge()
-        const container = document.querySelector('[data-villament-filters-panel]')
-
-        bridge.toggleFiltersPanel()
-        expect(container.style.display).toBe('')
-
-        document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }))
-
-        expect(container.style.display).toBe('none')
-        expect(bridge.isFiltersPanelVisible.value).toBe(false)
-    })
-
-    it('keeps the panel open when the pointerdown lands inside it or on the trigger', () => {
-        const wrapper = document.querySelector('.villament')
-        const trigger = document.createElement('div')
-        trigger.className = 'villament-filters-trigger'
-        wrapper.appendChild(trigger)
-
-        const bridge = makeBridge()
-        const container = document.querySelector('[data-villament-filters-panel]')
-        const inner = document.createElement('input')
-        container.appendChild(inner)
-
-        bridge.toggleFiltersPanel()
-
-        inner.dispatchEvent(new Event('pointerdown', { bubbles: true }))
-        expect(container.style.display).toBe('')
-
-        trigger.dispatchEvent(new Event('pointerdown', { bubbles: true }))
-        expect(container.style.display).toBe('')
-        expect(bridge.isFiltersPanelVisible.value).toBe(true)
-    })
-
-    it('stops listening for outside clicks once the panel is closed', () => {
-        const bridge = makeBridge()
-        const container = document.querySelector('[data-villament-filters-panel]')
-
-        bridge.toggleFiltersPanel()
-        bridge.toggleFiltersPanel()
-
-        // No listener remains: an outside pointerdown must not throw or reopen.
-        document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }))
-        expect(container.style.display).toBe('none')
-    })
-
     it('unregisters the commit hook on destroy', () => {
         const onFiltersChanged = vi.fn()
         const bridge = makeBridge({ onFiltersChanged })
@@ -308,7 +199,6 @@ describe('useLivewireBridge', () => {
         expect(() => {
             bridge.removeFilter('status')
             bridge.removeAllFilters()
-            bridge.toggleFiltersPanel()
             bridge.destroy()
         }).not.toThrow()
     })

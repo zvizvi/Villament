@@ -1,19 +1,15 @@
-import { ref } from 'vue'
-
 /**
- * Bridge between the Vue island and the host Livewire page component: the
- * native filters panel and the actions bridge.
+ * Bridge between the Vue island and the host Livewire page component: filter
+ * state sync and the actions bridge.
  *
- * The Blade island view keeps Filament's own complete filters panel mounted
- * (and Livewire-morphable) in a hidden sibling container
- * `[data-villament-filters-panel]` inside the same `.villament` wrapper.
- * This composable:
+ * The filters UI itself is fully Filament-native (stock trigger + dropdown /
+ * modal, teleported into a Vue slot from the Blade partial — Alpine owns its
+ * open/close). This composable:
  *
- * - toggles that container open/closed as a floating panel;
  * - watches Livewire commits for `tableFilters` changes and forwards them to
  *   Vue (`onFiltersChanged`) so the island refetches with the new state;
  * - removes/resets filters through Filament's own Livewire methods
- *   (`removeTableFilter` / `resetTableFiltersForm`) — Livewire is the single
+ *   (`removeTableFilter` / `removeTableFilters`) — Livewire is the single
  *   source of truth for filter state; no filter UI exists in Vue.
  *
  * Loop guard: `lastKnownFiltersJson` snapshots the last seen filter state, so
@@ -48,9 +44,6 @@ import { ref } from 'vue'
  *   (`$wire.$on`, as `table.js` does in `init()`) → `onDeselectAll`.
  *
  * @typedef {object} LivewireBridge
- * @property {import('vue').Ref<boolean>} isFiltersPanelVisible
- * @property {() => void} toggleFiltersPanel
- * @property {() => void} hideFiltersPanel
  * @property {(name: string, recordKey: string) => void} mountRecordAction
  * @property {(name: string, selection: { isTracking: boolean, selected: Iterable<string>, deselected: Iterable<string> }) => void} mountBulkAction
  * @property {(columns: object[]) => void} applyColumnManager
@@ -58,8 +51,6 @@ import { ref } from 'vue'
  * @property {() => *} getTableColumns
  * @property {() => void} destroy
  */
-
-const FILTERS_PANEL_SELECTOR = '[data-villament-filters-panel]'
 
 /**
  * Host-component methods whose successful commit means the table data may
@@ -73,26 +64,6 @@ const REFRESH_COMMIT_METHODS = [
     'mountTableAction',
     'applyTableColumnManager',
     'resetTableColumnManager',
-]
-
-/**
- * `villament-filters-panel-open` anchors the panel (package CSS);
- * `fi-dropdown-panel` is Filament's own — it provides the full panel surface
- * (absolute positioning, z-index, background, ring, shadow, radius)
- * natively, exactly like the stock filters dropdown. The width class
- * (`fi-width-*`, resolved from filtersFormWidth()/filtersFormColumns()) is
- * rendered server-side on the container by the Blade island view.
- */
-const FILTERS_DROPDOWN_OPEN_CLASSES = [
-    'villament-filters-panel-open',
-    'fi-dropdown-panel',
-]
-
-// Modal presentation reuses `fi-dropdown-panel` (surface + `width:100vw`
-// capped by the fi-width class) and only overrides position/centering in CSS.
-const FILTERS_MODAL_OPEN_CLASSES = [
-    'villament-filters-modal-open',
-    'fi-dropdown-panel',
 ]
 
 /**
@@ -130,121 +101,22 @@ function wireFor(livewireId) {
 /**
  * @param {{
  *     livewireId: string,
- *     islandElement?: ?Element,
  *     initialFilters?: Object<string, *>,
  *     onFiltersChanged?: (filters: Object<string, *>) => void,
  *     onActionCompleted?: (methods: string[]) => void,
  *     onDeselectAll?: () => void,
- * }} options `islandElement` is the `[data-villament]` mount point; the
- *     filters panel container is looked up among its siblings.
+ * }} options
  * @returns {LivewireBridge}
  */
 export function useLivewireBridge(options) {
     const {
         livewireId,
-        islandElement = null,
         onFiltersChanged = null,
         onActionCompleted = null,
         onDeselectAll = null,
     } = options
 
-    const isFiltersPanelVisible = ref(false)
-
     let lastKnownFiltersJson = JSON.stringify(options.initialFilters ?? {})
-
-    /** @type {?(event: Event) => void} Document listener while the panel is open. */
-    let onOutsidePointerDown = null
-
-    /** @type {?HTMLElement} Backdrop element while a modal-presentation panel is open. */
-    let filtersBackdrop = null
-
-    /** @returns {?HTMLElement} */
-    function filtersPanelContainer() {
-        const wrapper = islandElement?.closest('.villament') ?? islandElement?.parentElement
-
-        return wrapper?.querySelector(FILTERS_PANEL_SELECTOR) ?? null
-    }
-
-    /** @returns {?HTMLElement} The Vue-rendered funnel trigger, if present. */
-    function filtersTriggerElement() {
-        const wrapper = islandElement?.closest('.villament') ?? islandElement?.parentElement
-
-        return wrapper?.querySelector('.villament-filters-trigger') ?? null
-    }
-
-    /** @returns {void} */
-    function showFiltersPanel() {
-        const container = filtersPanelContainer()
-
-        if (! container) {
-            return
-        }
-
-        const isModal = container.getAttribute('data-villament-filters-presentation') === 'modal'
-
-        container.style.display = ''
-        container.classList.add(...(isModal ? FILTERS_MODAL_OPEN_CLASSES : FILTERS_DROPDOWN_OPEN_CLASSES))
-
-        // Modal presentation: a full-screen backdrop behind the centered panel.
-        // Appended to <body>, NOT next to the panel — a filter commit (reset /
-        // apply) morphs the Livewire component and would delete a backdrop
-        // rendered inside it (it's not in the server HTML), leaving the modal
-        // open with no backdrop. In <body> it survives morphs; only
-        // hideFiltersPanel removes it, so panel + backdrop stay in lockstep.
-        if (isModal) {
-            filtersBackdrop = document.createElement('div')
-            filtersBackdrop.className = 'villament-filters-backdrop'
-            document.body.appendChild(filtersBackdrop)
-        }
-
-        isFiltersPanelVisible.value = true
-
-        // Close on an outside click, like the stock filters dropdown. Capture
-        // phase so inner components (a filter's select, etc.) can't swallow the
-        // event, and `pointerdown` — the opening click already completed before
-        // this listener was attached, so it won't self-close. Clicks inside the
-        // panel or on the funnel trigger are ignored (the trigger toggles).
-        onOutsidePointerDown = (event) => {
-            if (container.contains(event.target) || filtersTriggerElement()?.contains(event.target)) {
-                return
-            }
-
-            hideFiltersPanel()
-        }
-
-        document.addEventListener('pointerdown', onOutsidePointerDown, true)
-    }
-
-    /** @returns {void} */
-    function hideFiltersPanel() {
-        const container = filtersPanelContainer()
-
-        if (container) {
-            container.style.display = 'none'
-            container.classList.remove(...FILTERS_DROPDOWN_OPEN_CLASSES, ...FILTERS_MODAL_OPEN_CLASSES)
-        }
-
-        if (filtersBackdrop) {
-            filtersBackdrop.remove()
-            filtersBackdrop = null
-        }
-
-        if (onOutsidePointerDown) {
-            document.removeEventListener('pointerdown', onOutsidePointerDown, true)
-            onOutsidePointerDown = null
-        }
-
-        isFiltersPanelVisible.value = false
-    }
-
-    /** @returns {void} */
-    function toggleFiltersPanel() {
-        if (isFiltersPanelVisible.value) {
-            hideFiltersPanel()
-        } else {
-            showFiltersPanel()
-        }
-    }
 
     /**
      * Removes one active filter via Filament's own `removeTableFilter`. The
@@ -486,10 +358,6 @@ export function useLivewireBridge(options) {
 
                 const calls = Array.isArray(commit?.calls) ? commit.calls : []
 
-                if (calls.some((call) => call?.method === 'applyTableFilters')) {
-                    hideFiltersPanel()
-                }
-
                 const refreshMethods = calls
                     .map((call) => call?.method)
                     .filter((method) => REFRESH_COMMIT_METHODS.includes(method))
@@ -507,13 +375,9 @@ export function useLivewireBridge(options) {
     function destroy() {
         forgetCommitHook?.()
         forgetCommitHook = null
-        hideFiltersPanel()
     }
 
     return {
-        isFiltersPanelVisible,
-        toggleFiltersPanel,
-        hideFiltersPanel,
         removeFilter,
         removeAllFilters,
         mountRecordAction,

@@ -159,46 +159,39 @@ describe('VueTable filters (native Livewire panel) + indicators', () => {
         expect(chips[1].find('.fi-badge-delete-btn').exists()).toBe(false)
     })
 
-    it('renders only the funnel trigger (no Vue filter fields) and toggles the native panel', async () => {
-        document.body.innerHTML = `
-            <div class="villament">
-                <div data-villament></div>
-                <div data-villament-filters-panel style="display: none;"></div>
-            </div>`
-        const island = document.querySelector('[data-villament]')
+    it('renders NO filter UI — only the toolbar teleport slot for the native Filament dialog', () => {
+        wrapper = mountTable()
 
-        wrapper = mount(VueTable, {
-            props: { config: makeConfig(), rootElement: island },
-            attachTo: island,
-        })
-
-        // The funnel trigger renders; no Vue-rendered filter panel exists.
-        expect(wrapper.find('.villament-filters-trigger').exists()).toBe(true)
-        expect(wrapper.find('.villament-filters-trigger .fi-dropdown-panel').exists()).toBe(false)
-
-        // Stock's filters trigger is a label-only icon button, so it carries a
-        // native `title` (not Filament's Alpine x-tooltip, which only the
-        // remove-all action — with an explicit ->tooltip() — gets).
-        // Title is the FILTER ACTION label ("Filter"), not the panel heading.
-        const triggerBtn = wrapper.get('.villament-filters-trigger button')
-        expect(triggerBtn.attributes('title')).toBe('Filter')
-        expect(triggerBtn.attributes('x-tooltip')).toBeUndefined()
-
-        const panel = document.querySelector('[data-villament-filters-panel]')
-        expect(panel.style.display).toBe('none')
-
-        await wrapper.get('.villament-filters-trigger button').trigger('click')
-        expect(panel.style.display).not.toBe('none')
-        expect(panel.classList.contains('villament-filters-panel-open')).toBe(true)
+        // The Blade partial teleports the STOCK trigger + dropdown/modal into
+        // this slot; Vue itself renders no filter controls at all.
+        expect(wrapper.find('[data-villament-filters-slot="toolbar"]').exists()).toBe(true)
+        expect(wrapper.find('.villament-filters-trigger').exists()).toBe(false)
+        expect(wrapper.find('.fi-ta-filters-dropdown').exists()).toBe(false)
     })
 
-    it('hides the funnel trigger when the table defines no filters', () => {
+    it('renders the positional slot for inline filter layouts', () => {
+        const config = makeConfig()
+        config.schema.filtersLayout = 'AboveContent'
+
+        wrapper = mount(VueTable, { props: { config }, attachTo: document.body })
+
+        expect(wrapper.find('[data-villament-filters-slot="above"]').exists()).toBe(true)
+        expect(wrapper.find('[data-villament-filters-slot="toolbar"]').exists()).toBe(false)
+    })
+
+    it('renders no filters slot when the table defines no filters (or layout Hidden)', () => {
         const config = makeConfig()
         config.schema.hasFilters = false
 
         wrapper = mount(VueTable, { props: { config }, attachTo: document.body })
 
-        expect(wrapper.find('.villament-filters-trigger').exists()).toBe(false)
+        expect(wrapper.find('[data-villament-filters-slot]').exists()).toBe(false)
+
+        const hidden = makeConfig()
+        hidden.schema.filtersLayout = 'Hidden'
+        const second = mount(VueTable, { props: { config: hidden }, attachTo: document.body })
+        expect(second.find('[data-villament-filters-slot]').exists()).toBe(false)
+        second.unmount()
     })
 
     it('removes a filter indicator through Livewire (removeTableFilter), not Vue state', async () => {
