@@ -21,6 +21,7 @@ function makeConfig(overrides = {}) {
             defaultSort: null,
             globallySearchable: true,
             hasFilters: true,
+            filtersLayout: 'Dropdown',
             pagination: { mode: 'offset', pageOptions: [10, 25], defaultPerPage: 10 },
             strings: {
                 filtersIndicator: 'Active filters',

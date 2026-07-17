@@ -75,10 +75,13 @@ final class SchemaSerializer
             // each change applies immediately.
             'columnManagerDeferred' => $table->hasDeferredColumnManager(),
             'columnManagerApplyClasses' => implode(' ', get_component_color_classes(ButtonComponent::class, 'primary')),
-            // The filter panel itself is Filament's native Livewire dropdown
-            // (rendered in Blade); the island only needs to know whether to
-            // show the funnel trigger.
+            // Filters UI is Filament-native (rendered in Blade). The island
+            // needs the layout to place the funnel/slots correctly: Dropdown +
+            // Modal put a funnel in the toolbar (the bridge presents the native
+            // panel as a floating dropdown or a centered modal); the inline
+            // layouts teleport the native filters into a positional slot.
             'hasFilters' => $table->getFilters() !== [],
+            'filtersLayout' => $table->getFiltersLayout()->name,
             'pagination' => [
                 'mode' => match ($table->getPaginationMode()) {
                     PaginationMode::Simple => 'simple',

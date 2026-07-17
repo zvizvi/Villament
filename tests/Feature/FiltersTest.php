@@ -30,6 +30,7 @@ describe('filter schema serialization', function (): void {
         $schema = VillamentTableConfig()['schema'];
 
         expect($schema['hasFilters'])->toBeTrue()
+            ->and($schema['filtersLayout'])->toBe('Dropdown')
             ->and($schema)->not->toHaveKey('filters');
     });
 

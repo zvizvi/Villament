@@ -200,6 +200,25 @@ describe('useLivewireBridge', () => {
         expect(bridge.isFiltersPanelVisible.value).toBe(false)
     })
 
+    it('presents the panel as a modal (with a backdrop) when the layout is Modal', () => {
+        const container = document.querySelector('[data-villament-filters-panel]')
+        container.setAttribute('data-villament-filters-presentation', 'modal')
+
+        const bridge = makeBridge()
+
+        bridge.toggleFiltersPanel()
+        expect(container.classList.contains('villament-filters-modal-open')).toBe(true)
+        expect(container.classList.contains('villament-filters-panel-open')).toBe(false)
+        // A backdrop is inserted as a sibling before the panel.
+        const backdrop = document.querySelector('.villament-filters-backdrop')
+        expect(backdrop).not.toBeNull()
+        expect(backdrop.nextElementSibling).toBe(container)
+
+        bridge.toggleFiltersPanel()
+        expect(container.classList.contains('villament-filters-modal-open')).toBe(false)
+        expect(document.querySelector('.villament-filters-backdrop')).toBeNull()
+    })
+
     it('hides the filters panel after an applyTableFilters commit', () => {
         const bridge = makeBridge({ onFiltersChanged: vi.fn() })
         const container = document.querySelector('[data-villament-filters-panel]')

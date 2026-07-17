@@ -55,10 +55,44 @@ const strings = resolveStrings(schema.strings)
 const icons = schema.icons ?? {}
 
 /**
- * The filter panel itself is Filament's native Livewire dropdown (rendered in
- * Blade); Vue shows only the funnel trigger and refetches on filter commits.
+ * The ENTIRE filters UI is Filament-native (rendered in Blade). Vue renders no
+ * filter controls — for dialog layouts it shows the funnel trigger (the bridge
+ * presents the native panel as a dropdown or modal); for inline layouts it
+ * renders a positional teleport slot — and refetches on filter commits.
  */
 const hasFilters = computed(() => Boolean(schema.hasFilters))
+
+/**
+ * Where the native filters UI lives, from the table's FiltersLayout:
+ * - `toolbar`: Dropdown / Modal — the funnel trigger sits in the toolbar.
+ * - `above` / `below` / `before` / `after`: the inline content layouts (+
+ *   collapsible), teleported into a positional slot.
+ * - `null`: Hidden — no UI.
+ */
+const filtersSlot = computed(() => {
+    if (! hasFilters.value) {
+        return null
+    }
+
+    switch (schema.filtersLayout) {
+        case 'Dropdown':
+        case 'Modal':
+            return 'toolbar'
+        case 'AboveContent':
+        case 'AboveContentCollapsible':
+            return 'above'
+        case 'BelowContent':
+            return 'below'
+        case 'BeforeContent':
+        case 'BeforeContentCollapsible':
+            return 'before'
+        case 'AfterContent':
+        case 'AfterContentCollapsible':
+            return 'after'
+        default:
+            return null
+    }
+})
 
 const recordActionsStructure = computed(() => schema.actions?.record ?? [])
 const bulkActionsStructure = computed(() => schema.actions?.bulk ?? [])
@@ -535,6 +569,9 @@ function recordCellClasses(column) {
             }"
         >
             <div class="fi-ta-main">
+                <!-- BeforeContent filters teleport here. -->
+                <div v-if="filtersSlot === 'before'" data-villament-filters-slot="before" />
+
                 <div
                     v-if="hasHeaderToolbar"
                     class="fi-ta-header-ctn"
@@ -567,9 +604,9 @@ function recordCellClasses(column) {
                                 @update:model-value="state.search.value = $event"
                             />
 
-                            <!-- Native Livewire filters panel: Vue shows only the funnel trigger. -->
+                            <!-- Dialog layouts (Dropdown/Modal): the funnel; the bridge presents the native panel. -->
                             <TableFiltersTrigger
-                                v-if="hasFilters"
+                                v-if="filtersSlot === 'toolbar'"
                                 :active-count="activeFilterCount"
                                 :strings="strings"
                                 :icons="icons"
@@ -608,6 +645,9 @@ function recordCellClasses(column) {
                     @remove="onRemoveIndicator"
                     @remove-all="onRemoveAllFilters"
                 />
+
+                <!-- AboveContent filters teleport here. -->
+                <div v-if="filtersSlot === 'above'" data-villament-filters-slot="above" />
 
                 <!-- Error state reuses Filament's own empty-state styling. -->
                 <div
@@ -815,6 +855,10 @@ function recordCellClasses(column) {
                         @update:cursor="state.cursor.value = $event"
                     />
                 </template>
+
+                <!-- BelowContent / AfterContent filters teleport here. -->
+                <div v-if="filtersSlot === 'below'" data-villament-filters-slot="below" />
+                <div v-if="filtersSlot === 'after'" data-villament-filters-slot="after" />
             </div>
         </div>
     </div>

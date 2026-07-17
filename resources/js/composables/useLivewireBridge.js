@@ -83,8 +83,15 @@ const REFRESH_COMMIT_METHODS = [
  * (`fi-width-*`, resolved from filtersFormWidth()/filtersFormColumns()) is
  * rendered server-side on the container by the Blade island view.
  */
-const FILTERS_PANEL_OPEN_CLASSES = [
+const FILTERS_DROPDOWN_OPEN_CLASSES = [
     'villament-filters-panel-open',
+    'fi-dropdown-panel',
+]
+
+// Modal presentation reuses `fi-dropdown-panel` (surface + `width:100vw`
+// capped by the fi-width class) and only overrides position/centering in CSS.
+const FILTERS_MODAL_OPEN_CLASSES = [
+    'villament-filters-modal-open',
     'fi-dropdown-panel',
 ]
 
@@ -148,6 +155,9 @@ export function useLivewireBridge(options) {
     /** @type {?(event: Event) => void} Document listener while the panel is open. */
     let onOutsidePointerDown = null
 
+    /** @type {?HTMLElement} Backdrop element while a modal-presentation panel is open. */
+    let filtersBackdrop = null
+
     /** @returns {?HTMLElement} */
     function filtersPanelContainer() {
         const wrapper = islandElement?.closest('.villament') ?? islandElement?.parentElement
@@ -170,8 +180,18 @@ export function useLivewireBridge(options) {
             return
         }
 
+        const isModal = container.getAttribute('data-villament-filters-presentation') === 'modal'
+
         container.style.display = ''
-        container.classList.add(...FILTERS_PANEL_OPEN_CLASSES)
+        container.classList.add(...(isModal ? FILTERS_MODAL_OPEN_CLASSES : FILTERS_DROPDOWN_OPEN_CLASSES))
+
+        // Modal presentation: a full-screen backdrop behind the centered panel.
+        if (isModal) {
+            filtersBackdrop = document.createElement('div')
+            filtersBackdrop.className = 'villament-filters-backdrop'
+            container.parentElement?.insertBefore(filtersBackdrop, container)
+        }
+
         isFiltersPanelVisible.value = true
 
         // Close on an outside click, like the stock filters dropdown. Capture
@@ -196,7 +216,12 @@ export function useLivewireBridge(options) {
 
         if (container) {
             container.style.display = 'none'
-            container.classList.remove(...FILTERS_PANEL_OPEN_CLASSES)
+            container.classList.remove(...FILTERS_DROPDOWN_OPEN_CLASSES, ...FILTERS_MODAL_OPEN_CLASSES)
+        }
+
+        if (filtersBackdrop) {
+            filtersBackdrop.remove()
+            filtersBackdrop = null
         }
 
         if (onOutsidePointerDown) {

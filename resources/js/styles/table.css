@@ -56,6 +56,30 @@
 }
 
 /*
+ * Modal presentation (FiltersLayout::Modal). Filament's own modal Alpine
+ * breaks when rendered outside its page context, so the bridge presents the
+ * native filters content as a centered, fixed panel over a backdrop. Width
+ * comes from `fi-dropdown-panel` (width:100vw) capped by the fi-width class —
+ * NO custom width, so it matches the dropdown's sizing.
+ */
+.villament > [data-villament-filters-panel].villament-filters-modal-open {
+    position: fixed;
+    /* Physical left/top so `transform` (physical) centers in both LTR and RTL. */
+    inset: 50% auto auto 50%;
+    transform: translate(-50%, -50%);
+    z-index: 41;
+    max-height: 85dvh;
+    overflow-y: auto;
+}
+
+.villament-filters-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    background: color-mix(in srgb, var(--gray-950, #0a0a0a) 50%, transparent);
+}
+
+/*
  * FLIP move animation for column-manager drag reordering. Stock uses
  * SortableJS with `data-sortable-animation-duration="300"` (inline styles at
  * runtime) — no Filament class exists; Vue's TransitionGroup applies this
