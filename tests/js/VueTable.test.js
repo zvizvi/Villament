@@ -164,9 +164,30 @@ describe('VueTable filters (native Livewire panel) + indicators', () => {
 
         // The Blade partial teleports the STOCK trigger + dropdown/modal into
         // this slot; Vue itself renders no filter controls at all.
-        expect(wrapper.find('[data-villament-filters-slot="toolbar"]').exists()).toBe(true)
+        expect(wrapper.find('[data-villament-filters-outlet="toolbar"]').exists()).toBe(true)
         expect(wrapper.find('.villament-filters-trigger').exists()).toBe(false)
         expect(wrapper.find('.fi-ta-filters-dropdown').exists()).toBe(false)
+    })
+
+    it('adopts the server-rendered slot (with its teleported content) into the outlet', () => {
+        document.body.innerHTML = `
+            <div class="villament">
+                <div data-villament></div>
+                <div wire:ignore data-villament-slots style="display: none">
+                    <div data-villament-filters-slot="toolbar" data-villament-owner="lw-users"><span id="native-filters">native</span></div>
+                </div>
+            </div>`
+        const island = document.querySelector('[data-villament]')
+
+        wrapper = mount(VueTable, {
+            props: { config: makeConfig(), rootElement: island },
+            attachTo: island,
+        })
+
+        // The Blade slot (containing the Alpine clone) moved into the outlet.
+        const outlet = island.querySelector('[data-villament-filters-outlet="toolbar"]')
+        expect(outlet.querySelector('[data-villament-filters-slot="toolbar"] #native-filters')).not.toBeNull()
+        expect(document.querySelector('[data-villament-slots] [data-villament-filters-slot]')).toBeNull()
     })
 
     it('renders the positional slot for inline filter layouts', () => {
@@ -175,8 +196,8 @@ describe('VueTable filters (native Livewire panel) + indicators', () => {
 
         wrapper = mount(VueTable, { props: { config }, attachTo: document.body })
 
-        expect(wrapper.find('[data-villament-filters-slot="above"]').exists()).toBe(true)
-        expect(wrapper.find('[data-villament-filters-slot="toolbar"]').exists()).toBe(false)
+        expect(wrapper.find('[data-villament-filters-outlet="above"]').exists()).toBe(true)
+        expect(wrapper.find('[data-villament-filters-outlet="toolbar"]').exists()).toBe(false)
     })
 
     it('Before/AfterContent render BOTH the positional slot and the toolbar slot (stock trigger)', () => {
@@ -187,8 +208,8 @@ describe('VueTable filters (native Livewire panel) + indicators', () => {
 
         // Stock puts the before/after content OUTSIDE the toolbar and its
         // trigger IN the toolbar (mobile-only for non-collapsible).
-        expect(wrapper.find('[data-villament-filters-slot="before"]').exists()).toBe(true)
-        expect(wrapper.find('[data-villament-filters-slot="toolbar"]').exists()).toBe(true)
+        expect(wrapper.find('[data-villament-filters-outlet="before"]').exists()).toBe(true)
+        expect(wrapper.find('[data-villament-filters-outlet="toolbar"]').exists()).toBe(true)
     })
 
     it('renders no filters slot when the table defines no filters (or layout Hidden)', () => {
@@ -197,12 +218,12 @@ describe('VueTable filters (native Livewire panel) + indicators', () => {
 
         wrapper = mount(VueTable, { props: { config }, attachTo: document.body })
 
-        expect(wrapper.find('[data-villament-filters-slot]').exists()).toBe(false)
+        expect(wrapper.find('[data-villament-filters-outlet]').exists()).toBe(false)
 
         const hidden = makeConfig()
         hidden.schema.filtersLayout = 'Hidden'
         const second = mount(VueTable, { props: { config: hidden }, attachTo: document.body })
-        expect(second.find('[data-villament-filters-slot]').exists()).toBe(false)
+        expect(second.find('[data-villament-filters-outlet]').exists()).toBe(false)
         second.unmount()
     })
 

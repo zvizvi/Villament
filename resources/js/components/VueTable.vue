@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { getCoreRowModel, useVueTable } from '@tanstack/vue-table'
 import { useTableState } from '../composables/useTableState.js'
 import { useTableData } from '../composables/useTableData.js'
@@ -33,7 +33,7 @@ const props = defineProps({
     },
     /**
      * The `[data-villament]` island element (passed by the bootstrapper).
-     * Currently unused by the component itself; kept for extensions.
+     * Used to adopt the server-rendered filter slots into position.
      */
     rootElement: {
         type: Object,
@@ -170,6 +170,36 @@ const bridge = useLivewireBridge({
     },
     onDeselectAll: () => selection.deselectAll(),
 })
+
+/**
+ * Adopts the SERVER-RENDERED filter slots into the Vue-rendered outlets.
+ *
+ * The slots (and the Alpine teleport clones inside them) are Blade-rendered
+ * in a hidden wire:ignore holder so they exist before Alpine walks the DOM —
+ * the only race-free option under wire:navigate, where Alpine initializes the
+ * swapped page before any island JS runs. Moving the live node preserves its
+ * Alpine listeners/state, and Livewire patches the clone via the template
+ * reference, so morphs keep working at the new position.
+ *
+ * @returns {void}
+ */
+function adoptFilterSlots() {
+    const wrapper = props.rootElement?.closest('.villament') ?? props.rootElement?.parentElement
+
+    if (! wrapper) {
+        return
+    }
+
+    for (const slot of wrapper.querySelectorAll('[data-villament-slots] > [data-villament-filters-slot]')) {
+        const outlet = props.rootElement.querySelector(
+            `[data-villament-filters-outlet="${slot.getAttribute('data-villament-filters-slot')}"]`,
+        )
+
+        outlet?.appendChild(slot)
+    }
+}
+
+onMounted(adoptFilterSlots)
 
 onBeforeUnmount(() => {
     bridge.destroy()
@@ -580,7 +610,7 @@ function recordCellClasses(column) {
             }"
         >
             <!-- BeforeContent filters teleport here (stock: sibling before .fi-ta-main). -->
-            <div v-if="filtersSlot === 'before'" data-villament-filters-slot="before" />
+            <div v-if="filtersSlot === 'before'" data-villament-filters-outlet="before" />
 
             <div class="fi-ta-main">
                 <div
@@ -588,7 +618,7 @@ function recordCellClasses(column) {
                     class="fi-ta-header-ctn"
                 >
                     <!-- AboveContent filters teleport here (stock: inside the header ctn, before the toolbar). -->
-                    <div v-if="filtersSlot === 'above'" data-villament-filters-slot="above" />
+                    <div v-if="filtersSlot === 'above'" data-villament-filters-outlet="above" />
 
                     <div class="fi-ta-header-toolbar">
                         <BulkActions
@@ -626,7 +656,7 @@ function recordCellClasses(column) {
                             -->
                             <div
                                 v-if="filtersToolbarSlot"
-                                data-villament-filters-slot="toolbar"
+                                data-villament-filters-outlet="toolbar"
                             />
 
                             <TableColumnManager
@@ -870,11 +900,11 @@ function recordCellClasses(column) {
                 </template>
 
                 <!-- BelowContent filters teleport here (stock: end of the main region, after pagination). -->
-                <div v-if="filtersSlot === 'below'" data-villament-filters-slot="below" />
+                <div v-if="filtersSlot === 'below'" data-villament-filters-outlet="below" />
             </div>
 
             <!-- AfterContent filters teleport here (stock: sibling after .fi-ta-main). -->
-            <div v-if="filtersSlot === 'after'" data-villament-filters-slot="after" />
+            <div v-if="filtersSlot === 'after'" data-villament-filters-outlet="after" />
         </div>
     </div>
 </template>

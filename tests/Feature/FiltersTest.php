@@ -71,12 +71,24 @@ describe('filter schema serialization', function (): void {
         // toolbar slot, containing Filament's own dropdown component: the
         // stock trigger action (with the active-count badge) and the stock
         // filters content (heading + fields + apply + reset). No Vue filter UI.
-        expect($html)->toContain('x-teleport="[data-villament-filters-slot=\'toolbar\']"')
+        expect($html)->toContain("x-teleport=\"[data-villament-filters-slot='toolbar'][data-villament-owner='")
             ->toContain('fi-ta-filters-dropdown')
             ->toContain('x-data="filamentDropdown"')
             ->toContain('fi-ta-filters-heading')
             ->toContain('resetTableFiltersForm')
             ->toContain('applyTableFilters');
+    });
+
+    it('server-renders the teleport slot elements in a hidden wire:ignore holder', function (): void {
+        // The physical slots must exist in the server HTML — under
+        // wire:navigate Alpine walks the swapped page before any island JS
+        // runs, and a missing teleport target throws in placeInDom().
+        $html = livewire(VueListUsers::class)->html();
+
+        preg_match('/<div\s+wire:ignore\s+data-villament-slots[^>]*>(.*?)<\/div>\s*$/s', $html, $matches);
+
+        expect($html)->toContain('data-villament-slots')
+            ->and($html)->toMatch('/data-villament-filters-slot="toolbar"\s+data-villament-owner="/');
     });
 
     it('sizes the native dropdown panel from filtersFormColumns, including responsive arrays', function (): void {

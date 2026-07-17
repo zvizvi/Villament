@@ -1,18 +1,21 @@
 {{--
-    Filament-native filters UI, rendered Livewire-morphable (NOT inside the
-    wire:ignore island) and placed per FiltersLayout. The Vue island renders
-    NO filter controls of its own.
+    Filament-native filters UI — trigger included — rendered Livewire-morphable
+    (NOT inside the wire:ignore island) and teleported into physical slot
+    elements, per FiltersLayout. The Vue island renders NO filter UI; it only
+    ADOPTS the slots into position after mounting.
 
-    Dialog layouts (Dropdown, Modal): the native filters CONTENT (heading,
-    fields, apply, reset) is kept hidden; the Vue funnel toggles it via the
-    bridge, which presents it as a floating dropdown or a centered modal (with
-    a backdrop). We render the raw content and own show/hide ourselves — so
-    Filament's fragile dropdown/modal Alpine (x-float, filamentModal) never
-    runs. The FIELDS are the same native Livewire form that already works.
+    The slot elements are SERVER-RENDERED below (inside a wire:ignore, hidden
+    holder), so they exist the moment Alpine walks the DOM — on first load AND
+    on wire:navigate, where Alpine initializes the swapped page before any of
+    our JS runs (a Vue-rendered slot raced that walk and placeInDom() threw on
+    a missing target). Adoption order is irrelevant: if Alpine teleports first,
+    Vue moves slot+clone together; if Vue adopts first, the teleport lands in
+    the already-positioned slot. Slots and teleport targets are scoped by
+    data-villament-owner so multiple islands on one page never cross-teleport.
 
-    Inline layouts (Above/Below/Before/After + collapsible): the native filters
-    are teleported into the positional Vue slot — plain containers, no
-    floating-ui, so Alpine teleport is safe.
+    Livewire's morph keeps the clones live (`context.patch(from._x_teleport,
+    to._x_teleport)`) — driven from the template element, so it works wherever
+    the clone currently sits, wire:ignore or not.
 --}}
 @php
     use Filament\Support\Enums\Width;
@@ -64,6 +67,14 @@
     if (is_string($vfWidth)) {
         $vfWidth = Width::tryFrom($vfWidth) ?? $vfWidth;
     }
+
+    $vfOwner = $vfLivewire->getId();
+
+    // The physical slot elements this layout needs (see the holder below).
+    $vfSlotNames = array_values(array_filter([
+        ($vfInlineSlot === null || $vfIsBefore || $vfIsAfter) ? 'toolbar' : null,
+        $vfInlineSlot,
+    ]));
 @endphp
 
 @if ($vfInlineSlot !== null)
@@ -86,7 +97,7 @@
     --}}
     <div x-data="{ areFiltersOpen: false }" style="display: contents">
         @if ($vfIsBefore || $vfIsAfter)
-            <template x-teleport="[data-villament-filters-slot='toolbar']">
+            <template x-teleport="[data-villament-filters-slot='toolbar'][data-villament-owner='{{ $vfOwner }}']">
                 <span
                     x-on:click="areFiltersOpen = ! areFiltersOpen"
                     @class([
@@ -99,7 +110,7 @@
             </template>
         @endif
 
-        <template x-teleport="[data-villament-filters-slot='{{ $vfInlineSlot }}']">
+        <template x-teleport="[data-villament-filters-slot='{{ $vfInlineSlot }}'][data-villament-owner='{{ $vfOwner }}']">
             @if ($vfIsBelow)
                 <x-filament-tables::filters
                     :apply-action="$vfApply"
@@ -161,7 +172,7 @@
 @else
     {{-- Dialog layouts (Dropdown + Modal): the STOCK trigger + dialog,
          teleported into the Vue toolbar slot. --}}
-    <template x-teleport="[data-villament-filters-slot='toolbar']">
+    <template x-teleport="[data-villament-filters-slot='toolbar'][data-villament-owner='{{ $vfOwner }}']">
         @if ($vfIsModal || $vfTrigger->isModalSlideOver())
             <x-filament::modal
                 :alignment="$vfTrigger->getModalAlignment()"
@@ -216,3 +227,17 @@
         @endif
     </template>
 @endif
+
+{{--
+    The physical teleport targets. Hidden until the Vue island adopts them
+    into position; wire:ignore so Livewire's morph never duplicates them (the
+    teleported clones inside are patched via the template reference instead).
+--}}
+<div wire:ignore data-villament-slots style="display: none">
+    @foreach ($vfSlotNames as $vfSlotName)
+        <div
+            data-villament-filters-slot="{{ $vfSlotName }}"
+            data-villament-owner="{{ $vfOwner }}"
+        ></div>
+    @endforeach
+</div>
