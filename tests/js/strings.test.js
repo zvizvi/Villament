@@ -11,11 +11,11 @@ import {
 describe('resolveStrings', () => {
     it('merges server strings over the English defaults', () => {
         const strings = resolveStrings({
-            filtersHeading: 'סינון',
+            columnManagerHeading: 'עמודות',
             searchPlaceholder: 'חיפוש',
         })
 
-        expect(strings.filtersHeading).toBe('סינון')
+        expect(strings.columnManagerHeading).toBe('עמודות')
         expect(strings.searchPlaceholder).toBe('חיפוש')
         expect(strings.filtersRemoveAll).toBe('Remove all filters')
         expect(strings.previousLabel).toBe('Previous')
@@ -23,12 +23,12 @@ describe('resolveStrings', () => {
 
     it('keeps the English literal when a key is missing, blank, or not a string', () => {
         const strings = resolveStrings({
-            filtersHeading: '',
+            columnManagerHeading: '',
             filtersRemove: null,
             nextLabel: undefined,
         })
 
-        expect(strings.filtersHeading).toBe(defaultStrings.filtersHeading)
+        expect(strings.columnManagerHeading).toBe(defaultStrings.columnManagerHeading)
         expect(strings.filtersRemove).toBe(defaultStrings.filtersRemove)
         expect(strings.nextLabel).toBe(defaultStrings.nextLabel)
     })

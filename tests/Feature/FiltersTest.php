@@ -37,9 +37,9 @@ describe('filter schema serialization', function (): void {
     it('includes localized UI strings in the schema', function (): void {
         $strings = VillamentTableConfig()['schema']['strings'];
 
-        expect($strings['filtersHeading'])->toBe('Filters')
-            // Trigger buttons use the ACTION label, distinct from the heading.
-            ->and($strings['filtersTrigger'])->toBe('Filter')
+        // Trigger/heading strings for the filters are no longer shipped —
+        // the whole filters UI (trigger included) is server-rendered.
+        expect($strings)->not->toHaveKeys(['filtersHeading', 'filtersTrigger'])
             ->and($strings['columnManagerTrigger'])->toBe('Column manager')
             ->and($strings['columnManagerHeading'])->toBe('Columns')
             ->and($strings['filtersRemoveAll'])->toBe('Remove all filters')
@@ -56,7 +56,6 @@ describe('filter schema serialization', function (): void {
             ->and($icons['sortAsc'])->toContain('viewBox="0 0 20 20"')
             ->and($icons['sortDesc'])->toContain('viewBox="0 0 20 20"')
             ->and($icons['search'])->toContain('<svg')
-            ->and($icons['filters'])->toContain('<svg')
             ->and($icons['previous'])->toContain('<svg')
             ->and($icons['next'])->toContain('<svg')
             ->and($icons['empty'])->toContain('<svg')

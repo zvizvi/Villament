@@ -75,11 +75,10 @@ final class SchemaSerializer
             // each change applies immediately.
             'columnManagerDeferred' => $table->hasDeferredColumnManager(),
             'columnManagerApplyClasses' => implode(' ', get_component_color_classes(ButtonComponent::class, 'primary')),
-            // Filters UI is Filament-native (rendered in Blade). The island
-            // needs the layout to place the funnel/slots correctly: Dropdown +
-            // Modal put a funnel in the toolbar (the bridge presents the native
-            // panel as a floating dropdown or a centered modal); the inline
-            // layouts teleport the native filters into a positional slot.
+            // The filters UI — trigger included — is Filament-native, rendered
+            // in Blade and teleported into a Vue slot. The island only needs
+            // the layout to know WHERE to render that slot: the toolbar for
+            // Dropdown/Modal, or a positional slot for the inline layouts.
             'hasFilters' => $table->getFilters() !== [],
             'filtersLayout' => $table->getFiltersLayout()->name,
             'pagination' => [
@@ -115,7 +114,6 @@ final class SchemaSerializer
             'sortAsc' => $this->iconHtml(Heroicon::ChevronUp, TablesIconAlias::HEADER_CELL_SORT_ASC_BUTTON),
             'sortDesc' => $this->iconHtml(Heroicon::ChevronDown, TablesIconAlias::HEADER_CELL_SORT_DESC_BUTTON),
             'search' => $this->iconHtml(Heroicon::MagnifyingGlass, TablesIconAlias::SEARCH_FIELD),
-            'filters' => $this->iconHtml(Heroicon::Funnel, TablesIconAlias::ACTIONS_FILTER),
             'removeFilters' => $this->iconHtml(Heroicon::XMark, TablesIconAlias::FILTERS_REMOVE_ALL_BUTTON),
             'previous' => $this->iconHtml($isRtl ? Heroicon::ChevronRight : Heroicon::ChevronLeft),
             'next' => $this->iconHtml($isRtl ? Heroicon::ChevronLeft : Heroicon::ChevronRight),
@@ -142,10 +140,6 @@ final class SchemaSerializer
         return [
             'searchPlaceholder' => __('filament-tables::table.fields.search.placeholder'),
             'searchLabel' => __('filament-tables::table.fields.search.label'),
-            'filtersHeading' => __('filament-tables::table.filters.heading'),
-            // The funnel trigger button's tooltip/aria is the FILTER ACTION
-            // label (e.g. "Filter"), not the panel heading ("Filters").
-            'filtersTrigger' => __('filament-tables::table.actions.filter.label'),
             'filtersIndicator' => __('filament-tables::table.filters.indicator'),
             'filtersRemove' => __('filament-tables::table.filters.actions.remove.label'),
             'filtersRemoveAll' => __('filament-tables::table.filters.actions.remove_all.label'),

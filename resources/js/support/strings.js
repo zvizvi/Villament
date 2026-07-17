@@ -11,8 +11,6 @@
 export const defaultStrings = Object.freeze({
     searchPlaceholder: 'Search',
     searchLabel: 'Search',
-    filtersHeading: 'Filters',
-    filtersTrigger: 'Filter',
     filtersIndicator: 'Active filters',
     filtersRemove: 'Remove filter',
     filtersRemoveAll: 'Remove all filters',

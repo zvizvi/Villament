@@ -53,16 +53,15 @@ const strings = resolveStrings(schema.strings)
 const icons = schema.icons ?? {}
 
 /**
- * The ENTIRE filters UI is Filament-native (rendered in Blade). Vue renders no
- * filter controls — for dialog layouts it shows the funnel trigger (the bridge
- * presents the native panel as a dropdown or modal); for inline layouts it
- * renders a positional teleport slot — and refetches on filter commits.
+ * The ENTIRE filters UI — trigger included — is Filament-native (rendered in
+ * Blade and teleported into a slot here). Vue renders only the empty slot
+ * element in the layout-appropriate position, and refetches on filter commits.
  */
 const hasFilters = computed(() => Boolean(schema.hasFilters))
 
 /**
  * Where the native filters UI lives, from the table's FiltersLayout:
- * - `toolbar`: Dropdown / Modal — the funnel trigger sits in the toolbar.
+ * - `toolbar`: Dropdown / Modal — the stock trigger + dialog sit in the toolbar.
  * - `above` / `below` / `before` / `after`: the inline content layouts (+
  *   collapsible), teleported into a positional slot.
  * - `null`: Hidden — no UI.
