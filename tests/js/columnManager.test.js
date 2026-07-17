@@ -262,6 +262,9 @@ describe('VueTable column manager + post-action refresh', () => {
             ['applyTableColumnManager', [expectedState, false]],
         ])
 
+        // Stock parity: applying does NOT close the panel — it stays open.
+        expect(wrapper.find('.fi-ta-col-manager').exists()).toBe(true)
+
         // Optimistic visibility after apply: the new column renders (empty cells) before any refetch.
         expect(wrapper.findAll('thead th.fi-ta-header-cell')).toHaveLength(2)
         expect(fetchMock).toHaveBeenCalledTimes(0)

@@ -410,15 +410,15 @@ function onDragEnd() {
 }
 
 /**
- * "Apply columns" (deferred mode): push the staged draft to the table and
- * close the panel — mirrors stock's `applyTableColumnManager`.
+ * "Apply columns" (deferred mode): push the staged draft to the table. Like
+ * stock's `applyTableColumnManager`, this does NOT close the panel — the
+ * dropdown stays open after applying.
  *
  * @returns {void}
  */
 function onApply() {
     emit('apply', JSON.parse(JSON.stringify(draft.value)), pendingReorder.value)
     pendingReorder.value = false
-    isOpen.value = false
 }
 
 /** @returns {void} */
