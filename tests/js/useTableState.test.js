@@ -194,6 +194,23 @@ describe('useTableState', () => {
         expect(state.columnSearches.value).toEqual({})
     })
 
+    it('round-trips grouping through the URL and hydrates over the config', () => {
+        const first = makeState({ grouping: null })
+        first.grouping.value = 'status:desc'
+
+        expect(new URL(window.location.href).searchParams.get('grouping')).toBe('status:desc')
+
+        first.destroy()
+
+        // URL wins over the server-provided default group.
+        const second = makeState({ grouping: 'created_at' })
+        expect(second.grouping.value).toBe('status:desc')
+
+        // Clearing the grouping drops it from the URL.
+        second.grouping.value = null
+        expect(new URL(window.location.href).searchParams.has('grouping')).toBe(false)
+    })
+
     it('round-trips the cursor through the URL and clears it with state', () => {
         window.history.replaceState(null, '', '/admin/users')
 

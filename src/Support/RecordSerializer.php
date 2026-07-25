@@ -11,6 +11,7 @@ use Filament\Support\Facades\FilamentView;
 use Filament\Support\View\Components\LinkComponent;
 use Filament\Tables\Columns\Column;
 use Filament\Tables\Contracts\HasTable;
+use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
 use Illuminate\Contracts\Pagination\CursorPaginator;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -56,6 +57,11 @@ final class RecordSerializer
         $table = $livewire->getTable();
         $columns = $table->getVisibleColumns();
 
+        // The active group (user selection or the table's default), or null.
+        // Records already arrive ordered by it (Filament's own pipeline), so
+        // the client inserts a header row wherever the group key changes.
+        $group = $table->getGrouping();
+
         $payload = [];
 
         foreach ($records as $record) {
@@ -72,6 +78,7 @@ final class RecordSerializer
             $payload[] = [
                 'key' => $livewire->getTableRecordKey($record),
                 'cells' => $cells,
+                'group' => $group === null ? null : $this->serializeGroup($group, $record),
                 'url' => $recordUrl,
                 'urlNewTab' => $recordUrlNewTab,
                 'urlWireNavigate' => filled($recordUrl) && ! $recordUrlNewTab && FilamentView::hasSpaMode($recordUrl),
@@ -192,6 +199,28 @@ final class RecordSerializer
             Size::ExtraSmall, Size::Small, 'xs', 'sm' => IconSize::Small,
             default => IconSize::Medium,
         };
+    }
+
+    /**
+     * This record's group membership: the string key drives header boundaries
+     * on the client (a new key starts a new group), and title/label/description
+     * are the header text — all evaluated server-side through the Group's own
+     * closures, exactly as the stock blade does per row.
+     *
+     * @param  Model|array<string, mixed>  $record
+     * @return array{key: ?string, title: ?string, label: ?string, description: ?string, collapsible: bool}
+     */
+    private function serializeGroup(Group $group, Model|array $record): array
+    {
+        $title = $group->getTitle($record);
+
+        return [
+            'key' => $group->getStringKey($record),
+            'title' => $this->stringable($title),
+            'label' => $group->isTitlePrefixedWithLabel() ? $this->stringable($group->getLabel()) : null,
+            'description' => $this->stringable($group->getDescription($record, $title)),
+            'collapsible' => $group->isCollapsible(),
+        ];
     }
 
     /**

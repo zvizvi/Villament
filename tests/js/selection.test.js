@@ -149,6 +149,37 @@ describe('VueTable selection + bulk actions', () => {
         return wrapper
     }
 
+    it('selects every page record of a group from the group-header checkbox', async () => {
+        const config = makeConfig()
+        config.schema.grouping = { groups: [{ id: 'status', label: 'Status' }], default: null, directionSettingHidden: false }
+        config.schema.strings.bulkSelectGroup = 'Select/deselect group :title for bulk actions.'
+        config.state.grouping = 'status'
+        config.initialData.records = [
+            { key: '1', cells: { name: { type: 'text', formatted: 'Jane' } }, actions: {}, can: {}, url: null, urlNewTab: false, action: null, group: { key: 'active', title: 'active', label: 'Status', description: null } },
+            { key: '2', cells: { name: { type: 'text', formatted: 'John' } }, actions: {}, can: {}, url: null, urlNewTab: false, action: null, group: { key: 'active', title: 'active', label: 'Status', description: null } },
+            { key: '3', cells: { name: { type: 'text', formatted: 'Sue' } }, actions: {}, can: {}, url: null, urlNewTab: false, action: null, group: { key: 'archived', title: 'archived', label: 'Status', description: null } },
+        ]
+
+        wrapper = mount(VueTable, { props: { config }, attachTo: document.body })
+
+        const groupCheckbox = wrapper.get('.fi-ta-group-selection-cell input.fi-ta-group-checkbox')
+        expect(groupCheckbox.attributes('aria-label')).toBe('Select/deselect group active for bulk actions.')
+
+        await groupCheckbox.setValue(true)
+
+        // Both records of the "active" group are now selected; the "archived"
+        // record is untouched.
+        const recordCheckboxes = wrapper.findAll('tbody input.fi-ta-record-checkbox')
+        expect(recordCheckboxes[0].element.checked).toBe(true)
+        expect(recordCheckboxes[1].element.checked).toBe(true)
+        expect(recordCheckboxes[2].element.checked).toBe(false)
+        expect(groupCheckbox.element.checked).toBe(true)
+
+        // Toggling it off clears just that group.
+        await groupCheckbox.setValue(false)
+        expect(wrapper.findAll('tbody input.fi-ta-record-checkbox')[0].element.checked).toBe(false)
+    })
+
     it('renders the selection column only when bulk actions exist', () => {
         const config = makeConfig()
         config.schema.actions.bulk = []

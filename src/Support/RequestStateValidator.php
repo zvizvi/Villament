@@ -26,7 +26,39 @@ final class RequestStateValidator
             page: $this->validatePage($request),
             perPage: $this->validatePerPage($request, $table),
             cursor: $this->validateCursor($request),
+            grouping: $this->validateGrouping($request, $table),
         );
+    }
+
+    /**
+     * Whitelists the `tableGrouping` string against the table's registered
+     * groups: the id must be one Filament exposes, the optional direction must
+     * be asc/desc. A blank param leaves grouping untouched (falls back to the
+     * table's own `defaultGroup()`).
+     */
+    private function validateGrouping(Request $request, Table $table): ?string
+    {
+        $grouping = $request->query('grouping');
+
+        if (blank($grouping)) {
+            return null;
+        }
+
+        if (! is_string($grouping)) {
+            $this->reject('grouping', 'The grouping parameter must be a string.');
+        }
+
+        [$id, $direction] = array_pad(explode(':', $grouping, 2), 2, 'asc');
+
+        if (! in_array($direction, ['asc', 'desc'], true)) {
+            $this->reject('grouping', "The grouping direction [{$direction}] is invalid.");
+        }
+
+        if ($table->getGroup($id) === null) {
+            $this->reject('grouping', "The group [{$id}] does not exist.");
+        }
+
+        return "{$id}:{$direction}";
     }
 
     private function validateSort(Request $request, Table $table): ?string

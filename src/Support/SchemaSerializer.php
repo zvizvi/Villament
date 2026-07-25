@@ -81,6 +81,7 @@ final class SchemaSerializer
             // Dropdown/Modal, or a positional slot for the inline layouts.
             'hasFilters' => $table->getFilters() !== [],
             'filtersLayout' => $table->getFiltersLayout()->name,
+            'grouping' => $this->grouping($table),
             'pagination' => [
                 'mode' => match ($table->getPaginationMode()) {
                     PaginationMode::Simple => 'simple',
@@ -121,6 +122,8 @@ final class SchemaSerializer
             'columnManager' => $this->iconHtml(Heroicon::ViewColumns, TablesIconAlias::ACTIONS_COLUMN_MANAGER),
             'badgeDelete' => $this->iconHtml(Heroicon::XMark, SupportIconAlias::BADGE_DELETE_BUTTON, IconSize::ExtraSmall),
             'reorderHandle' => $this->iconHtml(Heroicon::Bars2, TablesIconAlias::REORDER_HANDLE),
+            'group' => $this->iconHtml(Heroicon::RectangleStack, TablesIconAlias::ACTIONS_GROUP),
+            'groupCollapse' => $this->iconHtml(Heroicon::ChevronUp, TablesIconAlias::GROUPING_COLLAPSE_BUTTON, IconSize::Small),
         ];
     }
 
@@ -158,9 +161,15 @@ final class SchemaSerializer
             'columnManagerReset' => __('filament-tables::table.column_manager.actions.reset.label'),
             'bulkSelectPage' => __('filament-tables::table.fields.bulk_select_page.label'),
             'bulkSelectRecord' => __('filament-tables::table.fields.bulk_select_record.label'),
+            'bulkSelectGroup' => __('filament-tables::table.fields.bulk_select_group.label'),
             'selectedCount' => __('filament-tables::table.selection_indicator.selected_count'),
             'selectAll' => __('filament-tables::table.selection_indicator.actions.select_all.label'),
             'deselectAll' => __('filament-tables::table.selection_indicator.actions.deselect_all.label'),
+            'groupTrigger' => __('filament-tables::table.actions.group.label'),
+            'groupBy' => __('filament-tables::table.grouping.fields.group.label'),
+            'groupDirection' => __('filament-tables::table.grouping.fields.direction.label'),
+            'groupDirectionAsc' => __('filament-tables::table.grouping.fields.direction.options.asc'),
+            'groupDirectionDesc' => __('filament-tables::table.grouping.fields.direction.options.desc'),
         ];
     }
 
@@ -212,5 +221,50 @@ final class SchemaSerializer
         }
 
         return 'html';
+    }
+
+    /**
+     * Selectable grouping config for the Vue settings control. `null` when the
+     * table exposes no `groups()` — a forced-only `defaultGroup()` still groups
+     * the records (headers render) but offers no UI to change it.
+     *
+     * @return array{groups: list<array{id: string, label: string}>, default: ?string, directionSettingHidden: bool, settingsInDropdownOnDesktop: bool, collapsedByDefault: bool, settingsHidden: bool}|null
+     */
+    private function grouping(Table $table): ?array
+    {
+        $groups = $table->getGroups();
+
+        if ($groups === []) {
+            return null;
+        }
+
+        $default = $table->getDefaultGroup();
+
+        $serializedGroups = [];
+
+        foreach ($groups as $group) {
+            $serializedGroups[] = [
+                'id' => $group->getId(),
+                'label' => (string) $group->getLabel(),
+            ];
+        }
+
+        return [
+            'groups' => $serializedGroups,
+            // Preselects the control; only when the default is one of the
+            // selectable groups (a non-selectable forced default has no UI).
+            'default' => $table->isDefaultGroupSelectable() ? $default?->getId() : null,
+            'directionSettingHidden' => $table->isGroupingDirectionSettingHidden(),
+            // Stock default (false): a mobile dropdown (`sm:fi-hidden`) PLUS
+            // inline fields on desktop. True: the dropdown at every breakpoint.
+            'settingsInDropdownOnDesktop' => $table->areGroupingSettingsInDropdownOnDesktop(),
+            // Collapsible groups (per `Group::collapsible()`) start collapsed
+            // when the table opts in; the client tracks collapse state by title.
+            'collapsedByDefault' => $table->areGroupsCollapsedByDefault(),
+            // Suppresses the settings selector entirely (stock: the toolbar
+            // control is hidden). Grouping via `defaultGroup()` still applies —
+            // records group and headers render, users just can't change it.
+            'settingsHidden' => $table->areGroupingSettingsHidden(),
+        ];
     }
 }

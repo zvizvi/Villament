@@ -212,5 +212,8 @@ function itemIconClasses(action) {
                 </div>
             </div>
         </template>
+
+        <!-- Trailing siblings inside the same actions row (e.g. grouping settings). -->
+        <slot />
     </div>
 </template>

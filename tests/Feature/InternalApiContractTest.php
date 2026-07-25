@@ -12,6 +12,7 @@ use Filament\Tables\Columns\Column;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
 use Livewire\LivewireManager;
 
@@ -55,6 +56,26 @@ $methodContract = [
     [Table::class, 'getPaginationPageOptions'],
     [Table::class, 'getDefaultPaginationPageOption'],
     [Table::class, 'getPaginationMode'],
+    [Table::class, 'getGroups'],
+    [Table::class, 'getGroup'],
+    [Table::class, 'getGrouping'],
+    [Table::class, 'getDefaultGroup'],
+    [Table::class, 'isDefaultGroupSelectable'],
+    [Table::class, 'isGroupingDirectionSettingHidden'],
+    [Table::class, 'areGroupingSettingsHidden'],
+    [Table::class, 'areGroupingSettingsInDropdownOnDesktop'],
+    [Table::class, 'areGroupsCollapsedByDefault'],
+    [Table::class, 'isGroupsOnly'],
+    [Group::class, 'getId'],
+    [Group::class, 'getColumn'],
+    [Group::class, 'groupQuery'],
+    [Group::class, 'scopeQuery'],
+    [Group::class, 'isCollapsible'],
+    [Group::class, 'getLabel'],
+    [Group::class, 'getStringKey'],
+    [Group::class, 'getTitle'],
+    [Group::class, 'getDescription'],
+    [Group::class, 'isTitlePrefixedWithLabel'],
     [Column::class, 'record'],
     [Column::class, 'getState'],
     [TextColumn::class, 'formatState'],
@@ -109,6 +130,7 @@ $propertyContract = [
     [ListRecords::class, 'tableSort'],
     [ListRecords::class, 'tableSearch'],
     [ListRecords::class, 'tableColumnSearches'],
+    [ListRecords::class, 'tableGrouping'],
     [ListRecords::class, 'tableFilters'],
     [ListRecords::class, 'tableDeferredFilters'],
     [ListRecords::class, 'tableRecordsPerPage'],

@@ -23,6 +23,7 @@ use Filament\Tables\Columns\ViewColumn;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
+use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Zvizvi\Villament\Tests\Fixtures\Models\User;
@@ -33,6 +34,12 @@ use Zvizvi\Villament\Tests\Fixtures\Resources\Users\Pages\VueListUsers;
 class UserResource extends Resource
 {
     protected static ?string $model = User::class;
+
+    /** Test seam: flips the table into `groupsOnly()` mode for the groups-only tests. */
+    public static bool $groupsOnly = false;
+
+    /** Test seam: hides the grouping settings selector (`groupingSettingsHidden()`). */
+    public static bool $groupingSettingsHidden = false;
 
     public static function getEloquentQuery(): Builder
     {
@@ -80,6 +87,15 @@ class UserResource extends Resource
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->defaultSort('name')
+            ->groups([
+                Group::make('status')
+                    ->collapsible()
+                    ->getDescriptionFromRecordUsing(fn (User $record): string => "Users with status {$record->status}"),
+                Group::make('created_at')
+                    ->date(),
+            ])
+            ->groupsOnly(fn (): bool => static::$groupsOnly)
+            ->groupingSettingsHidden(fn (): bool => static::$groupingSettingsHidden)
             ->striped()
             ->reorderableColumns()
             ->filtersFormColumns(['sm' => 2, 'md' => 3, 'lg' => 4])

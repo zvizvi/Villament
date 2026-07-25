@@ -69,6 +69,12 @@ final class HeadlessTableHarness
         $component->tableSearch = $state->search;
         $component->tableColumnSearches = $state->columnSearches;
 
+        // A blank grouping falls through to the table's own `defaultGroup()`
+        // (mirroring stock, where `tableGrouping` is null until the user picks).
+        if ($state->grouping !== null) {
+            $component->tableGrouping = $state->grouping;
+        }
+
         if ($state->filters !== null) {
             $component->tableFilters = array_replace($component->tableFilters ?? [], $state->filters);
         }

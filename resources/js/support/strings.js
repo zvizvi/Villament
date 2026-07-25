@@ -27,9 +27,15 @@ export const defaultStrings = Object.freeze({
     columnManagerReset: 'Reset',
     bulkSelectPage: 'Select/deselect all items for bulk actions.',
     bulkSelectRecord: 'Select/deselect item :key for bulk actions.',
+    bulkSelectGroup: 'Select/deselect group :title for bulk actions.',
     selectedCount: '1 record selected|:count records selected',
     selectAll: 'Select all :count',
     deselectAll: 'Deselect all',
+    groupTrigger: 'Group',
+    groupBy: 'Group by',
+    groupDirection: 'Group direction',
+    groupDirectionAsc: 'Ascending',
+    groupDirectionDesc: 'Descending',
 })
 
 /**

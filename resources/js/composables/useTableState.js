@@ -4,6 +4,7 @@ import { appendFilterParams, deleteFilterParams, readFilterParams } from '../sup
 /**
  * @typedef {object} TableStateInit
  * @property {?string} [sort] Sort expression, e.g. `"name:asc"`.
+ * @property {?string} [grouping] Grouping expression, e.g. `"status:asc"` or `"status"`.
  * @property {string} [search] Global search term.
  * @property {Object<string, string>} [columnSearches] Per-column search terms, keyed by column key.
  * @property {Object<string, *>} [filters] Filter state map (Filament form state shapes), keyed by filter name.
@@ -14,6 +15,7 @@ import { appendFilterParams, deleteFilterParams, readFilterParams } from '../sup
 /**
  * @typedef {object} TableState
  * @property {import('vue').Ref<?string>} sort
+ * @property {import('vue').Ref<?string>} grouping
  * @property {import('vue').Ref<string>} search
  * @property {import('vue').Ref<Object<string, string>>} columnSearches
  * @property {import('vue').Ref<Object<string, *>>} filters
@@ -37,6 +39,10 @@ function readStateFromUrl() {
 
     if (params.has('sort')) {
         state.sort = params.get('sort') || null
+    }
+
+    if (params.has('grouping')) {
+        state.grouping = params.get('grouping') || null
     }
 
     if (params.has('search')) {
@@ -105,6 +111,7 @@ export function useTableState(initialState = {}, options = {}) {
     const urlState = urlSync ? readStateFromUrl() : {}
 
     const sort = ref(urlState.sort !== undefined ? urlState.sort : (initialState.sort ?? null))
+    const grouping = ref(urlState.grouping !== undefined ? urlState.grouping : (initialState.grouping ?? null))
     const search = ref(urlState.search !== undefined ? urlState.search : (initialState.search ?? ''))
     const columnSearches = ref(
         urlState.columnSearches !== undefined
@@ -130,7 +137,7 @@ export function useTableState(initialState = {}, options = {}) {
         const params = url.searchParams
 
         for (const key of [...params.keys()]) {
-            if (['sort', 'search', 'page', 'perPage', 'cursor'].includes(key) || COLUMN_SEARCH_PARAM_PATTERN.test(key)) {
+            if (['sort', 'grouping', 'search', 'page', 'perPage', 'cursor'].includes(key) || COLUMN_SEARCH_PARAM_PATTERN.test(key)) {
                 params.delete(key)
             }
         }
@@ -139,6 +146,10 @@ export function useTableState(initialState = {}, options = {}) {
 
         if (sort.value) {
             params.set('sort', sort.value)
+        }
+
+        if (grouping.value) {
+            params.set('grouping', grouping.value)
         }
 
         if (search.value) {
@@ -178,6 +189,7 @@ export function useTableState(initialState = {}, options = {}) {
 
         try {
             sort.value = urlState.sort !== undefined ? urlState.sort : null
+            grouping.value = urlState.grouping !== undefined ? urlState.grouping : null
             search.value = urlState.search !== undefined ? urlState.search : ''
             columnSearches.value = { ...(urlState.columnSearches ?? {}) }
             filters.value = urlState.filters ?? {}
@@ -200,7 +212,7 @@ export function useTableState(initialState = {}, options = {}) {
 
     if (urlSync) {
         stopUrlWatcher = watch(
-            () => [sort.value, search.value, page.value, perPage.value, cursor.value, { ...columnSearches.value }, filters.value],
+            () => [sort.value, grouping.value, search.value, page.value, perPage.value, cursor.value, { ...columnSearches.value }, filters.value],
             () => {
                 if (! isApplyingUrlState) {
                     writeStateToUrl()
@@ -225,6 +237,7 @@ export function useTableState(initialState = {}, options = {}) {
 
     return {
         sort,
+        grouping,
         search,
         columnSearches,
         filters,

@@ -5,6 +5,7 @@ import { useTableState } from '../composables/useTableState.js'
 import { useTableData } from '../composables/useTableData.js'
 import { useLivewireBridge } from '../composables/useLivewireBridge.js'
 import { useSelection } from '../composables/useSelection.js'
+import { useGroupCollapse } from '../composables/useGroupCollapse.js'
 import { formatString, resolveStrings } from '../support/strings.js'
 import { resolveCellComponent } from '../support/cellRegistry.js'
 import TrustedIcon from './TrustedIcon.js'
@@ -12,6 +13,7 @@ import TableHeader from './TableHeader.vue'
 import TableSearch from './TableSearch.vue'
 import TableFilterIndicators from './TableFilterIndicators.vue'
 import TableColumnManager from './TableColumnManager.vue'
+import TableGrouping from './TableGrouping.vue'
 import TablePagination from './TablePagination.vue'
 import RecordActions from './RecordActions.vue'
 import BulkActions from './BulkActions.vue'
@@ -58,6 +60,23 @@ const icons = schema.icons ?? {}
  * element in the layout-appropriate position, and refetches on filter commits.
  */
 const hasFilters = computed(() => Boolean(schema.hasFilters))
+
+/**
+ * Grouping settings UI shows only when the table exposes selectable `groups()`
+ * and hasn't hidden the settings (`groupingSettingsHidden()`) — a hidden
+ * selector still leaves `defaultGroup()` grouping active, headers and all.
+ */
+const hasGrouping = computed(
+    () => (schema.grouping?.groups?.length ?? 0) > 0 && ! schema.grouping?.settingsHidden,
+)
+
+/** Shared props for the grouping control (rendered inside the left actions row). */
+const groupingProps = computed(() => ({
+    grouping: schema.grouping,
+    modelValue: state.grouping.value,
+    strings,
+    icons,
+}))
 
 /**
  * Where the native filters UI lives, from the table's FiltersLayout:
@@ -117,8 +136,11 @@ const toolbarActionsStructure = computed(() => schema.actions?.toolbar ?? [])
 
 const hasRecordActions = computed(() => recordActionsStructure.value.length > 0)
 
-/** Selection UI (checkbox column, indicator, bulk bar) exists only when bulk actions do. */
-const isSelectionEnabled = computed(() => bulkActionsStructure.value.length > 0)
+/**
+ * Selection UI (checkbox column, indicator, bulk bar) exists only when bulk
+ * actions do — and never in groups-only mode (stock disables it there too).
+ */
+const isSelectionEnabled = computed(() => bulkActionsStructure.value.length > 0 && ! isGroupsOnly.value)
 
 const state = useTableState(props.config.state ?? {})
 
@@ -130,6 +152,29 @@ const state = useTableState(props.config.state ?? {})
 const columnsState = ref(JSON.parse(JSON.stringify(props.config.state?.columns ?? [])))
 
 const selection = useSelection()
+
+const groupCollapse = useGroupCollapse(Boolean(schema.grouping?.collapsedByDefault))
+
+/**
+ * Whether a record is hidden because its (collapsible) group is collapsed.
+ *
+ * @param {object} record
+ * @returns {boolean}
+ */
+function isRecordCollapsed(record) {
+    return Boolean(record.group?.collapsible) && groupCollapse.isCollapsed(record.group.title)
+}
+
+/**
+ * Group-header accessible label: `"Label: Title"` (or just the title),
+ * matching stock's collapse-button aria-label.
+ *
+ * @param {object} group
+ * @returns {string}
+ */
+function groupAriaLabel(group) {
+    return group.label ? `${group.label}: ${group.title}` : String(group.title ?? '')
+}
 
 const { records, meta, indicators, summaries, isLoading, error, retry, fetchNow, destroy: destroyData } = useTableData(
     props.config.endpoint,
@@ -311,6 +356,19 @@ const summaryRows = computed(() => {
 })
 
 /**
+ * Groups-only mode (server-authoritative: `groupsOnly()` config AND a group
+ * active). The individual record rows are replaced by one summary row per
+ * group; selection is disabled.
+ */
+const isGroupsOnly = computed(() => Boolean(summaries.value?.groupsOnly))
+
+/** Ordered per-group summary rows for groups-only mode. */
+const groupSummaryRows = computed(() => summaries.value?.groups ?? [])
+
+/** The active group's column, dropped from each groups-only row (its value is the heading). */
+const groupsOnlyColumn = computed(() => summaries.value?.groupColumn ?? null)
+
+/**
  * Stock heading colspan: the heading occupies the leading columns up to the
  * first summarized one.
  *
@@ -402,10 +460,68 @@ const hasBulkActionsBar = computed(
 const hasHeaderToolbar = computed(
     () => Boolean(schema.globallySearchable)
         || hasFilters.value
+        || hasGrouping.value
         || hasColumnManager.value
         || hasBulkActionsBar.value
         || toolbarActionsStructure.value.length > 0,
 )
+
+/**
+ * Colspan for a group-header row's content cell: it spans every column plus
+ * the trailing actions cell, but NOT the leading selection cell (rendered
+ * separately), matching stock's `fi-ta-group-header-cell`.
+ */
+const groupHeaderColspan = computed(
+    () => visibleColumns.value.length + (hasRecordActions.value ? 1 : 0),
+)
+
+/**
+ * Flattens the table rows into an ordered render list, inserting a
+ * `group-header` item wherever the group TITLE changes (stock compares titles,
+ * not keys). Without an active group every row is a plain `record` item, so
+ * the ungrouped path is unchanged. `rowIndex` is the record's position among
+ * records (drives striping), unaffected by the interleaved headers.
+ *
+ * Each group-header item also carries `keys`: the record keys of that group
+ * ON THE CURRENT PAGE, driving the header's select-all checkbox (page-scoped,
+ * like the page header checkbox — off-page rows are reached via "select all").
+ *
+ * `stripeIndex` drives row striping and RESETS to 0 at every group boundary
+ * (stock: each group restarts white → striped → …). Ungrouped, it's just the
+ * running record index, so the ungrouped stripe pattern is unchanged.
+ *
+ * @returns {Array<{type: 'group-header', id: string, group: object, keys: string[]} | {type: 'record', id: string, row: object, stripeIndex: number}>}
+ */
+const renderItems = computed(() => {
+    const items = []
+    let currentHeader = null
+    let previousGroupTitle = ''
+    let recordIndex = 0
+    let stripeIndex = 0
+
+    for (const row of table.getRowModel().rows) {
+        const group = row.original.group
+
+        if (group) {
+            const title = String(group.title ?? '')
+
+            if (title !== previousGroupTitle) {
+                currentHeader = { type: 'group-header', id: `group:${recordIndex}:${title}`, group, keys: [] }
+                items.push(currentHeader)
+                previousGroupTitle = title
+                stripeIndex = 0
+            }
+
+            currentHeader?.keys.push(row.original.key)
+        }
+
+        items.push({ type: 'record', id: row.id, row, stripeIndex })
+        recordIndex += 1
+        stripeIndex += 1
+    }
+
+    return items
+})
 
 /**
  * Mounts a bulk action on the host Livewire component, pushing the complete
@@ -621,22 +737,47 @@ function recordCellClasses(column) {
                     <div v-if="filtersSlot === 'above'" data-villament-filters-outlet="above" />
 
                     <div class="fi-ta-header-toolbar">
+                        <!--
+                            The grouping settings live INSIDE the leading
+                            `fi-ta-actions` row (stock parity), as a trailing
+                            sibling of the bulk/toolbar actions. Rendered exactly
+                            once: in the toolbar-actions row when present, else
+                            the bulk-actions row, else the empty placeholder row.
+                        -->
                         <BulkActions
                             v-if="hasBulkActionsBar"
                             :actions="bulkActionsStructure"
                             @mount="onMountBulkAction"
-                        />
+                        >
+                            <TableGrouping
+                                v-if="hasGrouping && ! toolbarActionsStructure.length"
+                                v-bind="groupingProps"
+                                @update:model-value="state.grouping.value = $event"
+                            />
+                        </BulkActions>
 
                         <BulkActions
                             v-if="toolbarActionsStructure.length"
                             :actions="toolbarActionsStructure"
                             @mount="bridge.mountTableAction($event)"
-                        />
+                        >
+                            <TableGrouping
+                                v-if="hasGrouping"
+                                v-bind="groupingProps"
+                                @update:model-value="state.grouping.value = $event"
+                            />
+                        </BulkActions>
 
                         <div
                             v-if="! hasBulkActionsBar && ! toolbarActionsStructure.length"
                             class="fi-ta-actions fi-align-start fi-wrapped"
-                        />
+                        >
+                            <TableGrouping
+                                v-if="hasGrouping"
+                                v-bind="groupingProps"
+                                @update:model-value="state.grouping.value = $event"
+                            />
+                        </div>
 
                         <div>
                             <TableSearch
@@ -737,7 +878,7 @@ function recordCellClasses(column) {
 
                             <tbody>
                                 <tr
-                                    v-if="hasColumnSearches"
+                                    v-if="hasColumnSearches && ! isGroupsOnly"
                                     class="fi-ta-row fi-ta-row-not-reorderable"
                                 >
                                     <td
@@ -771,62 +912,172 @@ function recordCellClasses(column) {
                                     />
                                 </tr>
 
-                                <tr
-                                    v-for="(row, rowIndex) in table.getRowModel().rows"
-                                    :key="row.id"
-                                    :class="recordRowClasses(row.original, rowIndex)"
-                                >
-                                    <td
-                                        v-if="isSelectionEnabled"
-                                        class="fi-ta-cell fi-ta-selection-cell"
+                                <!--
+                                    Groups-only mode: one server-computed
+                                    summary row per group (heading = group
+                                    title, cells = each summarized non-group
+                                    column), replacing the individual records.
+                                -->
+                                <template v-if="isGroupsOnly">
+                                    <tr
+                                        v-for="grp in groupSummaryRows"
+                                        :key="grp.key ?? grp.heading"
+                                        class="fi-ta-row fi-ta-summary-row fi-ta-group-summary-row"
                                     >
-                                        <input
-                                            :aria-label="formatString(strings.bulkSelectRecord, { key: row.original.key })"
-                                            type="checkbox"
-                                            :value="row.original.key"
-                                            :checked="selection.isRecordSelected(row.original.key)"
-                                            class="fi-ta-record-checkbox fi-checkbox-input"
-                                            @change="selection.toggleRecord(row.original.key)"
-                                        >
-                                    </td>
+                                        <td class="fi-ta-cell fi-ta-summary-row-heading-cell">
+                                            {{ grp.heading }}
+                                        </td>
 
-                                    <td
-                                        v-for="cell in row.getVisibleCells()"
-                                        :key="cell.id"
-                                        :class="recordCellClasses(cell.column.columnDef.meta.schema)"
+                                        <template
+                                            v-for="column in visibleColumns"
+                                            :key="column.key"
+                                        >
+                                            <td
+                                                v-if="column.key !== groupsOnlyColumn"
+                                                class="fi-ta-cell"
+                                                :class="column.alignment ? `fi-align-${column.alignment}` : undefined"
+                                            >
+                                                <!-- eslint-disable-next-line vue/no-v-html — trusted server-rendered summarizer views -->
+                                                <span v-html="grp.cells[column.key] ?? ''" />
+                                            </td>
+                                        </template>
+                                    </tr>
+                                </template>
+
+                                <template v-else>
+                                    <template
+                                        v-for="item in renderItems"
+                                        :key="item.id"
                                     >
-                                        <component
-                                            :is="cellWrapperTag(cell.getValue(), row.original)"
-                                            class="fi-ta-col"
-                                            :class="{ 'fi-ta-col-has-column-url': Boolean(cell.getValue()?.url) }"
-                                            :type="cellWrapperTag(cell.getValue(), row.original) === 'button' ? 'button' : undefined"
-                                            :href="cellWrapperUrl(cell.getValue(), row.original) || undefined"
-                                            :target="cellWrapperUrl(cell.getValue(), row.original) && cellWrapperNewTab(cell.getValue(), row.original) ? '_blank' : undefined"
-                                            :rel="cellWrapperUrl(cell.getValue(), row.original) && cellWrapperNewTab(cell.getValue(), row.original) ? 'noopener noreferrer' : undefined"
-                                            @click="
-                                                cellWrapperTag(cell.getValue(), row.original) === 'button'
-                                                    && bridge.mountRecordAction(row.original.action, row.original.key)
-                                            "
+                                        <!--
+                                        Group header: server-evaluated group
+                                        title/label/description, inserted where
+                                        the group changes. Matches stock's
+                                        fi-ta-group-header-row markup.
+                                    -->
+                                    <tr
+                                        v-if="item.type === 'group-header'"
+                                        class="fi-ta-row fi-ta-group-header-row"
+                                    >
+                                        <td
+                                            v-if="isSelectionEnabled"
+                                            class="fi-ta-cell fi-ta-group-selection-cell"
+                                        >
+                                            <input
+                                                :aria-label="formatString(strings.bulkSelectGroup, { title: item.group.title })"
+                                                type="checkbox"
+                                                class="fi-ta-group-checkbox fi-checkbox-input"
+                                                :checked="selection.areRecordsSelected(item.keys)"
+                                                @change="selection.toggleSelectPage(item.keys)"
+                                            >
+                                        </td>
+
+                                        <td
+                                            :colspan="groupHeaderColspan"
+                                            class="fi-ta-group-header-cell"
+                                        >
+                                            <!--
+                                                Collapsible groups: the whole
+                                                header toggles collapse (stock
+                                                puts the click on the div, not
+                                                the button); collapsed groups
+                                                add `fi-collapsed` here + on each
+                                                of their record rows.
+                                            -->
+                                            <div
+                                                class="fi-ta-group-header"
+                                                :class="{
+                                                    'fi-collapsible': item.group.collapsible,
+                                                    'fi-collapsed': item.group.collapsible && groupCollapse.isCollapsed(item.group.title),
+                                                }"
+                                                @click="item.group.collapsible && groupCollapse.toggle(item.group.title)"
+                                            >
+                                                <div>
+                                                    <div class="fi-ta-group-heading">
+                                                        <template v-if="item.group.label">{{ item.group.label }}: </template>{{ item.group.title }}
+                                                    </div>
+
+                                                    <p
+                                                        v-if="item.group.description"
+                                                        class="fi-ta-group-description"
+                                                    >
+                                                        {{ item.group.description }}
+                                                    </p>
+                                                </div>
+
+                                                <button
+                                                    v-if="item.group.collapsible"
+                                                    type="button"
+                                                    class="fi-icon-btn fi-size-sm"
+                                                    :aria-label="groupAriaLabel(item.group)"
+                                                    :aria-expanded="! groupCollapse.isCollapsed(item.group.title)"
+                                                >
+                                                    <TrustedIcon :html="icons.groupCollapse" />
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+
+                                    <tr
+                                        v-else
+                                        :class="[
+                                            recordRowClasses(item.row.original, item.stripeIndex),
+                                            { 'fi-collapsed': isRecordCollapsed(item.row.original) },
+                                        ]"
+                                    >
+                                        <td
+                                            v-if="isSelectionEnabled"
+                                            class="fi-ta-cell fi-ta-selection-cell"
+                                        >
+                                            <input
+                                                :aria-label="formatString(strings.bulkSelectRecord, { key: item.row.original.key })"
+                                                type="checkbox"
+                                                :value="item.row.original.key"
+                                                :checked="selection.isRecordSelected(item.row.original.key)"
+                                                class="fi-ta-record-checkbox fi-checkbox-input"
+                                                @change="selection.toggleRecord(item.row.original.key)"
+                                            >
+                                        </td>
+
+                                        <td
+                                            v-for="cell in item.row.getVisibleCells()"
+                                            :key="cell.id"
+                                            :class="recordCellClasses(cell.column.columnDef.meta.schema)"
                                         >
                                             <component
-                                                :is="resolveCellComponent(cell.getValue()?.type, cellComponents) ?? TextCell"
-                                                v-if="cell.getValue()"
-                                                :cell="cell.getValue()"
-                                            />
-                                        </component>
-                                    </td>
+                                                :is="cellWrapperTag(cell.getValue(), item.row.original)"
+                                                class="fi-ta-col"
+                                                :class="{ 'fi-ta-col-has-column-url': Boolean(cell.getValue()?.url) }"
+                                                :type="cellWrapperTag(cell.getValue(), item.row.original) === 'button' ? 'button' : undefined"
+                                                :href="cellWrapperUrl(cell.getValue(), item.row.original) || undefined"
+                                                :target="cellWrapperUrl(cell.getValue(), item.row.original) && cellWrapperNewTab(cell.getValue(), item.row.original) ? '_blank' : undefined"
+                                                :rel="cellWrapperUrl(cell.getValue(), item.row.original) && cellWrapperNewTab(cell.getValue(), item.row.original) ? 'noopener noreferrer' : undefined"
+                                                @click="
+                                                    cellWrapperTag(cell.getValue(), item.row.original) === 'button'
+                                                        && bridge.mountRecordAction(item.row.original.action, item.row.original.key)
+                                                "
+                                            >
+                                                <component
+                                                    :is="resolveCellComponent(cell.getValue()?.type, cellComponents) ?? TextCell"
+                                                    v-if="cell.getValue()"
+                                                    :cell="cell.getValue()"
+                                                />
+                                            </component>
+                                        </td>
 
-                                    <td
-                                        v-if="hasRecordActions"
-                                        class="fi-ta-cell"
-                                    >
-                                        <RecordActions
-                                            :structure="recordActionsStructure"
-                                            :actions="row.original.actions ?? {}"
-                                            @mount="bridge.mountRecordAction($event, row.original.key)"
-                                        />
-                                    </td>
-                                </tr>
+                                        <td
+                                            v-if="hasRecordActions"
+                                            class="fi-ta-cell"
+                                        >
+                                            <RecordActions
+                                                :structure="recordActionsStructure"
+                                                :actions="item.row.original.actions ?? {}"
+                                                @mount="bridge.mountRecordAction($event, item.row.original.key)"
+                                            />
+                                        </td>
+                                    </tr>
+                                    </template>
+                                </template>
                             </tbody>
 
                             <tfoot v-if="summaryRows.length">

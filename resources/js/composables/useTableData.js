@@ -84,6 +84,10 @@ export function useTableData(endpoint, state, options = {}) {
             params.set('sort', state.sort.value)
         }
 
+        if (state.grouping?.value) {
+            params.set('grouping', state.grouping.value)
+        }
+
         if (state.search.value) {
             params.set('search', state.search.value)
         }
@@ -235,6 +239,13 @@ export function useTableData(endpoint, state, options = {}) {
         watch(state.sort, () => {
             // A cursor encodes a position under the PREVIOUS ordering — it
             // must never survive a sort change (stock resets the page too).
+            resetPageSilently()
+            fetchNow()
+        }, { flush: 'sync' }),
+
+        watch(() => state.grouping?.value, () => {
+            // Grouping reorders records (and thus repaginates); stock's
+            // `updatedTableGroupColumn()` resets the page for the same reason.
             resetPageSilently()
             fetchNow()
         }, { flush: 'sync' }),
