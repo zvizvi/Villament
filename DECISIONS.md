@@ -110,6 +110,25 @@ Owner decision: the ENTIRE filter panel is Filament's original Livewire UI, not 
 - The schema ships only `hasFilters: bool` (show the trigger or not) — filter definitions never leave the server.
 - Trade-off accepted: applying a filter is one Livewire commit (small form) + one Vue refetch. High-frequency interactions (search/sort/pagination) stay Vue/AJAX. Panel positioning uses the existing CSS anchor (no floating-ui); the trigger button is the one filter element Vue-rendered (pixel-identical) to avoid teleporting a native dropdown into the wire:ignore toolbar.
 
+## 2026-07-26 — Header/cell modifiers ship as one set
+
+`wrapHeader()` surfaced a family, not a single flag: stock builds nine classes into its `<th>` where we built four, and five into its `<td>` where we built three. Serializing them one at a time invites drift, so `serializeColumn()` now carries the whole set and `headerCellClasses()` / `recordCellClasses()` mirror stock's `@class` lists in the same order.
+
+| Flag | Class | Cell |
+|---|---|---|
+| `canHeaderWrap()` | `fi-wrapped` | header |
+| `canGrow()` w/o width | `fi-growable` | header |
+| `getGroup()` | `fi-grouped` | header |
+| `getWidth()` | `style="width: …"` | header |
+| `getVerticalAlignment()` | `fi-vertical-align-*` | record |
+| `getHiddenFrom()` / `getVisibleFrom()` | `{bp}:fi-hidden` / `{bp}:fi-visible` | **both** |
+
+The last row is the one with teeth: the responsive classes must land on the header AND the record cells, or the column disappears from one row band and every cell after it shifts. Filament ships those breakpoint classes literally (`&.sm\:fi-hidden { @apply sm:hidden }`), so they survive without Tailwind scanning our templates.
+
+Two stock quirks preserved rather than fixed: the individual-search row and the summary rows do NOT get the responsive classes in stock either, so a `hiddenFrom()` column misaligns them there; and `fi-wrapped` on `.fi-ta-summary-header-cell` is inert, because Filament's own CSS applies `whitespace-nowrap` to both the `.fi-wrapped` and `:not(.fi-wrapped)` branches (unlike `.fi-ta-header-cell`, where it really is `whitespace-normal`).
+
+`fi-grouped` is emitted even though the `ColumnGroup` HEADER ROW is still unrendered — the class is a per-column fact (it draws the separators between a group's columns), and keeping the mirror complete beats a partial one. Column groups as a feature remain unimplemented; the column manager already understands them, the table head does not.
+
 ## 2026-07-26 — Summary rows: closing the gaps against the Summaries docs
 
 Everything the docs page describes about summarizers themselves (`Sum`/`Average`/`Count`/`Range`/custom `using()`, `money()`/`numeric()`/`prefix()`/`limit()`/`icons()`, `label()`, `query()`, `hidden()`/`visible()`) already worked, because the cells are `$summarizer->toHtml()` rendered by Filament. The gaps were all in the surrounding assembly:

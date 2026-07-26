@@ -37,6 +37,21 @@ it('inlines schema and initial records so first paint needs zero extra requests'
         ->and($config['livewireId'])->toBeString()->not->toBeEmpty()
         ->and($config['schemaVersion'])->toBeString()
         ->and(array_column($config['schema']['columns'], 'key'))->toBe(['name', 'status', 'is_admin', 'avatar_url', 'email', 'logins_count', 'created_at'])
+        // Header/cell modifiers travel with the column (stock builds the same
+        // set into its `<th>`/`<td>` `@class` lists).
+        ->and(collect($config['schema']['columns'])->firstWhere('key', 'status'))
+        ->toMatchArray([
+            'wrapHeader' => true,
+            'growable' => true,
+            'grouped' => false,
+            'verticalAlignment' => 'end',
+            'hiddenFrom' => 'md',
+            'visibleFrom' => 'xl',
+            'width' => null,
+        ])
+        // An explicit width suppresses `growable`, even with `grow()` set.
+        ->and(collect($config['schema']['columns'])->firstWhere('key', 'created_at'))
+        ->toMatchArray(['width' => '12rem', 'growable' => false])
         ->and($config['schema']['defaultSort'])->toBe(['column' => 'name', 'direction' => 'asc'])
         ->and($config['schema']['pagination']['mode'])->toBe('offset')
         ->and($config['initialData']['records'])->toHaveCount(4) // 3 created + the acting user

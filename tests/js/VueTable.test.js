@@ -595,6 +595,28 @@ describe('VueTable filters (native Livewire panel) + indicators', () => {
         expect(rows[0].classes()).toContain('fi-striped')
     })
 
+    it('pairs the responsive visibility classes across the header and record cells', () => {
+        const config = makeConfig()
+        config.schema.columns = [
+            { key: 'name', label: 'Name', type: 'text', sortable: false, individuallySearchable: false, toggleable: false, hiddenByDefault: false, alignment: 'end', verticalAlignment: 'start', hiddenFrom: 'md', visibleFrom: 'xl' },
+        ]
+
+        wrapper = mount(VueTable, { props: { config }, attachTo: document.body })
+
+        // Unpaired, the column would vanish from one row band but not the
+        // other at that breakpoint, shifting every cell after it.
+        const responsive = ['md:fi-hidden', 'xl:fi-visible']
+
+        expect(wrapper.get('th.fi-ta-header-cell-name').classes()).toEqual(expect.arrayContaining(responsive))
+
+        const cell = wrapper.get('tbody td.fi-ta-cell-name')
+        expect(cell.classes()).toEqual(expect.arrayContaining(responsive))
+        // Vertical alignment is a cell-only modifier — stock never emits it on
+        // the header.
+        expect(cell.classes()).toContain('fi-vertical-align-start')
+        expect(wrapper.get('th.fi-ta-header-cell-name').classes()).not.toContain('fi-vertical-align-start')
+    })
+
     it('uses the localized empty state heading', async () => {
         const config = makeConfig({
             initialData: {

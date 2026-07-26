@@ -117,10 +117,26 @@ function kebab(key) {
 
 /**
  * @param {object} column
- * @returns {string[]} Header cell classes matching Filament's own markup.
+ * @returns {string[]} Header cell classes matching Filament's own markup —
+ *   same set, same order as the `@class` list stock builds for its `<th>`.
  */
 function headerCellClasses(column) {
     const classes = ['fi-ta-header-cell', `fi-ta-header-cell-${kebab(column.key)}`]
+
+    // `w-full`: lets one column absorb the table's slack (`->grow()`).
+    if (column.growable) {
+        classes.push('fi-growable')
+    }
+
+    // Vertical separators between the columns of a `ColumnGroup`.
+    if (column.grouped) {
+        classes.push('fi-grouped')
+    }
+
+    // `->wrapHeader()`: `whitespace-normal` instead of the default `nowrap`.
+    if (column.wrapHeader) {
+        classes.push('fi-wrapped')
+    }
 
     if (sortDirectionFor(column)) {
         classes.push('fi-ta-header-cell-sorted')
@@ -130,7 +146,28 @@ function headerCellClasses(column) {
         classes.push(`fi-align-${column.alignment}`)
     }
 
+    // Filament ships these breakpoint classes literally (`sm:fi-hidden` …), so
+    // they survive without any Tailwind scanning of this file.
+    if (column.hiddenFrom) {
+        classes.push(`${column.hiddenFrom}:fi-hidden`)
+    }
+
+    if (column.visibleFrom) {
+        classes.push(`${column.visibleFrom}:fi-visible`)
+    }
+
     return classes
+}
+
+/**
+ * @param {object} column
+ * @returns {Object<string, string>|undefined} Stock sets `->width()` as an
+ *   inline style on the header cell only. Physical `width` (not the logical
+ *   `inline-size`) because that is the property stock emits, and a table
+ *   column's width is not direction-dependent anyway.
+ */
+function headerCellStyle(column) {
+    return column.width ? { width: column.width } : undefined
 }
 
 /**
@@ -165,6 +202,7 @@ function onSortClick(column) {
                 v-for="column in columns"
                 :key="column.key"
                 :class="headerCellClasses(column)"
+                :style="headerCellStyle(column)"
                 :aria-sort="
                     sortDirectionFor(column)
                         ? (sortDirectionFor(column) === 'asc' ? 'ascending' : 'descending')

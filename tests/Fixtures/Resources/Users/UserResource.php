@@ -15,6 +15,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Resources\Pages\PageRegistration;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
+use Filament\Support\Enums\VerticalAlignment;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\Summarizers\Average;
@@ -102,7 +103,14 @@ class UserResource extends Resource
                         return mb_strtoupper($state);
                     })
                     ->url(fn (User $record): string => static::getUrl('edit', ['record' => $record])),
+                // Carries every header/cell modifier at once, so the serialized
+                // class list can be asserted against stock's own `@class` set.
                 TextColumn::make('status')
+                    ->wrapHeader()
+                    ->grow()
+                    ->verticalAlignment(VerticalAlignment::End)
+                    ->hiddenFrom('md')
+                    ->visibleFrom('xl')
                     ->badge()
                     ->color(fn (string $state): string => match ($state) {
                         'active' => 'success',
@@ -123,6 +131,10 @@ class UserResource extends Resource
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
+                    // An explicit width suppresses `fi-growable`, even with
+                    // `grow()` set — stock's `blank($width) && canGrow()`.
+                    ->grow()
+                    ->width('12rem')
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->defaultSort('name')

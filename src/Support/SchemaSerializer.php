@@ -6,6 +6,7 @@ namespace Zvizvi\Villament\Support;
 
 use Filament\Support\Enums\Alignment;
 use Filament\Support\Enums\IconSize;
+use Filament\Support\Enums\VerticalAlignment;
 use Filament\Support\Icons\Heroicon;
 use Filament\Support\View\Components\ButtonComponent;
 use Filament\Support\View\SupportIconAlias;
@@ -199,6 +200,8 @@ final class SchemaSerializer
     private function serializeColumn(Column $column): array
     {
         $alignment = $column->getAlignment();
+        $verticalAlignment = $column->getVerticalAlignment();
+        $width = $column->getWidth();
 
         return [
             'key' => $column->getName(),
@@ -209,6 +212,20 @@ final class SchemaSerializer
             'toggleable' => $column->isToggleable(),
             'hiddenByDefault' => $column->isToggleable() && $column->isToggledHiddenByDefault(),
             'alignment' => $alignment instanceof Alignment ? $alignment->value : $alignment,
+            // Vertical alignment is a CELL modifier only — stock never puts it
+            // on the header.
+            'verticalAlignment' => $verticalAlignment instanceof VerticalAlignment ? $verticalAlignment->value : $verticalAlignment,
+            // The remaining flags drive the HEADER cell, mirroring the class
+            // list stock builds for its `<th>` (`fi-growable` is suppressed by
+            // an explicit width, and `canGrow()` defaults to false there).
+            'width' => $width,
+            'growable' => blank($width) && $column->canGrow(default: false),
+            'grouped' => $column->getGroup() !== null,
+            'wrapHeader' => $column->canHeaderWrap(),
+            // Responsive visibility must land on the header AND the record
+            // cells, or the two drift out of alignment at that breakpoint.
+            'hiddenFrom' => $column->getHiddenFrom(),
+            'visibleFrom' => $column->getVisibleFrom(),
         ];
     }
 

@@ -780,6 +780,20 @@ function recordCellClasses(column) {
         classes.push(`fi-align-${column.alignment}`)
     }
 
+    if (column.verticalAlignment) {
+        classes.push(`fi-vertical-align-${column.verticalAlignment}`)
+    }
+
+    // The header cell carries the same two classes — they must stay paired, or
+    // the column disappears from one row band but not the other.
+    if (column.hiddenFrom) {
+        classes.push(`${column.hiddenFrom}:fi-hidden`)
+    }
+
+    if (column.visibleFrom) {
+        classes.push(`${column.visibleFrom}:fi-visible`)
+    }
+
     return classes
 }
 </script>

@@ -87,3 +87,52 @@ describe('TableHeader sort icons (schema.icons contract)', () => {
         expect(wrapper.get('.fi-ta-header-cell-name').findAll('svg')).toHaveLength(0)
     })
 })
+
+describe('TableHeader cell modifiers (stock @class parity)', () => {
+    /**
+     * @param {object} column
+     * @returns {import('@vue/test-utils').VueWrapper}
+     */
+    function mountColumn(column) {
+        wrapper = mount(TableHeader, {
+            props: { columns: [{ key: 'status', label: 'Status', sortable: false, ...column }], sort: null, icons },
+        })
+
+        return wrapper
+    }
+
+    it('emits the full modifier class set, in stock order', () => {
+        const cell = mountColumn({
+            growable: true,
+            grouped: true,
+            wrapHeader: true,
+            alignment: 'end',
+            hiddenFrom: 'md',
+            visibleFrom: 'xl',
+        }).get('th')
+
+        expect(cell.classes()).toEqual([
+            'fi-ta-header-cell',
+            'fi-ta-header-cell-status',
+            'fi-growable',
+            'fi-grouped',
+            'fi-wrapped',
+            'fi-align-end',
+            'md:fi-hidden',
+            'xl:fi-visible',
+        ])
+    })
+
+    it('emits none of them for a plain column', () => {
+        const cell = mountColumn({}).get('th')
+
+        expect(cell.classes()).toEqual(['fi-ta-header-cell', 'fi-ta-header-cell-status'])
+        expect(cell.attributes('style')).toBeUndefined()
+    })
+
+    it('sets an explicit width as an inline style on the header cell', () => {
+        const cell = mountColumn({ width: '12rem' }).get('th')
+
+        expect(cell.attributes('style')).toBe('width: 12rem;')
+    })
+})
