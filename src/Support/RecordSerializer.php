@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace Zvizvi\Villament\Support;
 
+use Filament\Actions\Action;
 use Filament\Resources\Resource;
+use Filament\Support\Enums\Alignment;
 use Filament\Support\Enums\IconSize;
 use Filament\Support\Enums\Size;
+use Filament\Support\Enums\VerticalAlignment;
 use Filament\Support\Facades\FilamentView;
 use Filament\Support\View\Components\LinkComponent;
 use Filament\Tables\Columns\Column;
@@ -62,27 +65,48 @@ final class RecordSerializer
         // the client inserts a header row wherever the group key changes.
         $group = $table->getGrouping();
 
+        // Materialized because `$rowLoop` needs the page count up front. NOT
+        // `collect($records)`: a paginator is `Arrayable`, so that would hand
+        // back its metadata array instead of its items.
+        $records = $records instanceof \Traversable
+            ? iterator_to_array($records, preserve_keys: false)
+            : array_values($records);
+
+        $recordCount = count($records);
+
         $payload = [];
 
-        foreach ($records as $record) {
+        foreach ($records as $index => $record) {
+            $recordKey = $livewire->getTableRecordKey($record);
+            $recordUrl = $table->getRecordUrl($record);
+            $recordUrlNewTab = filled($recordUrl) && $table->shouldOpenRecordUrlInNewTab($record);
+            $recordAction = $table->getRecordAction($record);
+            $rowLoop = $this->rowLoop($index, $recordCount);
+
             $cells = [];
 
             foreach ($columns as $column) {
+                // Same three seeds, in the same order, as the stock blade —
+                // every one of them is reachable from a column closure.
                 $column->record($record);
-                $cells[$column->getName()] = $this->serializeCell($column);
+                $column->rowLoop($rowLoop);
+                $column->recordKey($recordKey);
+
+                $cells[$column->getName()] = [
+                    ...$this->serializeCell($column),
+                    ...$this->cellInteraction($table, $column, $recordUrl, $recordUrlNewTab, $recordAction),
+                    ...$this->cellAttributes($column),
+                ];
             }
 
-            $recordUrl = $table->getRecordUrl($record);
-            $recordUrlNewTab = filled($recordUrl) && $table->shouldOpenRecordUrlInNewTab($record);
-
             $payload[] = [
-                'key' => $livewire->getTableRecordKey($record),
+                'key' => $recordKey,
                 'cells' => $cells,
                 'group' => $group === null ? null : $this->serializeGroup($group, $record),
                 'url' => $recordUrl,
                 'urlNewTab' => $recordUrlNewTab,
                 'urlWireNavigate' => filled($recordUrl) && ! $recordUrlNewTab && FilamentView::hasSpaMode($recordUrl),
-                'action' => $table->getRecordAction($record),
+                'action' => $recordAction,
                 'actions' => $this->serializeRecordActions($table, $record),
                 'can' => $record instanceof Model ? [
                     'view' => $resourceClass::canView($record),
@@ -93,6 +117,164 @@ final class RecordSerializer
         }
 
         return $payload;
+    }
+
+    /**
+     * A stand-in for Blade's `$loop` over the page's records — the object
+     * stock hands each column through `rowLoop()`, and the one a closure that
+     * injects `$rowLoop` receives. Field-for-field with Laravel's own
+     * `ManagesLoops`, including the 1-based `iteration` and the `odd` flag
+     * that is TRUE on the first row. `depth`/`parent` describe the records
+     * loop as the outermost one, which is what it is here.
+     */
+    private function rowLoop(int $index, int $count): \stdClass
+    {
+        return (object) [
+            'iteration' => $index + 1,
+            'index' => $index,
+            'remaining' => $count - $index - 1,
+            'count' => $count,
+            'first' => $index === 0,
+            'last' => $index === ($count - 1),
+            'odd' => ($index % 2) === 0,
+            'even' => ($index % 2) === 1,
+            'depth' => 1,
+            'parent' => null,
+        ];
+    }
+
+    /**
+     * The cell's click behavior, resolved exactly as the stock blade resolves
+     * it: which element wraps the content (`a` / `button` / `div`), where it
+     * points, and what it invokes. Keeping the `match` server-side is the
+     * point — the client cannot see `getAction()`, and a second copy of this
+     * precedence chain in JS would drift.
+     *
+     * A column with STATE-BASED urls never becomes the wrapper link: stock
+     * renders each state item with its own anchor inside the content instead.
+     *
+     * @return array<string, mixed>
+     */
+    private function cellInteraction(
+        Table $table,
+        Column $column,
+        ?string $recordUrl,
+        bool $recordUrlNewTab,
+        ?string $recordAction,
+    ): array {
+        $columnAction = $column->getAction();
+        $columnUrl = $column->getUrl();
+
+        // Stock's gate on BOTH interactive wrappers.
+        $isClickable = (! $column->hasStateBasedUrls()) && (! $column->isClickDisabled());
+
+        $wrapper = 'div';
+
+        if ($isClickable && (filled($columnUrl) || (filled($recordUrl) && $columnAction === null))) {
+            $wrapper = 'a';
+        } elseif ($isClickable && (($columnAction !== null) || filled($recordAction))) {
+            $wrapper = 'button';
+        }
+
+        $url = $wrapper === 'a' ? ($columnUrl ?: $recordUrl) : null;
+        $newTab = $wrapper === 'a'
+            ? (filled($columnUrl) ? $column->shouldOpenUrlInNewTab() : $recordUrlNewTab)
+            : false;
+
+        return [
+            'wrapper' => $wrapper,
+            'url' => $url,
+            'newTab' => $newTab,
+            'wireNavigate' => filled($url) && ! $newTab && FilamentView::hasSpaMode($url),
+            // Stock only marks the anchor when the COLUMN supplied the url.
+            'hasColumnUrl' => $wrapper === 'a' && filled($columnUrl),
+            'click' => $wrapper === 'button'
+                ? $this->cellClick($table, $column, $columnAction, $recordAction)
+                : null,
+        ];
+    }
+
+    /**
+     * What a button-wrapped cell invokes. Mirrors the stock blade's three
+     * branches: a real `Action` mounts, a bare closure goes through
+     * `callTableColumnAction()`, and a record action either mounts (when the
+     * table defines it) or calls a method of the same name on the component.
+     *
+     * @return array{type: string, name: string}|null
+     */
+    private function cellClick(Table $table, Column $column, mixed $columnAction, ?string $recordAction): ?array
+    {
+        if ($columnAction instanceof Action) {
+            return ['type' => 'mountAction', 'name' => $columnAction->getName()];
+        }
+
+        if ($columnAction) {
+            return ['type' => 'columnAction', 'name' => $column->getName()];
+        }
+
+        if (blank($recordAction)) {
+            return null;
+        }
+
+        return $table->getAction($recordAction)
+            ? ['type' => 'mountAction', 'name' => $recordAction]
+            : ['type' => 'method', 'name' => $recordAction];
+    }
+
+    /**
+     * Developer-authored `extraAttributes()` / `extraCellAttributes()`, plus
+     * the cell class list when any modifier is a per-record closure — the one
+     * case where the schema's single answer per column is not the answer for
+     * this row. Keys are omitted when empty so the common row stays lean.
+     *
+     * @return array<string, mixed>
+     */
+    private function cellAttributes(Column $column): array
+    {
+        $payload = [];
+
+        if (($extraAttributes = $column->getExtraAttributes()) !== []) {
+            $payload['extraAttributes'] = $extraAttributes;
+        }
+
+        if (($extraCellAttributes = $column->getExtraCellAttributes()) !== []) {
+            $payload['extraCellAttributes'] = $extraCellAttributes;
+        }
+
+        if (
+            $column->hasDynamicAlignment()
+            || $column->hasDynamicVerticalAlignment()
+            || $column->hasDynamicHiddenFrom()
+            || $column->hasDynamicVisibleFrom()
+        ) {
+            $payload['cellClasses'] = $this->cellClasses($column);
+        }
+
+        return $payload;
+    }
+
+    /**
+     * The `<td>` class list for THIS record, mirroring
+     * `Column::getCellAttributeHtml()` (extra attributes excluded — those
+     * travel separately and merge on the client).
+     *
+     * @return list<string>
+     */
+    private function cellClasses(Column $column): array
+    {
+        $alignment = $column->getAlignment();
+        $verticalAlignment = $column->getVerticalAlignment();
+        $hiddenFrom = $column->getHiddenFrom();
+        $visibleFrom = $column->getVisibleFrom();
+
+        return array_values(array_filter([
+            'fi-ta-cell',
+            'fi-ta-cell-'.str($column->getName())->camel()->kebab()->toString(),
+            $alignment instanceof Alignment ? "fi-align-{$alignment->value}" : (is_string($alignment) ? $alignment : ''),
+            $verticalAlignment instanceof VerticalAlignment ? "fi-vertical-align-{$verticalAlignment->value}" : (is_string($verticalAlignment) ? $verticalAlignment : ''),
+            filled($hiddenFrom) ? "{$hiddenFrom}:fi-hidden" : '',
+            filled($visibleFrom) ? "{$visibleFrom}:fi-visible" : '',
+        ], fn (string $class): bool => $class !== ''));
     }
 
     /**

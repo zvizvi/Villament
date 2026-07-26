@@ -97,6 +97,38 @@ final class HeadlessTableHarness
         return $this;
     }
 
+    /**
+     * Writes the state Filament would have persisted itself. Stock does this
+     * inside `updatedTableSort()` / `updatedTableSearch()` /
+     * `updatedTableColumnSearches()`, which a stateless endpoint never fires;
+     * without it `persistSortInSession()` and friends would keep READING (the
+     * page inlines whatever `mountInteractsWithTable()` restored) while never
+     * WRITING — the preference would freeze at its last Livewire-set value.
+     *
+     * Only the session writes are replicated, never those hooks' other work
+     * (`resetPage()`, deselecting records): the request already carries an
+     * explicit page and selection.
+     */
+    public function persistState(): self
+    {
+        $component = $this->component;
+        $table = $this->getTable();
+
+        if ($table->persistsSortInSession()) {
+            session()->put($component->getTableSortSessionKey(), $component->tableSort);
+        }
+
+        if ($table->persistsSearchInSession()) {
+            session()->put($component->getTableSearchSessionKey(), $component->tableSearch);
+        }
+
+        if ($table->persistsColumnSearchesInSession()) {
+            session()->put($component->getTableColumnSearchesSessionKey(), $component->tableColumnSearches);
+        }
+
+        return $this;
+    }
+
     public function getTable(): Table
     {
         return $this->component->getTable();

@@ -49,7 +49,7 @@ it('routes cells through custom column serializers registered in the config', fu
 
     $record = getJson(ENDPOINT.'?columnSearches[name]=Extension+Target')->assertOk()->json('records.0');
 
-    expect($record['cells']['email'])->toBe(['type' => 'email-card', 'email' => $user->email]);
+    expect($record['cells']['email'])->toMatchArray(['type' => 'email-card', 'email' => $user->email]);
 
     // The schema column type follows the same chain.
     $config = VillamentTableConfig();

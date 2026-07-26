@@ -54,20 +54,8 @@
  * the filter sidebar short of the table's bottom edge.
  */
 .villament-table [data-villament-filters-outlet],
-.villament-table [data-villament-filters-slot] {
+.villament-table [data-villament-filters-slot],
+.villament-table [data-villament-columns-outlet],
+.villament-table [data-villament-columns-slot] {
     display: contents;
-}
-
-/*
- * FLIP move animation for column-manager drag reordering. Stock uses
- * SortableJS with `data-sortable-animation-duration="300"` (inline styles at
- * runtime) — no Filament class exists; Vue's TransitionGroup applies this
- * class while items travel to their new slot.
- */
-.villament-col-manager-move {
-    transition: transform 300ms ease;
-
-    /* An item mid-flight must not intercept dragover — the source would
-       oscillate against it while it travels (visible blinking). */
-    pointer-events: none;
 }

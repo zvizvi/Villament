@@ -41,4 +41,8 @@
     @if ($withNativeFilters)
         @include('villament::partials.filters')
     @endif
+
+    @if ($withNativeColumnManager)
+        @include('villament::partials.column-manager')
+    @endif
 </div>

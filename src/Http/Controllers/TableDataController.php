@@ -47,7 +47,7 @@ final class TableDataController
 
         $table = $this->harness->getTable();
         $state = $this->validator->validate($request, $table);
-        $this->harness->applyState($state);
+        $this->harness->applyState($state)->persistState();
 
         $cacheTtl = (int) config('villament.cache_ttl', 0);
 

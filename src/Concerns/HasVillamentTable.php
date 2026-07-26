@@ -32,7 +32,11 @@ trait HasVillamentTable
             ->components([
                 $this->getTabsContentComponent(),
                 RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_BEFORE),
-                VillamentIsland::make($config, withNativeFilters: (bool) ($config['schema']['hasFilters'] ?? false)),
+                VillamentIsland::make(
+                    $config,
+                    withNativeFilters: (bool) ($config['schema']['hasFilters'] ?? false),
+                    withNativeColumnManager: (bool) ($config['schema']['hasColumnManager'] ?? false),
+                ),
                 RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_AFTER),
             ]);
     }

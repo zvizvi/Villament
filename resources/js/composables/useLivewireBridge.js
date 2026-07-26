@@ -45,6 +45,8 @@
  *
  * @typedef {object} LivewireBridge
  * @property {(name: string, recordKey: string) => void} mountRecordAction
+ * @property {(columnName: string, recordKey: string) => void} callColumnAction
+ * @property {(method: string, recordKey: string) => void} callRecordMethod
  * @property {(name: string, selection: { isTracking: boolean, selected: Iterable<string>, deselected: Iterable<string> }) => void} mountBulkAction
  * @property {(columns: object[]) => void} applyColumnManager
  * @property {() => void} resetColumnManager
@@ -62,6 +64,7 @@ const REFRESH_COMMIT_METHODS = [
     'callMountedAction',
     'unmountAction',
     'mountTableAction',
+    'callTableColumnAction',
     'applyTableColumnManager',
     'resetTableColumnManager',
 ]
@@ -182,6 +185,52 @@ export function useLivewireBridge(options) {
 
         try {
             wire.mountAction(name, {}, { table: true, recordKey })
+        } catch {
+            // Never break the island on a mid-teardown component.
+        }
+    }
+
+    /**
+     * Invokes a column `action()` that is a bare closure rather than an
+     * `Action` object — stock's `callTableColumnAction()`. No modal, no
+     * mounting: the closure runs and the component re-renders.
+     *
+     * @param {string} columnName
+     * @param {string} recordKey
+     * @returns {void}
+     */
+    function callColumnAction(columnName, recordKey) {
+        const wire = wireFor(livewireId)
+
+        if (! wire) {
+            return
+        }
+
+        try {
+            wire.callTableColumnAction(columnName, recordKey)
+        } catch {
+            // Never break the island on a mid-teardown component.
+        }
+    }
+
+    /**
+     * Calls a method of the page component by name with the record key — the
+     * shape `recordAction('methodName')` takes when the name is NOT a table
+     * action (stock: `{$recordAction}('{$recordKey}')`).
+     *
+     * @param {string} method
+     * @param {string} recordKey
+     * @returns {void}
+     */
+    function callRecordMethod(method, recordKey) {
+        const wire = wireFor(livewireId)
+
+        if (! wire || typeof wire[method] !== 'function') {
+            return
+        }
+
+        try {
+            wire[method](recordKey)
         } catch {
             // Never break the island on a mid-teardown component.
         }
@@ -381,6 +430,8 @@ export function useLivewireBridge(options) {
         removeFilter,
         removeAllFilters,
         mountRecordAction,
+        callColumnAction,
+        callRecordMethod,
         mountBulkAction,
         mountTableAction,
         applyColumnManager,

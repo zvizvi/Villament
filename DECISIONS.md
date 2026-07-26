@@ -143,6 +143,18 @@ Concretely, `.fi-ta-ctn` is `display: flex`, and `.fi-ta-filters-{before,after}-
 
 Fix: `display: contents` on both wrappers, in `resources/js/styles/table.css`. Applied to every slot, not just before/after — it makes the toolbar trigger a direct child of the toolbar's end group (picking up its `gap-x-4` exactly like stock) and the above/below containers direct children of their regions. The wrappers keep their identity for `querySelector`-based adoption; they simply stop generating boxes.
 
+## 2026-07-26 — The column manager goes native too
+
+Owner call, and the same reasoning that made the filters native: the manager is a one-shot control with no per-interaction performance budget, so a Vue reimplementation bought nothing and cost every option stock supports. The Vue `TableColumnManager.vue` (≈600 lines, incl. a hand-rolled drag-reorder with a live row preview) is DELETED; `resources/views/partials/column-manager.blade.php` renders Filament's own trigger + dropdown/modal + panel and teleports it into a `[data-villament-columns-slot='toolbar']` slot, exactly like the filters.
+
+What that recovers in one move: `columnManagerLayout(Modal)` (with the trigger action's full modal config — heading, width, slide-over, footer actions, content hooks), `columnManagerResetActionPosition(Footer)`, `columnManagerColumns()`, a customized `columnManagerTriggerAction()`, and `x-sortable` reordering with Filament's own animation duration. All of those were gaps; none of them is our code now.
+
+Two things made it safe. Filament registers `filamentTableColumnManager` in the plain `tables` JS asset (not an `x-load`-gated `AlpineComponent`), so it is present on a page that never renders a stock table. And the manager writes through Livewire (`applyTableColumnManager` / `resetTableColumnManager`) — commits the island's bridge ALREADY watched, so it re-reads `tableColumns` and refetches with no new plumbing.
+
+The schema keeps exactly one key, `hasColumnManager` (from `Table::hasColumnManager()`), telling the island whether to render the slot; the manager's strings, icon, apply-button classes and `deferred`/`reorderable` flags are gone from the payload. `state.columns` stays — it drives the island's own column order and visibility, which is a different job.
+
+Slot adoption generalized from `[data-villament-filters-slot]` to a loop over both families, and the `display: contents` rule now covers the columns outlet/slot for the same reason it covers the filters ones.
+
 ## 2026-07-17 — Data-channel evaluation: `#[Json]` vs the GET endpoint (Stage 1 of the Livewire-4 pivot exploration)
 
 Implemented `#[Json] villamentData(string $query)` on `HasVillamentTable` — the island's query string parsed with `parse_str()` into the SAME `RequestStateValidator`, state applied to the LIVE page component (no harness), response assembled by the shared `Support\TablePayload` (also used by the controller — the channels cannot drift, parity-tested). The JS side gained a `transport` option in `useTableData` (with a structural-payload guard + fetch fallback) and `bridge.callTableData()`.
@@ -222,6 +234,28 @@ The column-manager state (`tableColumns`, already inlined for toggling and reord
 Keyed by `e($group->getLabel())`, because that is what BOTH `Table::getColumnGroups()` and `mapTableColumnGroupToArray()` use as their key — matching on it is what lets the two payloads meet. The serialized `label` is the RAW one: the manager's copy is pre-escaped for use as a key, and Vue escapes on render, so reusing it would print `&amp;`. The fixture group is deliberately named `Profile & Access` to pin that. (An `Htmlable` label is flattened to a string and rendered as text, matching what the column labels already do.)
 
 `visibleColumns` was refactored into `columnLayout`, which yields the same walk as SEGMENTS (a bare column, or a group with its visible members) with `visibleColumns` flattened out of it. Deriving both rows from one walk is the point: computed separately, a `colspan` can drift out of step with the cells it covers, and every column after the group shifts. Stock's `hasColumnGroups()` rule falls out of the same structure — a group with no visible columns contributes no cell, and with no group left there is no row.
+
+## 2026-07-26 — Closing the Columns-overview gaps: the cell is more than its value
+
+An audit of the Columns "Overview" docs against the serializers turned up a class of gap worse than "unsupported": options that were silently dropped, and one that was silently WRONG.
+
+**`$rowLoop` was never seeded.** Stock does `$column->record(...)->rowLoop($loop->parent)->recordKey(...)` before every cell; we did only the first. Any closure injecting `$rowLoop` got `null` — a fatal, not a degradation. `RecordSerializer` now materializes the page (a paginator is `Arrayable`, so `collect()` would hand back its metadata, not its items) and synthesizes the loop object field-for-field with Laravel's `ManagesLoops`, 1-based `iteration` and all.
+
+**The cell's click model moved server-side.** `cellWrapperTag()` in Vue knew about two of the five inputs stock uses, so `action()` on a column did nothing, `disabledClick()` was ignored (a cell stock renders as a plain `div` became a link), `url()` on a non-text column vanished, and a state-based `url()` linked the WHOLE cell to the first item's target. The payload now names the wrapper outright (`wrapper`, `url`, `newTab`, `hasColumnUrl`, `click`), because only the server can see `getAction()`; a second copy of that precedence chain in JS is exactly the kind of thing that drifts. `click` carries the three stock branches — mount an `Action`, `callTableColumnAction()` a closure, or call a component method of that name. A column with state-based urls falls back to the column's own `toHtml()`, whose per-item anchors the structured payload cannot express.
+
+**Tooltips, placeholders, descriptions.** `tooltip()` / `emptyTooltip()` render as `x-tooltip` in stock — on the content span for text, the badge span for badges, the `<svg>` for icons, the `<img>` for images. Those targets are reproduced, not approximated. `headerTooltip()` wraps the header label in `.fi-ta-header-cell-tooltip` in BOTH the sortable and non-sortable branches. `placeholder()` now works on icon and image cells (only text honored it), gated on stock's own condition — blank STATE, not "no icon resolved". Fixing the image gate also fixed a latent 500: `ImageColumn::getImageUrl(null)` hands the null to the disk adapter and fatals, so any record with a null image column crashed the endpoint.
+
+`description(position: 'above')` ships alongside the below one, and with either present `TextCell` drops stock's single-item fast path — the wrapper keeps only the text classes and the item moves into its own `<p>`, flanked by the descriptions. That structure IS stock's; we had been merging the two.
+
+**`extraAttributes()` / `extraCellAttributes()` / `extraHeaderAttributes()`** are no longer deferred. They travel as attribute MAPS and are `v-bind`-ed onto the element stock puts them on (content root / `<td>` / `<th>`), never as HTML — Vue escapes values, and class keys merge with ours. The trust level is stock's: these come from the table definition, not from user input. Known limitation: an Alpine directive passed this way (`x-on:click`, `x-data`) is inert inside the island, which Alpine does not walk.
+
+Per-record `alignment(fn)` / `verticalAlignment(fn)` / `hiddenFrom(fn)` / `visibleFrom(fn)` have no single answer at schema time, so when `hasDynamic*()` says so the row carries its own `cellClasses`. Keys are omitted entirely when empty, so the common row stays lean.
+
+**Table-level search options.** `searchDebounce()`, `searchOnBlur()` and `searchPlaceholder()` were being ignored in favor of our own config and the default translation. The table now wins: `config('villament.debounce_ms')` defaults to `null` = "follow the table", which also moves the effective default from our 300ms to Filament's 500ms. `searchOnBlur` skips the debounce entirely, as `wire:model.blur` does. (The Vue prop is `searchOnBlur`, not `onBlur` — an `on*` prop name collides with Vue's listener convention.)
+
+**Session persistence was half-working**, in the way that looks fine until you notice: the READ worked (the page inlines what `mountInteractsWithTable()` restored), but nothing ever wrote, because the endpoint sets `tableSort` directly and never fires `updatedTableSort()`. The preference froze at its last Livewire-set value. `HeadlessTableHarness::persistState()` now replicates the session writes — and ONLY those, not the hooks' `resetPage()` / deselect work, which would fight the explicit request state.
+
+Left alone deliberately: `defaultSortOptionLabel()` renders only inside `stackedOnMobile()` / the content layout, neither of which the island implements.
 
 ## Verified Filament v5 internal API map (§4.1, §4.8)
 

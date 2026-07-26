@@ -310,11 +310,15 @@ describe('VueTable clickable + striped rows', () => {
     it('a column url wins over the record url', () => {
         const config = makeConfig()
         config.initialData.records[0].url = EDIT_URL
+        // The server resolves the wrapper (it alone sees `getAction()`,
+        // `disabledClick()` and state-based urls) and marks a column url.
         config.initialData.records[0].cells.name = {
             type: 'text',
             formatted: 'Jane',
+            wrapper: 'a',
             url: 'https://host.test/other',
             newTab: false,
+            hasColumnUrl: true,
         }
 
         wrapper = mount(VueTable, { props: { config }, attachTo: document.body })

@@ -19,12 +19,13 @@ final class VillamentIsland extends Component
     /**
      * @param  array<string, mixed>  $config
      */
-    public static function make(array $config, bool $withNativeFilters = false): static
+    public static function make(array $config, bool $withNativeFilters = false, bool $withNativeColumnManager = false): static
     {
         $static = app(self::class);
         $static->viewData([
             'config' => $config,
             'withNativeFilters' => $withNativeFilters,
+            'withNativeColumnManager' => $withNativeColumnManager,
         ]);
         $static->configure();
 

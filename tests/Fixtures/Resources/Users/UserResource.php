@@ -51,6 +51,16 @@ class UserResource extends Resource
 
     public static bool $hasAllTableSummary = true;
 
+    /** Test seams: the table's own search options (`searchDebounce()`, …). */
+    public static ?string $searchDebounce = null;
+
+    public static bool $searchOnBlur = false;
+
+    public static ?string $searchPlaceholder = null;
+
+    /** Test seam: the three `persist*InSession()` toggles, flipped together. */
+    public static bool $persistsInSession = false;
+
     /**
      * Test seam: the table's `defaultGroup()`. Set to an id that is also in
      * `groups()` for a SELECTABLE default (stock's mount hook seeds
@@ -104,7 +114,15 @@ class UserResource extends Resource
 
                         return mb_strtoupper($state);
                     })
-                    ->url(fn (User $record): string => static::getUrl('edit', ['record' => $record])),
+                    ->url(fn (User $record): string => static::getUrl('edit', ['record' => $record]))
+                    // Cell + header tooltips, and the row-number closure that
+                    // proves `$rowLoop` reaches column closures at all.
+                    ->tooltip(fn (User $record, \stdClass $rowLoop): string => "Row {$rowLoop->iteration} of {$rowLoop->count}: {$record->name}")
+                    ->headerTooltip('The user\'s full name')
+                    ->description('Primary contact', position: 'above')
+                    ->extraAttributes(['data-name-cell' => 'yes'])
+                    ->extraCellAttributes(['data-td' => 'name'])
+                    ->extraHeaderAttributes(['data-th' => 'name']),
                 // Carries every header/cell modifier at once, so the serialized
                 // class list can be asserted against stock's own `@class` set.
                 TextColumn::make('status')
@@ -126,9 +144,13 @@ class UserResource extends Resource
                 // rendering the raw label exactly once.
                 ColumnGroup::make('Profile & Access', [
                     IconColumn::make('is_admin')
-                        ->boolean(),
+                        ->boolean()
+                        ->placeholder('No role')
+                        ->emptyTooltip('This user has no role set'),
                     ImageColumn::make('avatar_url')
-                        ->circular(),
+                        ->circular()
+                        ->placeholder('No avatar')
+                        ->tooltip('Profile picture'),
                 ])
                     ->wrapHeader()
                     ->alignment(Alignment::Center),
@@ -139,6 +161,12 @@ class UserResource extends Resource
                         Sum::make(),
                         Average::make(),
                     ]),
+                // A cell whose click is disabled: stock renders a plain div
+                // even though the record has a url.
+                TextColumn::make('team.name')
+                    ->label('Team')
+                    ->disabledClick()
+                    ->placeholder('No team'),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
@@ -149,6 +177,13 @@ class UserResource extends Resource
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->defaultSort('name')
+            // Search + persistence options, driven by the test seams above.
+            ->searchDebounce(static::$searchDebounce ?? '500ms')
+            ->searchOnBlur(static::$searchOnBlur)
+            ->searchPlaceholder(static::$searchPlaceholder)
+            ->persistSortInSession(static::$persistsInSession)
+            ->persistSearchInSession(static::$persistsInSession)
+            ->persistColumnSearchesInSession(static::$persistsInSession)
             ->groups([
                 Group::make('status')
                     ->collapsible()

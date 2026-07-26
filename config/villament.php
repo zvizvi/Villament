@@ -5,9 +5,11 @@ declare(strict_types=1);
 return [
 
     /*
-     * Debounce (milliseconds) for the island's search inputs.
+     * Debounce (milliseconds) for the island's search inputs. `null` follows
+     * each table's own `searchDebounce()` (Filament's default: 500ms); set a
+     * number here to override every table at once.
      */
-    'debounce_ms' => 300,
+    'debounce_ms' => null,
 
     /*
      * `Cache-Control: private, max-age=...` for data endpoint responses.

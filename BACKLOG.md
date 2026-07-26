@@ -16,7 +16,8 @@ Two distinct mechanisms, both keyed to `wire:target`:
   next to `generate_loading_indicator_html(['wire:loading.delay.{delay}' => '', 'wire:target' => …])`.
   Verified spots: the sort button (`vendor/filament/tables/resources/views/index.blade.php:1811-1828`,
   targeting `sortTable('{column}')`), the filters trigger (`components/filters.blade.php:27`),
-  the column-manager trigger (`components/column-manager/index.blade.php:37`), and every
+  the column-manager trigger (`components/column-manager/index.blade.php:37` — both
+  now rendered natively, so they already have this), and every
   `<x-filament::button>` / `icon-button` / `link` / `dropdown item` with a loading
   indicator (`support/resources/views/components/button/index.blade.php:152-168`).
 - **Disable-while-loading.** `wire:loading.attr="disabled"` on the page / group / record
@@ -46,10 +47,11 @@ and nothing else is disabled mid-flight. Our buttons are not Livewire-driven, so
    `loadingSource = { type: 'sort', column: 'name' }`), which is the island's
    equivalent of `wire:target`.
 3. Honor the configured delay so a sub-`delay` response paints no spinner.
-4. Apply it to: sort buttons, the filters trigger, the column-manager trigger,
-   pagination controls and per-page select, group settings, and per-group collapse
-   toggles. Disable-while-loading goes on: page / group / record checkboxes, the
-   indicator chips' remove + remove-all buttons, and the clickable-record element.
+4. Apply it to: sort buttons, pagination controls and per-page select, group
+   settings, and per-group collapse toggles. Disable-while-loading goes on: page /
+   group / record checkboxes, the indicator chips' remove + remove-all buttons, and
+   the clickable-record element. (The filters and column-manager triggers are
+   Filament-native now — their indicators come with the stock markup.)
 5. Row and bulk actions go through Livewire's `mountAction()`, so those buttons keep
    real `wire:target` semantics available — decide per button whether to reuse
    `wire:loading` there or to route everything through the island's own state, and

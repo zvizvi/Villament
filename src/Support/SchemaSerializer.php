@@ -8,15 +8,14 @@ use Filament\Support\Enums\Alignment;
 use Filament\Support\Enums\IconSize;
 use Filament\Support\Enums\VerticalAlignment;
 use Filament\Support\Icons\Heroicon;
-use Filament\Support\View\Components\ButtonComponent;
 use Filament\Support\View\SupportIconAlias;
 use Filament\Tables\Columns\Column;
 use Filament\Tables\Enums\PaginationMode;
 use Filament\Tables\Table;
 use Filament\Tables\View\TablesIconAlias;
+use Illuminate\Contracts\Support\Htmlable;
 
 use function Filament\Support\generate_icon_html;
-use function Filament\Support\get_component_color_classes;
 
 /**
  * Serializes a Filament Table definition into the JSON schema payload the Vue
@@ -32,10 +31,13 @@ final class SchemaSerializer
 
     /**
      * @param  list<ColumnSerializers\ColumnSerializer>|null  $columnSerializers
+     * @param  int|null  $debounceMs  A package-level override; `null` (the
+     *                                default) follows the table's own
+     *                                `searchDebounce()`.
      */
     public function __construct(
         ?array $columnSerializers = null,
-        private readonly int $debounceMs = 300,
+        private readonly ?int $debounceMs = null,
     ) {
         $this->columnSerializers = $columnSerializers ?? [
             new ColumnSerializers\IconColumnSerializer,
@@ -70,13 +72,16 @@ final class SchemaSerializer
                 'direction' => $table->getDefaultSortDirection() ?? 'asc',
             ],
             'globallySearchable' => $table->isSearchable(),
+            // Stock searches on blur instead of as-you-type when asked; the
+            // island then skips its debounce entirely, like Livewire does.
+            'searchOnBlur' => $table->isSearchOnBlur(),
             'striped' => $table->isStriped(),
-            'reorderableColumns' => $table->hasReorderableColumns(),
-            // Deferred (stock default): column toggles/reorders stage in the
-            // panel and only hit the table on "Apply columns". Non-deferred:
-            // each change applies immediately.
-            'columnManagerDeferred' => $table->hasDeferredColumnManager(),
-            'columnManagerApplyClasses' => implode(' ', get_component_color_classes(ButtonComponent::class, 'primary')),
+            // The column manager — trigger, dropdown/modal and panel — is
+            // Filament-native too, teleported into a toolbar slot. The island
+            // only needs to know WHETHER to render that slot; everything the
+            // manager does (layout, reset position, grid columns, a customized
+            // trigger, drag reordering) stays Filament's.
+            'hasColumnManager' => $table->hasColumnManager(),
             // The filters UI — trigger included — is Filament-native, rendered
             // in Blade and teleported into a Vue slot. The island only needs
             // the layout to know WHERE to render that slot: the toolbar for
@@ -94,7 +99,7 @@ final class SchemaSerializer
                 'defaultPerPage' => $table->getDefaultPaginationPageOption(),
             ],
             'actions' => (new ActionSerializer)->serializeStructure($table),
-            'debounceMs' => $this->debounceMs,
+            'debounceMs' => $this->debounceMs ?? $this->searchDebounceMs($table),
             'strings' => $this->strings($table),
             'icons' => $this->icons($table),
         ];
@@ -121,12 +126,28 @@ final class SchemaSerializer
             'previous' => $this->iconHtml($isRtl ? Heroicon::ChevronRight : Heroicon::ChevronLeft),
             'next' => $this->iconHtml($isRtl ? Heroicon::ChevronLeft : Heroicon::ChevronRight),
             'empty' => $this->iconHtml($table->getEmptyStateIcon(), size: IconSize::Large),
-            'columnManager' => $this->iconHtml(Heroicon::ViewColumns, TablesIconAlias::ACTIONS_COLUMN_MANAGER),
             'badgeDelete' => $this->iconHtml(Heroicon::XMark, SupportIconAlias::BADGE_DELETE_BUTTON, IconSize::ExtraSmall),
-            'reorderHandle' => $this->iconHtml(Heroicon::Bars2, TablesIconAlias::REORDER_HANDLE),
             'group' => $this->iconHtml(Heroicon::RectangleStack, TablesIconAlias::ACTIONS_GROUP),
             'groupCollapse' => $this->iconHtml(Heroicon::ChevronUp, TablesIconAlias::GROUPING_COLLAPSE_BUTTON, IconSize::Small),
         ];
+    }
+
+    /**
+     * `searchDebounce()` speaks Livewire's `.debounce` syntax (`'500ms'`,
+     * `'1s'`), which the island has to turn back into a number. Filament's own
+     * default is 500ms, so that is what an unconfigured table gets here too.
+     */
+    private function searchDebounceMs(Table $table): int
+    {
+        $debounce = trim($table->getSearchDebounce());
+
+        if (preg_match('/^(\d+(?:\.\d+)?)\s*(ms|s)?$/i', $debounce, $matches) !== 1) {
+            return 500;
+        }
+
+        $value = (float) $matches[1];
+
+        return (int) round(strtolower($matches[2] ?? 'ms') === 's' ? $value * 1000 : $value);
     }
 
     private function iconHtml(string|\BackedEnum $icon, ?string $alias = null, ?IconSize $size = null): ?string
@@ -143,7 +164,9 @@ final class SchemaSerializer
     private function strings(Table $table): array
     {
         return [
-            'searchPlaceholder' => __('filament-tables::table.fields.search.placeholder'),
+            // `searchPlaceholder()` overrides the translated default, exactly
+            // as it does in the stock search field.
+            'searchPlaceholder' => $table->getSearchPlaceholder() ?? __('filament-tables::table.fields.search.placeholder'),
             'searchLabel' => __('filament-tables::table.fields.search.label'),
             'filtersIndicator' => __('filament-tables::table.filters.indicator'),
             'filtersRemove' => __('filament-tables::table.filters.actions.remove.label'),
@@ -155,12 +178,6 @@ final class SchemaSerializer
             'perPageAll' => __('filament::components/pagination.fields.records_per_page.options.all'),
             'previousLabel' => __('filament::components/pagination.actions.previous.label'),
             'nextLabel' => __('filament::components/pagination.actions.next.label'),
-            'columnManagerHeading' => __('filament-tables::table.column_manager.heading'),
-            // The trigger button's tooltip/aria is the ACTION label (e.g.
-            // "Column manager" / "הצג עמודות"), not the panel heading.
-            'columnManagerTrigger' => __('filament-tables::table.actions.column_manager.label'),
-            'columnManagerApply' => __('filament-tables::table.column_manager.actions.apply.label'),
-            'columnManagerReset' => __('filament-tables::table.column_manager.actions.reset.label'),
             'bulkSelectPage' => __('filament-tables::table.fields.bulk_select_page.label'),
             'bulkSelectRecord' => __('filament-tables::table.fields.bulk_select_record.label'),
             'bulkSelectGroup' => __('filament-tables::table.fields.bulk_select_group.label'),
@@ -203,10 +220,15 @@ final class SchemaSerializer
         $alignment = $column->getAlignment();
         $verticalAlignment = $column->getVerticalAlignment();
         $width = $column->getWidth();
+        $headerTooltip = $column->getHeaderTooltip();
 
         return [
             'key' => $column->getName(),
             'label' => (string) $column->getLabel(),
+            'headerTooltip' => $headerTooltip instanceof Htmlable ? $headerTooltip->toHtml() : $headerTooltip,
+            // Developer-authored `extraHeaderAttributes()`. Per column, not per
+            // record — the header renders once.
+            'extraHeaderAttributes' => $column->getExtraHeaderAttributes(),
             'type' => $this->columnType($column),
             'sortable' => $column->isSortable(),
             'individuallySearchable' => $column->isIndividuallySearchable(),

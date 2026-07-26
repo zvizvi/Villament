@@ -42,10 +42,17 @@ final class TextColumnSerializer implements ColumnSerializer
      */
     private function buildCell(TextColumn $column): array
     {
+        // Per-STATE-ITEM urls are rendered by stock as an anchor around each
+        // item INSIDE the content (the cell wrapper stays a plain div). The
+        // structured payload carries one url per cell, so this case defers to
+        // the column's own markup rather than silently linking the whole cell
+        // to the first item's url.
+        if ($column->hasStateBasedUrls()) {
+            return ['type' => 'html', 'html' => $column->toHtml()];
+        }
+
         $state = $column->getState();
         $stateItems = is_array($state) ? array_values($state) : [$state];
-        $firstStateItem = $stateItems[0] ?? null;
-
         $formattedItems = [];
         $containsHtml = $column->isHtml();
 
@@ -70,6 +77,9 @@ final class TextColumnSerializer implements ColumnSerializer
                 'formatted' => null,
                 'empty' => true,
                 'placeholder' => $this->stringable($column->getPlaceholder()),
+                // Stock puts `emptyTooltip()` on the wrapper of the blank
+                // cell, where `tooltip()` never applies.
+                'tooltip' => $this->stringable($column->getEmptyTooltip()),
             ];
         }
 
@@ -82,18 +92,14 @@ final class TextColumnSerializer implements ColumnSerializer
             ];
         }
 
-        $url = $column->hasStateBasedUrls()
-            ? $column->getUrl($firstStateItem)
-            : $column->getUrl();
-
         $textSize = $column->getSize($state);
 
         $cell = [
             'type' => $column->isBadge() ? 'badge' : 'text',
             'formatted' => $formatted,
-            'url' => $url,
-            'newTab' => $column->shouldOpenUrlInNewTab(),
+            'descriptionAbove' => $this->stringable($column->getDescriptionAbove()),
             'description' => $this->stringable($column->getDescriptionBelow()),
+            'tooltip' => $this->stringable($column->getTooltip($state)),
             'size' => $textSize instanceof \BackedEnum ? $textSize->value : $textSize,
         ];
 

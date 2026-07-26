@@ -1,7 +1,7 @@
 <script setup>
 import TrustedIcon from './TrustedIcon.js'
 
-defineProps({
+const props = defineProps({
     modelValue: {
         type: String,
         default: '',
@@ -22,18 +22,44 @@ defineProps({
         type: String,
         default: null,
     },
+    /**
+     * `searchOnBlur()`: commit the term when the field loses focus (or on
+     * Enter) instead of as you type. Stock swaps `wire:model.live.debounce`
+     * for `wire:model.blur`, so the debounce plays no part either.
+     */
+    searchOnBlur: {
+        type: Boolean,
+        default: false,
+    },
 })
 
 const emit = defineEmits(['update:modelValue'])
 
 /**
- * Emits every keystroke — debouncing happens centrally in `useTableData()`
- * (300ms), so this component stays a dumb controlled input.
+ * Emits every keystroke — debouncing happens centrally in `useTableData()`,
+ * so this component stays a dumb controlled input. In `searchOnBlur` mode
+ * nothing is emitted until the field is committed.
  *
  * @param {Event} event
  * @returns {void}
  */
 function onInput(event) {
+    if (props.searchOnBlur) {
+        return
+    }
+
+    emit('update:modelValue', event.target.value)
+}
+
+/**
+ * @param {Event} event
+ * @returns {void}
+ */
+function onCommit(event) {
+    if (! props.searchOnBlur) {
+        return
+    }
+
     emit('update:modelValue', event.target.value)
 }
 </script>
@@ -60,6 +86,8 @@ function onInput(event) {
                     :placeholder="placeholder"
                     :value="modelValue"
                     @input="onInput"
+                    @change="onCommit"
+                    @blur="onCommit"
                 >
             </div>
         </div>

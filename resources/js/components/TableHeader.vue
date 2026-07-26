@@ -1,5 +1,6 @@
 <script setup>
 import TrustedIcon from './TrustedIcon.js'
+import { filamentTooltip } from '../support/tooltip.js'
 
 const props = defineProps({
     /**
@@ -196,6 +197,14 @@ function headerGroupCellClasses(group) {
 
 /**
  * @param {object} column
+ * @returns {?string} The `x-tooltip` expression for `->headerTooltip()`, or null.
+ */
+function headerTooltipFor(column) {
+    return filamentTooltip(column.headerTooltip)
+}
+
+/**
+ * @param {object} column
  * @returns {Object<string, string>|undefined} Stock sets `->width()` as an
  *   inline style on the header cell only. Physical `width` (not the logical
  *   `inline-size`) because that is the property stock emits, and a table
@@ -266,11 +275,15 @@ function onSortClick(column) {
             <th
                 v-for="column in columns"
                 :key="column.key"
+                v-bind="column.extraHeaderAttributes ?? {}"
+                scope="col"
                 :class="headerCellClasses(column)"
                 :style="headerCellStyle(column)"
                 :aria-sort="
-                    sortDirectionFor(column)
-                        ? (sortDirectionFor(column) === 'asc' ? 'ascending' : 'descending')
+                    column.sortable
+                        ? (sortDirectionFor(column)
+                            ? (sortDirectionFor(column) === 'asc' ? 'ascending' : 'descending')
+                            : 'none')
                         : undefined
                 "
             >
@@ -284,13 +297,24 @@ function onSortClick(column) {
                     @keydown.enter.prevent.stop="onSortClick(column)"
                     @keydown.space.prevent.stop="onSortClick(column)"
                 >
-                    {{ column.label }}
+                    <!-- `headerTooltip()` wraps the label in both branches (stock). -->
+                    <span
+                        v-if="headerTooltipFor(column)"
+                        class="fi-ta-header-cell-tooltip"
+                        :x-tooltip="headerTooltipFor(column)"
+                    >{{ column.label }}</span>
+                    <template v-else>{{ column.label }}</template>
 
                     <TrustedIcon :html="sortIconFor(column)" />
                 </span>
 
                 <template v-else>
-                    {{ column.label }}
+                    <span
+                        v-if="headerTooltipFor(column)"
+                        class="fi-ta-header-cell-tooltip"
+                        :x-tooltip="headerTooltipFor(column)"
+                    >{{ column.label }}</span>
+                    <template v-else>{{ column.label }}</template>
                 </template>
             </th>
 

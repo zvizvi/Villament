@@ -6,8 +6,6 @@ import { makeWireProxy } from './support/livewireProxyMock.js'
 const ENDPOINT = 'https://host.test/admin/villament/users/data'
 const LIVEWIRE_ID = 'lw-users'
 
-const COLUMN_MANAGER_ICON = '<svg data-icon="column-manager" class="fi-icon fi-size-md" viewBox="0 0 20 20"><path d="M3 3h14v14H3z" /></svg>'
-
 /**
  * @returns {object[]} Filament column manager state (`state.columns`).
  */
@@ -34,20 +32,12 @@ function makeConfig() {
             defaultSort: null,
             globallySearchable: false,
             striped: false,
-            reorderableColumns: true,
+            hasColumnManager: true,
             filters: [],
             pagination: { mode: 'offset', pageOptions: [10], defaultPerPage: 10 },
             actions: { record: [], bulk: [] },
-            strings: {
-                // Trigger label ("Show columns") is distinct from the panel
-                columnManagerTrigger: 'Show columns',
-                columnManagerHeading: 'Columns',
-                columnManagerReset: 'Reset',
-            },
-            icons: {
-                columnManager: COLUMN_MANAGER_ICON,
-                reorderHandle: '<svg data-icon="reorder-handle" class="fi-icon fi-size-md" viewBox="0 0 20 20"><path d="M2 6h16M2 13h16" /></svg>',
-            },
+            strings: {},
+            icons: {},
         },
         initialData: {
             records: [
@@ -68,7 +58,7 @@ function makeConfig() {
     }
 }
 
-describe('VueTable column manager + post-action refresh', () => {
+describe('VueTable native column-manager slot + post-commit refresh', () => {
     /** @type {import('vitest').Mock} */
     let fetchMock
 
@@ -213,85 +203,72 @@ describe('VueTable column manager + post-action refresh', () => {
         expect(wrapper.find('.fi-ta-cell-created-at').exists()).toBe(false)
     })
 
-    it('renders the trigger with the server icon and lists only toggleable columns', async () => {
+    it('renders the toolbar slot the native manager teleports into', () => {
         const wrapper = mountTable()
 
-        const manager = wrapper.get('.villament-column-manager')
-        const trigger = manager.get('.fi-dropdown-trigger button')
-
-        // Trigger uses the ACTION label; the panel heading (below) uses the heading.
-        expect(trigger.attributes('aria-label')).toBe('Show columns')
-        expect(trigger.attributes('title')).toBe('Show columns')
-        // Wrapperless icon: the svg is a DIRECT child of the trigger button.
-        expect(trigger.find(':scope > svg[data-icon="column-manager"]').exists()).toBe(true)
-
-        await trigger.trigger('click')
-
-        expect(manager.get('.fi-ta-col-manager-heading').text()).toBe('Columns')
-
-        // Stock lists every visible column; non-toggleable ones are checked + disabled.
-        const checkboxes = manager.findAll('.fi-ta-col-manager-item input.fi-checkbox-input')
-        expect(checkboxes).toHaveLength(2)
-
-        const nonToggleable = checkboxes.find((checkbox) => checkbox.attributes('data-column') === 'name')
-        expect(nonToggleable.element.checked).toBe(true)
-        expect(nonToggleable.element.disabled).toBe(true)
-
-        const toggleable = checkboxes.find((checkbox) => checkbox.attributes('data-column') === 'created_at')
-        expect(toggleable.element.checked).toBe(false)
-        expect(toggleable.element.disabled).toBe(false)
+        // Vue renders an EMPTY outlet: the trigger, dropdown/modal and panel
+        // are all Filament's, teleported in from the Blade partial.
+        const outlet = wrapper.get('[data-villament-columns-outlet="toolbar"]')
+        expect(outlet.element.children).toHaveLength(0)
     })
 
-    it('deferred (stock default): a toggle stages, "Apply columns" commits the FULL state + refetches once', async () => {
+    it('renders no slot when the table has no column manager', () => {
+        const config = makeConfig()
+        config.schema.hasColumnManager = false
+
+        wrapper = mount(VueTable, { props: { config }, attachTo: document.body })
+
+        expect(wrapper.find('[data-villament-columns-outlet="toolbar"]').exists()).toBe(false)
+    })
+
+    it('adopts the server-rendered slot into the outlet on mount', () => {
+        const config = makeConfig()
+
+        const host = document.createElement('div')
+        host.className = 'villament'
+        host.innerHTML = `
+            <div data-villament></div>
+            <div data-villament-slots style="display: none">
+                <div data-villament-columns-slot="toolbar" data-villament-owner="${LIVEWIRE_ID}">
+                    <span id="native-manager"></span>
+                </div>
+            </div>
+        `
+        document.body.appendChild(host)
+
+        wrapper = mount(VueTable, {
+            props: { config, rootElement: host.querySelector('[data-villament]') },
+            attachTo: host.querySelector('[data-villament]'),
+        })
+
+        const outlet = wrapper.get('[data-villament-columns-outlet="toolbar"]')
+        expect(outlet.element.querySelector('#native-manager')).not.toBeNull()
+
+        host.remove()
+    })
+
+    it('re-reads the authoritative column state and refetches after an apply commit', async () => {
         const wrapper = mountTable()
 
-        await wrapper.get('.villament-column-manager .fi-dropdown-trigger button').trigger('click')
-        await wrapper.get('.fi-ta-col-manager-item input[data-column="created_at"]').setValue(true)
+        // The native panel calls `applyTableColumnManager` itself; the island
+        // only reacts to the resulting commit.
+        const appliedState = makeColumnsState()
+        appliedState[1].isToggled = true
+        wireState.tableColumns = appliedState
 
-        // Deferred: the toggle is staged only — no wire call, table unchanged.
-        expect(wireCalls).toEqual([])
-        expect(wrapper.findAll('thead th.fi-ta-header-cell')).toHaveLength(1)
-
-        // "Apply columns" pushes the staged state.
-        await wrapper.get('.fi-ta-col-manager-actions-ctn button').trigger('click')
-
-        const expectedState = makeColumnsState()
-        expectedState[1].isToggled = true
-
-        expect(wireCalls).toEqual([
-            ['applyTableColumnManager', [expectedState, false]],
-        ])
-
-        // Stock parity: applying does NOT close the panel — it stays open.
-        expect(wrapper.find('.fi-ta-col-manager').exists()).toBe(true)
-
-        // Optimistic visibility after apply: the new column renders (empty cells) before any refetch.
-        expect(wrapper.findAll('thead th.fi-ta-header-cell')).toHaveLength(2)
-        expect(fetchMock).toHaveBeenCalledTimes(0)
-
-        // Livewire acknowledges: authoritative state is re-read, data refetched exactly once.
-        wireState.tableColumns = expectedState
         fireCommit(['applyTableColumnManager'])
 
         await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
 
-        // The refetch (already awaited above) fills the new column in.
         await vi.waitFor(() => {
+            expect(wrapper.findAll('thead th.fi-ta-header-cell')).toHaveLength(2)
             expect(wrapper.get('.fi-ta-cell-created-at').text()).toContain('2026-01-01')
         })
     })
 
-    it('reset calls resetTableColumnManager and adopts the authoritative state from Livewire', async () => {
+    it('adopts the authoritative state after a reset commit', async () => {
         const wrapper = mountTable()
 
-        await wrapper.get('.villament-column-manager .fi-dropdown-trigger button').trigger('click')
-        await wrapper.get('.fi-ta-col-manager-header .fi-link').trigger('click')
-
-        expect(wireCalls).toEqual([
-            ['resetTableColumnManager', []],
-        ])
-
-        // The server-side reset turns the column back on.
         const resetState = makeColumnsState()
         resetState[1].isToggled = true
         wireState.tableColumns = resetState
@@ -332,110 +309,5 @@ describe('VueTable column manager + post-action refresh', () => {
 
         // The filters watcher performed the (single) refetch.
         await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
-    })
-
-    it('non-deferred (deferColumnManager false): a toggle applies immediately, no apply button', async () => {
-        const config = makeConfig()
-        config.schema.columnManagerDeferred = false
-
-        wrapper = mount(VueTable, { props: { config }, attachTo: document.body })
-
-        await wrapper.get('.villament-column-manager .fi-dropdown-trigger button').trigger('click')
-
-        // No "Apply columns" button in immediate mode.
-        expect(wrapper.find('.fi-ta-col-manager-actions-ctn').exists()).toBe(false)
-
-        await wrapper.get('.fi-ta-col-manager-item input[data-column="created_at"]').setValue(true)
-
-        const applied = wireCalls.filter(([method]) => method === 'applyTableColumnManager').pop()
-        expect(applied).toBeDefined()
-        expect(applied[1][1]).toBe(false)
-    })
-
-    it('renders no column manager trigger when nothing is toggleable', () => {
-        const config = makeConfig()
-        config.state.columns = [
-            { type: 'column', name: 'name', label: 'Name', isHidden: false, isToggled: true, isToggleable: false, isToggledHiddenByDefault: null },
-        ]
-
-        wrapper = mount(VueTable, { props: { config }, attachTo: document.body })
-
-        expect(wrapper.find('.villament-column-manager').exists()).toBe(false)
-    })
-
-    it('drag-reorders columns, applies with wasReordered=true, and reorders the table headers', async () => {
-        const wrapper = mountTable()
-
-        const trigger = wrapper.get('.villament-column-manager .fi-dropdown-trigger button')
-        await trigger.trigger('click')
-
-        const manager = wrapper.get('.villament-column-manager')
-        const itemsBefore = manager.findAll('.fi-ta-col-manager-items > .fi-ta-col-manager-item')
-        expect(itemsBefore.map((item) => item.get('input').attributes('data-column'))).toEqual(['name', 'created_at'])
-
-        // Reorder handles render (stock fi-ta-col-manager-reorder-handle).
-        expect(manager.findAll('.fi-ta-col-manager-reorder-handle').length).toBe(2)
-
-        // Simulate dragging `created_at` over `name` (same top scope), then dropping.
-        await itemsBefore[1].trigger('dragstart')
-        await itemsBefore[0].trigger('dragover')
-        await itemsBefore[0].trigger('drop')
-
-        // Deferred: the reorder is staged; nothing commits until "Apply columns".
-        expect(wireCalls.filter(([method]) => method === 'applyTableColumnManager')).toEqual([])
-
-        await manager.get('.fi-ta-col-manager-actions-ctn button').trigger('click')
-
-        const applied = wireCalls.filter(([method]) => method === 'applyTableColumnManager').pop()
-        expect(applied).toBeDefined()
-        expect(applied[1][0].map((entry) => entry.name)).toEqual(['created_at', 'name'])
-        expect(applied[1][1]).toBe(true)
-
-        // Header order follows the (optimistically applied) state order —
-        // created_at is hidden (isToggled false), so only name renders, but
-        // the visible-order derivation is exercised via state.columns.
-        const headers = wrapper.findAll('thead th.fi-ta-header-cell')
-        expect(headers.length).toBeGreaterThan(0)
-    })
-
-    it('suppresses the native ghost and moves a live full-row preview with the cursor', async () => {
-        const wrapper = mountTable()
-
-        await wrapper.get('.villament-column-manager .fi-dropdown-trigger button').trigger('click')
-
-        const item = wrapper.findAll('.fi-ta-col-manager-item')[0]
-        const setDragImage = vi.fn()
-
-        await item.trigger('dragstart', {
-            dataTransfer: { setDragImage, effectAllowed: null },
-            clientX: 10,
-            clientY: 10,
-        })
-
-        // Native ghost replaced with a rendered transparent element (an
-        // unloaded <img> makes Chrome show a default globe/document icon).
-        expect(setDragImage).toHaveBeenCalledTimes(1)
-        const blank = setDragImage.mock.calls[0][0]
-        expect(blank.tagName).toBe('DIV')
-        expect(document.body.contains(blank)).toBe(true)
-        expect(blank.style.background).toBe('transparent')
-
-        // The live preview: manager-context shell, OPAQUE with a soft
-        // drop-shadow (stock look), row clone WITH its reorder handle; the
-        // source row dims in place as the placeholder.
-        const preview = document.body.querySelector('.villament-drag-preview')
-        expect(preview).not.toBeNull()
-        expect(preview.style.opacity).toBe('')
-        expect(preview.style.filter).toContain('drop-shadow')
-        expect(preview.querySelector('.fi-ta-col-manager-item .fi-ta-col-manager-reorder-handle')).not.toBeNull()
-        expect(item.element.style.opacity).toBe('0.4')
-
-        // Cursor tracking via document dragover.
-        document.dispatchEvent(new MouseEvent('dragover', { clientX: 60, clientY: 90 }))
-        expect(preview.style.transform).toContain('translate3d(50px, 80px, 0)')
-
-        await item.trigger('dragend')
-        expect(document.body.querySelector('.villament-drag-preview')).toBeNull()
-        expect(item.element.style.opacity).toBe('')
     })
 })

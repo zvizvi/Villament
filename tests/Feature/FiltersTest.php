@@ -40,8 +40,6 @@ describe('filter schema serialization', function (): void {
         // Trigger/heading strings for the filters are no longer shipped —
         // the whole filters UI (trigger included) is server-rendered.
         expect($strings)->not->toHaveKeys(['filtersHeading', 'filtersTrigger'])
-            ->and($strings['columnManagerTrigger'])->toBe('Column manager')
-            ->and($strings['columnManagerHeading'])->toBe('Columns')
             ->and($strings['filtersRemoveAll'])->toBe('Remove all filters')
             ->and($strings['searchPlaceholder'])->toBe('Search')
             ->and($strings['paginationOverview'])->toContain(':first');

@@ -16,7 +16,7 @@ return new class extends Migration
             $table->string('email')->unique();
             $table->string('password');
             $table->string('status')->default('active');
-            $table->boolean('is_admin')->default(false);
+            $table->boolean('is_admin')->nullable()->default(false);
             $table->string('avatar_url')->nullable();
             $table->boolean('is_banned')->default(false);
             $table->unsignedInteger('logins_count')->default(0);

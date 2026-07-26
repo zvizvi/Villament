@@ -27,7 +27,9 @@ final class VillamentServiceProvider extends PackageServiceProvider
         $this->app->bind(SchemaSerializer::class, function (): SchemaSerializer {
             return new SchemaSerializer(
                 columnSerializers: $this->columnSerializerChain(),
-                debounceMs: (int) config('villament.debounce_ms', 300),
+                // `null` = no package override: each table's own
+                // `searchDebounce()` wins.
+                debounceMs: ($debounceMs = config('villament.debounce_ms')) === null ? null : (int) $debounceMs,
             );
         });
 

@@ -12,7 +12,6 @@ import TrustedIcon from './TrustedIcon.js'
 import TableHeader from './TableHeader.vue'
 import TableSearch from './TableSearch.vue'
 import TableFilterIndicators from './TableFilterIndicators.vue'
-import TableColumnManager from './TableColumnManager.vue'
 import TableGrouping from './TableGrouping.vue'
 import TablePagination from './TablePagination.vue'
 import RecordActions from './RecordActions.vue'
@@ -217,7 +216,8 @@ const bridge = useLivewireBridge({
 })
 
 /**
- * Adopts the SERVER-RENDERED filter slots into the Vue-rendered outlets.
+ * Adopts the SERVER-RENDERED native slots (filters UI, column manager) into
+ * the Vue-rendered outlets.
  *
  * The slots (and the Alpine teleport clones inside them) are Blade-rendered
  * in a hidden wire:ignore holder so they exist before Alpine walks the DOM —
@@ -228,23 +228,26 @@ const bridge = useLivewireBridge({
  *
  * @returns {void}
  */
-function adoptFilterSlots() {
+function adoptNativeSlots() {
     const wrapper = props.rootElement?.closest('.villament') ?? props.rootElement?.parentElement
 
     if (! wrapper) {
         return
     }
 
-    for (const slot of wrapper.querySelectorAll('[data-villament-slots] > [data-villament-filters-slot]')) {
-        const outlet = props.rootElement.querySelector(
-            `[data-villament-filters-outlet="${slot.getAttribute('data-villament-filters-slot')}"]`,
-        )
+    // Two families now: the filters UI and the column manager, both native.
+    for (const family of ['filters', 'columns']) {
+        for (const slot of wrapper.querySelectorAll(`[data-villament-slots] > [data-villament-${family}-slot]`)) {
+            const outlet = props.rootElement.querySelector(
+                `[data-villament-${family}-outlet="${slot.getAttribute(`data-villament-${family}-slot`)}"]`,
+            )
 
-        outlet?.appendChild(slot)
+            outlet?.appendChild(slot)
+        }
     }
 }
 
-onMounted(adoptFilterSlots)
+onMounted(adoptNativeSlots)
 
 onBeforeUnmount(() => {
     bridge.destroy()
@@ -515,19 +518,12 @@ const hasColumnSearches = computed(
     () => visibleColumns.value.some((column) => column.individuallySearchable),
 )
 
-/** Whether any column can be toggled (renders the column manager trigger). */
-const hasColumnManager = computed(() => {
-    /** @param {object[]} entries @returns {boolean} */
-    function anyToggleable(entries) {
-        return entries.some((entry) => (
-            entry.type === 'group'
-                ? anyToggleable(entry.columns ?? [])
-                : (! entry.isHidden && entry.isToggleable !== false)
-        ))
-    }
-
-    return anyToggleable(columnsState.value)
-})
+/**
+ * Whether the toolbar renders the column-manager slot. The manager itself is
+ * Filament-native (trigger + dropdown/modal + panel), teleported in from the
+ * Blade partial — `Table::hasColumnManager()` already answers this server-side.
+ */
+const hasColumnManager = computed(() => Boolean(schema.hasColumnManager))
 
 const pageRecordKeys = computed(() => records.value.map((record) => record.key))
 
@@ -651,25 +647,6 @@ function onMountBulkAction(name) {
 }
 
 /**
- * Applies a column manager change: optimistic local visibility (a newly
- * toggled column renders empty cells until the refetch lands), then the
- * FULL state array goes to Livewire. The commit watcher re-reads the
- * authoritative state and refetches.
- *
- * @param {object[]} nextColumns
- * @returns {void}
- */
-function onApplyColumnManager(nextColumns, wasReordered = false) {
-    columnsState.value = nextColumns
-    bridge.applyColumnManager(nextColumns, wasReordered)
-}
-
-/** @returns {void} */
-function onResetColumnManager() {
-    bridge.resetColumnManager()
-}
-
-/**
  * @param {object} record
  * @param {number} rowIndex Zero-based row index on the page (striping).
  * @returns {Array<string|Object<string, boolean>>} Row classes matching Filament's own markup.
@@ -686,24 +663,21 @@ function recordRowClasses(record, rowIndex) {
 }
 
 /**
- * Stock cell wrapper tag: an anchor when the column has a URL or the record
- * itself does; a button when the record has a click action; a plain div
- * otherwise.
+ * The cell's click behavior is decided SERVER-side (`RecordSerializer`), where
+ * `getAction()`, `disabledClick()` and state-based urls are visible; the
+ * payload names the wrapper element outright. These accessors only supply the
+ * fallbacks for a cell that predates that contract.
  *
  * @param {?object} cellValue
  * @param {object} record
  * @returns {'a'|'button'|'div'}
  */
 function cellWrapperTag(cellValue, record) {
-    if (cellValue?.url || record.url) {
-        return 'a'
+    if (cellValue?.wrapper) {
+        return cellValue.wrapper
     }
 
-    if (record.action) {
-        return 'button'
-    }
-
-    return 'div'
+    return record.url ? 'a' : (record.action ? 'button' : 'div')
 }
 
 /**
@@ -712,7 +686,11 @@ function cellWrapperTag(cellValue, record) {
  * @returns {?string}
  */
 function cellWrapperUrl(cellValue, record) {
-    return cellValue?.url || record.url || null
+    if (cellValue?.wrapper) {
+        return cellValue.url || null
+    }
+
+    return record.url || null
 }
 
 /**
@@ -721,7 +699,43 @@ function cellWrapperUrl(cellValue, record) {
  * @returns {boolean}
  */
 function cellWrapperNewTab(cellValue, record) {
-    return cellValue?.url ? Boolean(cellValue.newTab) : Boolean(record.urlNewTab)
+    if (cellValue?.wrapper) {
+        return Boolean(cellValue.newTab)
+    }
+
+    return Boolean(record.urlNewTab)
+}
+
+/**
+ * Runs whatever a button-wrapped cell invokes. The three shapes mirror the
+ * stock blade's own branches: mount a table action, call a column action, or
+ * call a method of that name on the page component.
+ *
+ * @param {?object} cellValue
+ * @param {object} record
+ * @returns {void}
+ */
+function onCellClick(cellValue, record) {
+    if (cellWrapperTag(cellValue, record) !== 'button') {
+        return
+    }
+
+    const click = cellValue?.click
+
+    if (! click) {
+        // Pre-`click` payload: the record action was the only possibility.
+        bridge.mountRecordAction(record.action, record.key)
+
+        return
+    }
+
+    if (click.type === 'mountAction') {
+        bridge.mountRecordAction(click.name, record.key)
+    } else if (click.type === 'columnAction') {
+        bridge.callColumnAction(click.name, record.key)
+    } else if (click.type === 'method') {
+        bridge.callRecordMethod(click.name, record.key)
+    }
 }
 
 /**
@@ -815,9 +829,16 @@ function kebab(key) {
 
 /**
  * @param {object} column Column schema.
+ * @param {?object} [cellValue] This row's cell payload.
  * @returns {string[]} Record cell classes matching Filament's own markup.
  */
-function recordCellClasses(column) {
+function recordCellClasses(column, cellValue = null) {
+    // A per-record `alignment(fn)` / `hiddenFrom(fn)` / … has no single answer
+    // at schema time, so the server sends this row's own list instead.
+    if (cellValue?.cellClasses) {
+        return cellValue.cellClasses
+    }
+
     const classes = ['fi-ta-cell', `fi-ta-cell-${kebab(column.key)}`]
 
     if (column.alignment) {
@@ -912,6 +933,7 @@ function recordCellClasses(column) {
                                 :placeholder="strings.searchPlaceholder"
                                 :label="strings.searchLabel"
                                 :icon="icons.search"
+                                :search-on-blur="Boolean(schema.searchOnBlur)"
                                 @update:model-value="state.search.value = $event"
                             />
 
@@ -926,16 +948,15 @@ function recordCellClasses(column) {
                                 data-villament-filters-outlet="toolbar"
                             />
 
-                            <TableColumnManager
+                            <!--
+                                Same treatment as the filters: the STOCK
+                                column-manager trigger + dropdown/modal
+                                teleports here from the Blade partial. Vue
+                                renders only this slot.
+                            -->
+                            <div
                                 v-if="hasColumnManager"
-                                :columns="columnsState"
-                                :reorderable="Boolean(schema.reorderableColumns)"
-                                :deferred="schema.columnManagerDeferred !== false"
-                                :apply-classes="schema.columnManagerApplyClasses ?? ''"
-                                :strings="strings"
-                                :icons="icons"
-                                @apply="onApplyColumnManager"
-                                @reset="onResetColumnManager"
+                                data-villament-columns-outlet="toolbar"
                             />
                         </div>
                     </div>
@@ -1029,6 +1050,7 @@ function recordCellClasses(column) {
                                             :label="`${strings.searchLabel}: ${column.label}`"
                                             :placeholder="strings.searchPlaceholder"
                                             :icon="icons.search"
+                                            :search-on-blur="Boolean(schema.searchOnBlur)"
                                             @update:model-value="onColumnSearch(column.key, $event)"
                                         />
                                     </td>
@@ -1206,20 +1228,18 @@ function recordCellClasses(column) {
                                         <td
                                             v-for="cell in item.row.getVisibleCells()"
                                             :key="cell.id"
-                                            :class="recordCellClasses(cell.column.columnDef.meta.schema)"
+                                            v-bind="cell.getValue()?.extraCellAttributes ?? {}"
+                                            :class="recordCellClasses(cell.column.columnDef.meta.schema, cell.getValue())"
                                         >
                                             <component
                                                 :is="cellWrapperTag(cell.getValue(), item.row.original)"
                                                 class="fi-ta-col"
-                                                :class="{ 'fi-ta-col-has-column-url': Boolean(cell.getValue()?.url) }"
+                                                :class="{ 'fi-ta-col-has-column-url': Boolean(cell.getValue()?.hasColumnUrl) }"
                                                 :type="cellWrapperTag(cell.getValue(), item.row.original) === 'button' ? 'button' : undefined"
                                                 :href="cellWrapperUrl(cell.getValue(), item.row.original) || undefined"
                                                 :target="cellWrapperUrl(cell.getValue(), item.row.original) && cellWrapperNewTab(cell.getValue(), item.row.original) ? '_blank' : undefined"
                                                 :rel="cellWrapperUrl(cell.getValue(), item.row.original) && cellWrapperNewTab(cell.getValue(), item.row.original) ? 'noopener noreferrer' : undefined"
-                                                @click="
-                                                    cellWrapperTag(cell.getValue(), item.row.original) === 'button'
-                                                        && bridge.mountRecordAction(item.row.original.action, item.row.original.key)
-                                                "
+                                                @click="onCellClick(cell.getValue(), item.row.original)"
                                             >
                                                 <component
                                                     :is="resolveCellComponent(cell.getValue()?.type, cellComponents) ?? TextCell"

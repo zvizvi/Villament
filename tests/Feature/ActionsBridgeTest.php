@@ -9,6 +9,7 @@ use Zvizvi\Villament\Tests\Fixtures\Resources\Users\Pages\VueListUsers;
 use function Pest\Laravel\actingAs;
 use function Pest\Laravel\assertDatabaseHas;
 use function Pest\Laravel\assertDatabaseMissing;
+use function Pest\Laravel\get;
 use function Pest\Laravel\getJson;
 use function Pest\Livewire\livewire;
 
@@ -44,11 +45,12 @@ describe('action structure serialization', function (): void {
 
         $createdAt = collect($config['state']['columns'])->firstWhere('name', 'created_at');
 
+        // The manager UI is Filament-native; the island still needs the STATE
+        // (it drives column order and visibility) and the slot flag.
         expect($createdAt['isToggleable'])->toBeTrue()
             ->and($createdAt['isToggled'])->toBeFalse()
-            ->and($config['schema']['strings']['columnManagerHeading'])->toBe('Columns')
-            ->and($config['schema']['strings']['selectedCount'])->toContain(':count')
-            ->and($config['schema']['icons']['columnManager'])->toContain('<svg');
+            ->and($config['schema']['hasColumnManager'])->toBeTrue()
+            ->and($config['schema']['strings']['selectedCount'])->toContain(':count');
     });
 });
 
@@ -180,19 +182,20 @@ describe('actions bridge wire path (DoD)', function (): void {
 });
 
 describe('column manager server path (DoD)', function (): void {
-    it('exposes the reorderable flag and the reorder handle icon', function (): void {
-        $config = VillamentTableConfig();
+    it('renders the STOCK manager, teleported into the island toolbar slot', function (): void {
+        $html = get(VueListUsers::getUrl())->assertOk()->getContent();
 
-        expect($config['schema']['reorderableColumns'])->toBeTrue()
-            ->and($config['schema']['icons']['reorderHandle'])->toContain('<svg');
-    });
-
-    it('ships the deferred flag (stock default true) + the apply button label and primary classes', function (): void {
-        $schema = VillamentTableConfig()['schema'];
-
-        expect($schema['columnManagerDeferred'])->toBeTrue()
-            ->and($schema['columnManagerApplyClasses'])->toContain('fi-color-primary')
-            ->and($schema['strings']['columnManagerApply'])->toBe('Apply columns');
+        // Filament's own panel + trigger + Alpine component, not a Vue copy.
+        expect($html)->toContain('filamentTableColumnManager(')
+            ->toContain('fi-ta-col-manager')
+            ->toContain('fi-ta-col-manager-dropdown')
+            // Reordering is stock's `x-sortable`, and the apply action is
+            // stock's — both come free with the native panel.
+            ->toContain('x-sortable')
+            ->toContain(__('filament-tables::table.column_manager.actions.apply.label'))
+            // Teleport target + the outlet the island adopts it into.
+            ->toContain("x-teleport=\"[data-villament-columns-slot='toolbar']")
+            ->toContain('data-villament-columns-slot="toolbar"');
     });
 
     it('keeps schemaVersion stable across a reorder — no drift-detector page reload', function (): void {
