@@ -1134,8 +1134,15 @@ function recordCellClasses(column) {
                         </div>
                     </div>
 
+                    <!--
+                        `meta.paginated` mirrors stock's own `$hasPagination`:
+                        the records must actually be a (non-empty) paginator.
+                        Hides the bar for `paginated(false)` tables and in
+                        groupsOnly mode, where Filament returns a plain
+                        Collection.
+                    -->
                     <TablePagination
-                        v-if="meta && hasRecords"
+                        v-if="meta?.paginated"
                         :meta="meta"
                         :page="state.page.value"
                         :per-page="state.perPage.value"

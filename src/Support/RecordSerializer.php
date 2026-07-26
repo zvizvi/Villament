@@ -96,13 +96,20 @@ final class RecordSerializer
     }
 
     /**
+     * Pagination metadata. `paginated` mirrors the stock blade's own
+     * `$hasPagination` test — the records must actually BE a paginator (and be
+     * non-empty) — so the island hides the pagination bar in exactly the cases
+     * stock does: `paginated(false)` tables, and `groupsOnly()` mode, where
+     * `Table::isPaginated()` is false and a plain Collection comes back.
+     *
      * @param  iterable<int, mixed>  $records
-     * @return array<string, int|string|null>
+     * @return array<string, int|string|bool|null>
      */
     public function meta(iterable $records): array
     {
         if ($records instanceof CursorPaginator) {
             return [
+                'paginated' => $records->isNotEmpty(),
                 'currentPage' => null,
                 'perPage' => $records->perPage(),
                 'total' => null,
@@ -117,6 +124,7 @@ final class RecordSerializer
 
         if ($records instanceof LengthAwarePaginator) {
             return [
+                'paginated' => $records->total() > 0,
                 'currentPage' => $records->currentPage(),
                 'perPage' => $records->perPage(),
                 'total' => $records->total(),
@@ -128,6 +136,7 @@ final class RecordSerializer
 
         if ($records instanceof Paginator) {
             return [
+                'paginated' => $records->isNotEmpty(),
                 'currentPage' => $records->currentPage(),
                 'perPage' => $records->perPage(),
                 'total' => null,
@@ -140,6 +149,8 @@ final class RecordSerializer
         $count = iterator_count(collect($records)->getIterator());
 
         return [
+            // Not a paginator at all — stock renders no pagination bar.
+            'paginated' => false,
             'currentPage' => 1,
             'perPage' => $count,
             'total' => $count,

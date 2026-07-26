@@ -429,6 +429,24 @@ describe('VueTable filters (native Livewire panel) + indicators', () => {
         expect(groupRows[0].findAll('td')).toHaveLength(2)
     })
 
+    it('renders the pagination bar only when the records are actually paginated', () => {
+        const paginated = makeConfig()
+        paginated.initialData.meta = { paginated: true, currentPage: 1, perPage: 10, total: 40, lastPage: 4, from: 1, to: 10 }
+
+        wrapper = mount(VueTable, { props: { config: paginated }, attachTo: document.body })
+        expect(wrapper.find('.fi-pagination').exists()).toBe(true)
+        wrapper.unmount()
+
+        // `paginated(false)` tables and groupsOnly mode return a plain
+        // Collection server-side, so stock renders no pagination bar at all —
+        // even though records (and a fabricated meta) are present.
+        const unpaginated = makeConfig()
+        unpaginated.initialData.meta = { paginated: false, currentPage: 1, perPage: 1, total: 1, lastPage: 1, from: 1, to: 1 }
+
+        wrapper = mount(VueTable, { props: { config: unpaginated }, attachTo: document.body })
+        expect(wrapper.find('.fi-pagination').exists()).toBe(false)
+    })
+
     it('uses the localized empty state heading', async () => {
         const config = makeConfig({
             initialData: {

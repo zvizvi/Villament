@@ -325,3 +325,20 @@ it('disables pagination in groupsOnly mode, so every group yields a row', functi
         UserResource::$groupsOnly = false;
     }
 });
+
+it('reports records as unpaginated in groupsOnly mode, so the island hides pagination', function (): void {
+    // Normal mode: a real paginator.
+    expect(getJson('/admin/villament/users/data'.'?perPage=10')->assertOk()->json('meta.paginated'))
+        ->toBeTrue();
+
+    UserResource::$groupsOnly = true;
+
+    try {
+        // groupsOnly: `Table::isPaginated()` is false, so a plain Collection
+        // comes back — stock renders no pagination bar, and neither do we.
+        expect(getJson('/admin/villament/users/data'.'?grouping=status')->assertOk()->json('meta.paginated'))
+            ->toBeFalse();
+    } finally {
+        UserResource::$groupsOnly = false;
+    }
+});
