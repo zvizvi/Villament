@@ -110,13 +110,38 @@ Owner decision: the ENTIRE filter panel is Filament's original Livewire UI, not 
 - The schema ships only `hasFilters: bool` (show the trigger or not) — filter definitions never leave the server.
 - Trade-off accepted: applying a filter is one Livewire commit (small form) + one Vue refetch. High-frequency interactions (search/sort/pagination) stay Vue/AJAX. Panel positioning uses the existing CSS anchor (no floating-ui); the trigger button is the one filter element Vue-rendered (pixel-identical) to avoid teleporting a native dropdown into the wire:ignore toolbar.
 
-## 2026-07-26 — `ColumnGroup`: structure from the manager state, modifiers from the schema
+## 2026-07-26 — Adopted filter slots are `display: contents`
 
-The column-manager state (`tableColumns`, already inlined for toggling and reordering) is Filament's own group-aware tree: `{type: 'group', name, columns: [...]}`, in layout order, reordered along with the columns. So the island does NOT need the layout serialized a second time — it needs only what the manager omits: the group's `label`, `wrapHeader`, `alignment`, `hiddenFrom`, `visibleFrom`. Those ship as `schema.columnGroups`.
+The filters UI reaches its position through two structural boxes stock does not have: the Vue-rendered outlet (`[data-villament-filters-outlet]`) and the Blade-rendered teleport slot (`[data-villament-filters-slot]`, moved into the outlet on mount). Both are pure plumbing, but a box is a box — and Filament's layout depends on the containers being DIRECT children.
 
-Keyed by `e($group->getLabel())`, because that is what BOTH `Table::getColumnGroups()` and `mapTableColumnGroupToArray()` use as their key — matching on it is what lets the two payloads meet. The serialized `label` is the RAW one: the manager's copy is pre-escaped for use as a key, and Vue escapes on render, so reusing it would print `&amp;`. The fixture group is deliberately named `Profile & Access` to pin that. (An `Htmlable` label is flattened to a string and rendered as text, matching what the column labels already do.)
+Concretely, `.fi-ta-ctn` is `display: flex`, and `.fi-ta-filters-{before,after}-content-ctn` is `lg:static` — i.e. at `lg` it is a flex item stretched to the table's full height (below `lg` it is `absolute`, which resolves against `.fi-ta-ctn` either way, so only the `lg` path broke). Wrapped, the OUTLET became the flex item and the filters container fell back to content height, ending short of the table's bottom edge.
 
-`visibleColumns` was refactored into `columnLayout`, which yields the same walk as SEGMENTS (a bare column, or a group with its visible members) with `visibleColumns` flattened out of it. Deriving both rows from one walk is the point: computed separately, a `colspan` can drift out of step with the cells it covers, and every column after the group shifts. Stock's `hasColumnGroups()` rule falls out of the same structure — a group with no visible columns contributes no cell, and with no group left there is no row.
+Fix: `display: contents` on both wrappers, in `resources/js/styles/table.css`. Applied to every slot, not just before/after — it makes the toolbar trigger a direct child of the toolbar's end group (picking up its `gap-x-4` exactly like stock) and the above/below containers direct children of their regions. The wrappers keep their identity for `querySelector`-based adoption; they simply stop generating boxes.
+
+## 2026-07-26 — `defaultGroup()` is request state, not schema
+
+The grouping settings control rendered blank while the rows were grouped: `schema.grouping.default` was serialized but nothing consumed it, and the island's inlined `state` had no `grouping` key at all.
+
+The right place for it is the state, because that is where stock keeps it. `mountInteractsWithTable()` does `$this->tableGrouping = "{$id}:asc"` whenever `isDefaultGroupSelectable()` (the default group id is also in `groups()`) — so by render time the live page already holds the exact value. Inlining `$this->tableGrouping` therefore fixes three things at once: the control preselects, the island echoes the value back on every request, and the STATELESS data endpoint stays grouped (it has no mount hook, so without the echo the first AJAX interaction would have silently dropped the grouping). `schema.grouping.default` was deleted as dead payload.
+
+A forced (non-selectable) `defaultGroup()` inlines `null`, which is also correct: stock leaves `tableGrouping` alone there and `getTableGrouping()` falls through to the default on both the page and the endpoint, while the control has nothing to preselect — the group is not one of its options.
+
+Consequence: **grouping is the one state key where the server wins over the URL** (`useTableState`). Stock's mount hook overrides `tableGrouping` AFTER Livewire hydrates `#[Url]`, so with a selectable default the inlined value is what the page actually rendered; deferring to the URL would show one group in the control while the rows are grouped by another. Where stock does not override, the server hydrated the value from that same query string, so the rule is a no-op. Back/forward still reads the URL, mirroring stock's no-remount popstate path.
+
+Known stock quirk inherited by this: with a selectable default, a cold load of `?grouping=other` is ignored — stock's mount line has no `blank()` guard, unlike the search/filter session hydration directly above it.
+
+## 2026-07-26 — Summary rows: closing the gaps against the Summaries docs
+
+Everything the docs page describes about summarizers themselves (`Sum`/`Average`/`Count`/`Range`/custom `using()`, `money()`/`numeric()`/`prefix()`/`limit()`/`icons()`, `label()`, `query()`, `hidden()`/`visible()`) already worked, because the cells are `$summarizer->toHtml()` rendered by Filament. The gaps were all in the surrounding assembly:
+
+- **`summaries(pageCondition:, allTableCondition:)` was ignored.** `SummarySerializer` now applies `hasPageSummary()` / `hasAllTableSummary()`, plus stock's `(! $groupsOnly)` guard on the page row.
+- **The summary header row did not exist.** Stock precedes a page summary with `fi-ta-summary-header-row fi-striped`, repeating each summarized column's label with `summary.heading` in the first cell. Serialized as `summaries.header = {heading, labels}` — `labels` holds only summarized columns, unioned across the page and all queries like stock's `$columnHasSummary`.
+- **The all-records heading was wrong.** Stock uses `subheadings.all` ("All :label") when a page summary sits above it, `summary.heading` when it stands alone; the stripe likewise moves to whichever row is first. Both are decided server-side and shipped as `heading` + `striped`.
+- **The rows lived in a `<tfoot>`.** Filament scopes its row/cell rules to `& > tbody > tr` and paints `& > tfoot` gray for content footers, so the rows lost their padding, mobile stacking and divider while gaining a stray gray background. They now close the `<tbody>`, as in stock. (The per-group subheading rows were already inside it.)
+- **`selectedState` was handed the wrong shape.** Stock takes `getTableSummarySelectedState($query)[0]`; we passed the outer array. `Summarizer::getSelectedState()` does `array_key_exists($selectAlias, $this->selectedState)`, so every lookup missed and `getState()` fell back to a separate aggregate query PER summarizer — discarding the single combined `SELECT` the method exists to build. Measured on the fixture: 6 queries for two rows, now 2. Pinned by a test asserting no `… as aggregate` fallback touches the summarized column.
+- **`fi-ta-group-summary-row`** was a class we invented; stock gives per-group rows the same classes as the page/all rows.
+
+Still unsupported, deliberately: `extraHeadingColumn` / `placeholderColumns: false` belong to the content-layout summary (grid/cards), a layout the island does not implement; `canHeaderWrap()` is unsupported in our table headers generally, not just here — **superseded below** (header/cell modifiers).
 
 ## 2026-07-26 — Header/cell modifiers ship as one set
 
@@ -135,40 +160,15 @@ The last row is the one with teeth: the responsive classes must land on the head
 
 Two stock quirks preserved rather than fixed: the individual-search row and the summary rows do NOT get the responsive classes in stock either, so a `hiddenFrom()` column misaligns them there; and `fi-wrapped` on `.fi-ta-summary-header-cell` is inert, because Filament's own CSS applies `whitespace-nowrap` to both the `.fi-wrapped` and `:not(.fi-wrapped)` branches (unlike `.fi-ta-header-cell`, where it really is `whitespace-normal`).
 
-`fi-grouped` is emitted even though the `ColumnGroup` HEADER ROW is still unrendered — the class is a per-column fact (it draws the separators between a group's columns), and keeping the mirror complete beats a partial one. Column groups as a feature remain unimplemented; the column manager already understands them, the table head does not.
+`fi-grouped` is emitted even though the `ColumnGroup` HEADER ROW is still unrendered — the class is a per-column fact (it draws the separators between a group's columns), and keeping the mirror complete beats a partial one. Column groups as a feature remain unimplemented; the column manager already understands them, the table head does not — **superseded below** (`ColumnGroup`).
 
-## 2026-07-26 — Summary rows: closing the gaps against the Summaries docs
+## 2026-07-26 — `ColumnGroup`: structure from the manager state, modifiers from the schema
 
-Everything the docs page describes about summarizers themselves (`Sum`/`Average`/`Count`/`Range`/custom `using()`, `money()`/`numeric()`/`prefix()`/`limit()`/`icons()`, `label()`, `query()`, `hidden()`/`visible()`) already worked, because the cells are `$summarizer->toHtml()` rendered by Filament. The gaps were all in the surrounding assembly:
+The column-manager state (`tableColumns`, already inlined for toggling and reordering) is Filament's own group-aware tree: `{type: 'group', name, columns: [...]}`, in layout order, reordered along with the columns. So the island does NOT need the layout serialized a second time — it needs only what the manager omits: the group's `label`, `wrapHeader`, `alignment`, `hiddenFrom`, `visibleFrom`. Those ship as `schema.columnGroups`.
 
-- **`summaries(pageCondition:, allTableCondition:)` was ignored.** `SummarySerializer` now applies `hasPageSummary()` / `hasAllTableSummary()`, plus stock's `(! $groupsOnly)` guard on the page row.
-- **The summary header row did not exist.** Stock precedes a page summary with `fi-ta-summary-header-row fi-striped`, repeating each summarized column's label with `summary.heading` in the first cell. Serialized as `summaries.header = {heading, labels}` — `labels` holds only summarized columns, unioned across the page and all queries like stock's `$columnHasSummary`.
-- **The all-records heading was wrong.** Stock uses `subheadings.all` ("All :label") when a page summary sits above it, `summary.heading` when it stands alone; the stripe likewise moves to whichever row is first. Both are decided server-side and shipped as `heading` + `striped`.
-- **The rows lived in a `<tfoot>`.** Filament scopes its row/cell rules to `& > tbody > tr` and paints `& > tfoot` gray for content footers, so the rows lost their padding, mobile stacking and divider while gaining a stray gray background. They now close the `<tbody>`, as in stock. (The per-group subheading rows were already inside it.)
-- **`selectedState` was handed the wrong shape.** Stock takes `getTableSummarySelectedState($query)[0]`; we passed the outer array. `Summarizer::getSelectedState()` does `array_key_exists($selectAlias, $this->selectedState)`, so every lookup missed and `getState()` fell back to a separate aggregate query PER summarizer — discarding the single combined `SELECT` the method exists to build. Measured on the fixture: 6 queries for two rows, now 2. Pinned by a test asserting no `… as aggregate` fallback touches the summarized column.
-- **`fi-ta-group-summary-row`** was a class we invented; stock gives per-group rows the same classes as the page/all rows.
+Keyed by `e($group->getLabel())`, because that is what BOTH `Table::getColumnGroups()` and `mapTableColumnGroupToArray()` use as their key — matching on it is what lets the two payloads meet. The serialized `label` is the RAW one: the manager's copy is pre-escaped for use as a key, and Vue escapes on render, so reusing it would print `&amp;`. The fixture group is deliberately named `Profile & Access` to pin that. (An `Htmlable` label is flattened to a string and rendered as text, matching what the column labels already do.)
 
-Still unsupported, deliberately: `extraHeadingColumn` / `placeholderColumns: false` belong to the content-layout summary (grid/cards), a layout the island does not implement; `canHeaderWrap()` is unsupported in our table headers generally, not just here.
-
-## 2026-07-26 — `defaultGroup()` is request state, not schema
-
-The grouping settings control rendered blank while the rows were grouped: `schema.grouping.default` was serialized but nothing consumed it, and the island's inlined `state` had no `grouping` key at all.
-
-The right place for it is the state, because that is where stock keeps it. `mountInteractsWithTable()` does `$this->tableGrouping = "{$id}:asc"` whenever `isDefaultGroupSelectable()` (the default group id is also in `groups()`) — so by render time the live page already holds the exact value. Inlining `$this->tableGrouping` therefore fixes three things at once: the control preselects, the island echoes the value back on every request, and the STATELESS data endpoint stays grouped (it has no mount hook, so without the echo the first AJAX interaction would have silently dropped the grouping). `schema.grouping.default` was deleted as dead payload.
-
-A forced (non-selectable) `defaultGroup()` inlines `null`, which is also correct: stock leaves `tableGrouping` alone there and `getTableGrouping()` falls through to the default on both the page and the endpoint, while the control has nothing to preselect — the group is not one of its options.
-
-Consequence: **grouping is the one state key where the server wins over the URL** (`useTableState`). Stock's mount hook overrides `tableGrouping` AFTER Livewire hydrates `#[Url]`, so with a selectable default the inlined value is what the page actually rendered; deferring to the URL would show one group in the control while the rows are grouped by another. Where stock does not override, the server hydrated the value from that same query string, so the rule is a no-op. Back/forward still reads the URL, mirroring stock's no-remount popstate path.
-
-Known stock quirk inherited by this: with a selectable default, a cold load of `?grouping=other` is ignored — stock's mount line has no `blank()` guard, unlike the search/filter session hydration directly above it.
-
-## 2026-07-26 — Adopted filter slots are `display: contents`
-
-The filters UI reaches its position through two structural boxes stock does not have: the Vue-rendered outlet (`[data-villament-filters-outlet]`) and the Blade-rendered teleport slot (`[data-villament-filters-slot]`, moved into the outlet on mount). Both are pure plumbing, but a box is a box — and Filament's layout depends on the containers being DIRECT children.
-
-Concretely, `.fi-ta-ctn` is `display: flex`, and `.fi-ta-filters-{before,after}-content-ctn` is `lg:static` — i.e. at `lg` it is a flex item stretched to the table's full height (below `lg` it is `absolute`, which resolves against `.fi-ta-ctn` either way, so only the `lg` path broke). Wrapped, the OUTLET became the flex item and the filters container fell back to content height, ending short of the table's bottom edge.
-
-Fix: `display: contents` on both wrappers, in `resources/js/styles/table.css`. Applied to every slot, not just before/after — it makes the toolbar trigger a direct child of the toolbar's end group (picking up its `gap-x-4` exactly like stock) and the above/below containers direct children of their regions. The wrappers keep their identity for `querySelector`-based adoption; they simply stop generating boxes.
+`visibleColumns` was refactored into `columnLayout`, which yields the same walk as SEGMENTS (a bare column, or a group with its visible members) with `visibleColumns` flattened out of it. Deriving both rows from one walk is the point: computed separately, a `colspan` can drift out of step with the cells it covers, and every column after the group shifts. Stock's `hasColumnGroups()` rule falls out of the same structure — a group with no visible columns contributes no cell, and with no group left there is no row.
 
 ## 2026-07-17 — Data-channel evaluation: `#[Json]` vs the GET endpoint (Stage 1 of the Livewire-4 pivot exploration)
 
