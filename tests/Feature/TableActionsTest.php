@@ -9,6 +9,8 @@ use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Support\Enums\Alignment;
 use Filament\Tables\Enums\RecordActionsPosition;
+use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Support\HtmlString;
 use Zvizvi\Villament\Tests\Fixtures\Models\User;
 use Zvizvi\Villament\Tests\Fixtures\Resources\Users\Pages\VueListUsers;
 use Zvizvi\Villament\Tests\Fixtures\Resources\Users\UserResource;
@@ -138,6 +140,26 @@ describe('header actions', function (): void {
         $schema = json_decode($matches[1], true, flags: JSON_THROW_ON_ERROR)['schema'];
 
         expect($schema['header']['hasCustomView'])->toBeTrue();
+    });
+
+    it('gives an element-less header a root element to teleport', function (): void {
+        // Alpine teleports `template.content...firstElementChild`, so a bare
+        // string header would make that null and throw — and a multi-root view
+        // would lose everything after its first element.
+        UserResource::$header = fn (): Htmlable => new HtmlString('abc<p>def</p>ghi');
+
+        $html = livewire(VueListUsers::class)->html();
+
+        expect($html)->toContain('<div data-villament-header-view style="display: contents">')
+            ->toContain('abc<p>def</p>ghi');
+
+        // The wrapper sits INSIDE the teleport template, so it is what Alpine
+        // clones — the whole header travels, not just the `<p>`.
+        preg_match('/<template x-teleport="\[data-villament-header-slot[^"]*"\s*>(.*?)<\/template>/s', $html, $matches);
+
+        expect($matches[1])->toContain('data-villament-header-view')
+            ->toContain('abc')
+            ->toContain('ghi');
     });
 
     it('reports no custom header view by default', function (): void {

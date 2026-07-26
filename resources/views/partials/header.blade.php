@@ -22,8 +22,19 @@
     $vhOwner = $vhLivewire->getId();
 @endphp
 
+{{--
+    The wrapper is NOT cosmetic. Alpine's teleport takes
+    `template.content.cloneNode(true).firstElementChild` — so an ELEMENT-less
+    header (`header(new HtmlString('abc'))`) makes it null and the directive
+    throws on the next line, and a multi-root view would teleport only its
+    first element and silently drop the rest. One guaranteed root element fixes
+    both. `display: contents` keeps it out of the layout, exactly like the
+    filters partial's own `x-data` wrapper.
+--}}
 <template x-teleport="[data-villament-header-slot='header'][data-villament-owner='{{ $vhOwner }}']">
-    {{ $vhHeader }}
+    <div data-villament-header-view style="display: contents">
+        {{ $vhHeader }}
+    </div>
 </template>
 
 {{-- The physical teleport target; the island adopts it into the header container. --}}
