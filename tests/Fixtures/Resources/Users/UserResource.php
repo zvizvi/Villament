@@ -27,6 +27,7 @@ use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Zvizvi\Villament\Tests\Fixtures\Models\User;
 use Zvizvi\Villament\Tests\Fixtures\Resources\Users\Pages\EditUser;
 use Zvizvi\Villament\Tests\Fixtures\Resources\Users\Pages\ListUsers;
@@ -53,6 +54,12 @@ class UserResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()->where('is_banned', false);
+    }
+
+    /** The uppercased first letter of a name — the `initial` group's key. */
+    public static function initial(User $record): string
+    {
+        return mb_strtoupper(mb_substr((string) $record->name, 0, 1));
     }
 
     public static function form(Schema $schema): Schema
@@ -102,6 +109,22 @@ class UserResource extends Resource
                     ->getDescriptionFromRecordUsing(fn (User $record): string => "Users with status {$record->status}"),
                 Group::make('created_at')
                     ->date(),
+                // Relationship grouping (dot-syntax): exercises the Group's
+                // eager loading, RelationshipOrderer subquery ordering, and
+                // `whereHas` key scoping.
+                Group::make('team.name')
+                    ->label('Team'),
+                // Every query/label closure at once, over a column that does
+                // NOT exist ('initial') — so the closures are the ONLY thing
+                // that can produce a working key/title/order/scope.
+                Group::make('initial')
+                    ->label('Initial')
+                    ->titlePrefixedWithLabel(false)
+                    ->getKeyFromRecordUsing(fn (User $record): string => static::initial($record))
+                    ->getTitleFromRecordUsing(fn (User $record): string => 'Starts with '.static::initial($record))
+                    ->orderQueryUsing(fn (Builder $query, string $direction): Builder => $query->orderByRaw('upper(substr(name, 1, 1)) '.($direction === 'desc' ? 'desc' : 'asc')))
+                    ->groupQueryUsing(fn (QueryBuilder $query): QueryBuilder => $query->groupByRaw('upper(substr(name, 1, 1))'))
+                    ->scopeQueryByKeyUsing(fn (Builder $query, ?string $key): Builder => $query->whereRaw('upper(substr(name, 1, 1)) = ?', [$key])),
             ])
             ->groupsOnly(fn (): bool => static::$groupsOnly)
             ->groupingSettingsHidden(fn (): bool => static::$groupingSettingsHidden)

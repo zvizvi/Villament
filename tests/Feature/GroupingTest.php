@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Filament\Actions\Action;
 use Livewire\Features\SupportTesting\Testable;
 use Zvizvi\Villament\Support\SchemaSerializer;
+use Zvizvi\Villament\Tests\Fixtures\Models\Team;
 use Zvizvi\Villament\Tests\Fixtures\Models\User;
 use Zvizvi\Villament\Tests\Fixtures\Resources\Users\Pages\ListUsers;
 use Zvizvi\Villament\Tests\Fixtures\Resources\Users\UserResource;
@@ -54,8 +55,9 @@ it('serializes the selectable groups into the schema', function (): void {
     $grouping = (new SchemaSerializer)->serialize($table)['grouping'];
 
     expect($grouping)->not->toBeNull()
-        ->and(array_column($grouping['groups'], 'id'))->toBe(['status', 'created_at'])
+        ->and(array_column($grouping['groups'], 'id'))->toBe(['status', 'created_at', 'team.name', 'initial'])
         ->and($grouping['groups'][0]['label'])->toBe('Status')
+        ->and($grouping['groups'][2]['label'])->toBe('Team')
         ->and($grouping['directionSettingHidden'])->toBeFalse()
         ->and($grouping['settingsInDropdownOnDesktop'])->toBeFalse()
         ->and($grouping['collapsedByDefault'])->toBeFalse()
@@ -188,5 +190,95 @@ it('renders the grouping trigger through Filament, honoring groupRecordsTriggerA
             ->and($customized['triggerHtml'])->toContain('fi-color-danger');
     } finally {
         UserResource::$groupRecordsTriggerAction = null;
+    }
+});
+
+it('matches the stock table when grouping by a relationship column', function (): void {
+    $teams = collect(['Alpha', 'Beta', 'Gamma'])->map(
+        fn (string $name): Team => Team::query()->create(['name' => $name, 'slug' => mb_strtolower($name)]),
+    );
+
+    // Spread users across teams, leaving some without one (null group).
+    User::query()->where('is_banned', false)->get()->each(function (User $user, int $index) use ($teams): void {
+        $user->update(['team_id' => $index % 4 === 0 ? null : $teams[$index % 3]->getKey()]);
+    });
+
+    $stock = groupedStockKeys(livewire(ListUsers::class)->set('tableGrouping', 'team.name'));
+
+    expect($stock)->not->toBeEmpty()
+        ->and(groupedEndpointKeys('grouping=team.name'))->toBe($stock);
+
+    // …and descending, which drives the RelationshipOrderer subquery the other way.
+    $stockDesc = groupedStockKeys(livewire(ListUsers::class)->set('tableGrouping', 'team.name:desc'));
+
+    expect(groupedEndpointKeys('grouping=team.name:desc'))->toBe($stockDesc);
+});
+
+it('serializes relationship group titles from the related record', function (): void {
+    $team = Team::query()->create(['name' => 'Alpha', 'slug' => 'alpha']);
+    User::query()->where('is_banned', false)->update(['team_id' => $team->getKey()]);
+
+    $records = getJson('/admin/villament/users/data'.'?grouping=team.name&perPage=10')->assertOk()->json('records');
+
+    expect($records)->not->toBeEmpty();
+
+    foreach ($records as $record) {
+        expect($record['group']['key'])->toBe('Alpha')
+            ->and($record['group']['title'])->toBe('Alpha')
+            ->and($record['group']['label'])->toBe('Team');
+    }
+});
+
+it('matches the stock table when the group defines custom query closures', function (): void {
+    // The `initial` group has no real column — key/title/order/scope all come
+    // from its closures, so parity here proves every one of them ran.
+    $stock = groupedStockKeys(livewire(ListUsers::class)->set('tableGrouping', 'initial'));
+
+    expect($stock)->not->toBeEmpty()
+        ->and(groupedEndpointKeys('grouping=initial'))->toBe($stock);
+
+    $stockDesc = groupedStockKeys(livewire(ListUsers::class)->set('tableGrouping', 'initial:desc'));
+
+    expect(groupedEndpointKeys('grouping=initial:desc'))->toBe($stockDesc);
+});
+
+it('serializes group keys and titles from closures, without the label prefix', function (): void {
+    $records = getJson('/admin/villament/users/data'.'?grouping=initial&perPage=10')->assertOk()->json('records');
+
+    expect($records)->not->toBeEmpty();
+
+    foreach ($records as $record) {
+        $key = $record['group']['key'];
+
+        expect($key)->toMatch('/^[A-Z]$/')
+            ->and($record['group']['title'])->toBe("Starts with {$key}")
+            // `titlePrefixedWithLabel(false)` → no label ships for the header.
+            ->and($record['group']['label'])->toBeNull();
+    }
+});
+
+it('computes groupsOnly summaries through the group query closures', function (): void {
+    UserResource::$groupsOnly = true;
+
+    try {
+        $summaries = getJson('/admin/villament/users/data'.'?grouping=initial')->assertOk()->json('summaries');
+
+        expect($summaries['groupsOnly'])->toBeTrue()
+            ->and($summaries['groupColumn'])->toBe('initial')
+            ->and($summaries['groups'])->not->toBeEmpty();
+
+        // `groupQueryUsing` + `scopeQueryByKeyUsing` drove these aggregates: each
+        // row's sum must equal the sum of that initial's users.
+        foreach ($summaries['groups'] as $row) {
+            $expected = User::query()
+                ->where('is_banned', false)
+                ->whereRaw('upper(substr(name, 1, 1)) = ?', [$row['key']])
+                ->sum('logins_count');
+
+            expect($row['heading'])->toBe("Starts with {$row['key']}")
+                ->and($row['cells']['logins_count'])->toContain((string) $expected);
+        }
+    } finally {
+        UserResource::$groupsOnly = false;
     }
 });

@@ -16,6 +16,7 @@ use Filament\Support\SupportServiceProvider;
 use Filament\Tables\TablesServiceProvider;
 use Filament\Widgets\WidgetsServiceProvider;
 use Illuminate\Support\Facades\Gate;
+use Kirschbaum\PowerJoins\PowerJoinsServiceProvider;
 use Livewire\LivewireServiceProvider;
 use Orchestra\Testbench\TestCase as Orchestra;
 use Zvizvi\Villament\Tests\Fixtures\AdminPanelProvider;
@@ -39,6 +40,10 @@ abstract class TestCase extends Orchestra
             LivewireServiceProvider::class,
             BladeIconsServiceProvider::class,
             BladeHeroiconsServiceProvider::class,
+            // Auto-discovered in a real app; Testbench needs it explicitly.
+            // Filament's RelationshipJoiner/RelationshipOrderer call its
+            // `leftJoinRelationship()` macro for relationship sort & grouping.
+            PowerJoinsServiceProvider::class,
             FilamentServiceProvider::class,
             SchemasServiceProvider::class,
             ActionsServiceProvider::class,
