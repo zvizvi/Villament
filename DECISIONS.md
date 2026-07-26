@@ -110,6 +110,14 @@ Owner decision: the ENTIRE filter panel is Filament's original Livewire UI, not 
 - The schema ships only `hasFilters: bool` (show the trigger or not) — filter definitions never leave the server.
 - Trade-off accepted: applying a filter is one Livewire commit (small form) + one Vue refetch. High-frequency interactions (search/sort/pagination) stay Vue/AJAX. Panel positioning uses the existing CSS anchor (no floating-ui); the trigger button is the one filter element Vue-rendered (pixel-identical) to avoid teleporting a native dropdown into the wire:ignore toolbar.
 
+## 2026-07-26 — `ColumnGroup`: structure from the manager state, modifiers from the schema
+
+The column-manager state (`tableColumns`, already inlined for toggling and reordering) is Filament's own group-aware tree: `{type: 'group', name, columns: [...]}`, in layout order, reordered along with the columns. So the island does NOT need the layout serialized a second time — it needs only what the manager omits: the group's `label`, `wrapHeader`, `alignment`, `hiddenFrom`, `visibleFrom`. Those ship as `schema.columnGroups`.
+
+Keyed by `e($group->getLabel())`, because that is what BOTH `Table::getColumnGroups()` and `mapTableColumnGroupToArray()` use as their key — matching on it is what lets the two payloads meet. The serialized `label` is the RAW one: the manager's copy is pre-escaped for use as a key, and Vue escapes on render, so reusing it would print `&amp;`. The fixture group is deliberately named `Profile & Access` to pin that. (An `Htmlable` label is flattened to a string and rendered as text, matching what the column labels already do.)
+
+`visibleColumns` was refactored into `columnLayout`, which yields the same walk as SEGMENTS (a bare column, or a group with its visible members) with `visibleColumns` flattened out of it. Deriving both rows from one walk is the point: computed separately, a `colspan` can drift out of step with the cells it covers, and every column after the group shifts. Stock's `hasColumnGroups()` rule falls out of the same structure — a group with no visible columns contributes no cell, and with no group left there is no row.
+
 ## 2026-07-26 — Header/cell modifiers ship as one set
 
 `wrapHeader()` surfaced a family, not a single flag: stock builds nine classes into its `<th>` where we built four, and five into its `<td>` where we built three. Serializing them one at a time invites drift, so `serializeColumn()` now carries the whole set and `headerCellClasses()` / `recordCellClasses()` mirror stock's `@class` lists in the same order.

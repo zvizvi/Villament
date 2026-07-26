@@ -15,7 +15,9 @@ use Filament\Forms\Components\TextInput;
 use Filament\Resources\Pages\PageRegistration;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
+use Filament\Support\Enums\Alignment;
 use Filament\Support\Enums\VerticalAlignment;
+use Filament\Tables\Columns\ColumnGroup;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\Summarizers\Average;
@@ -117,10 +119,19 @@ class UserResource extends Resource
                         'pending' => 'warning',
                         default => 'danger',
                     }),
-                IconColumn::make('is_admin')
-                    ->boolean(),
-                ImageColumn::make('avatar_url')
-                    ->circular(),
+                // A ColumnGroup spanning two adjacent columns. The `&` in
+                // the label is deliberate: Filament keys its column-manager
+                // group entries (and `getColumnGroups()`) by `e($label)`, so
+                // this proves the island matches on the ESCAPED key while
+                // rendering the raw label exactly once.
+                ColumnGroup::make('Profile & Access', [
+                    IconColumn::make('is_admin')
+                        ->boolean(),
+                    ImageColumn::make('avatar_url')
+                        ->circular(),
+                ])
+                    ->wrapHeader()
+                    ->alignment(Alignment::Center),
                 ViewColumn::make('email')
                     ->view('fixtures.columns.user-email'),
                 TextColumn::make('logins_count')

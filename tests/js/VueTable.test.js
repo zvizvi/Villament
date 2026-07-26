@@ -617,6 +617,51 @@ describe('VueTable filters (native Livewire panel) + indicators', () => {
         expect(wrapper.get('th.fi-ta-header-cell-name').classes()).not.toContain('fi-vertical-align-start')
     })
 
+    it('spans a column group over exactly its visible columns, and drops it when empty', () => {
+        const column = (key, label) => ({ key, label, type: 'text', sortable: false, individuallySearchable: false, toggleable: true, hiddenByDefault: false, alignment: null })
+        const entry = (name, isToggled = true) => ({ type: 'column', name, label: name, isHidden: false, isToggled, isToggleable: true })
+
+        const config = makeConfig()
+        config.schema.columns = [column('name', 'Name'), column('is_admin', 'Admin'), column('avatar_url', 'Avatar')]
+        config.schema.columnGroups = {
+            'Profile &amp; Access': { label: 'Profile & Access', wrapHeader: false, alignment: null, hiddenFrom: null, visibleFrom: null },
+        }
+        config.state.columns = [
+            entry('name'),
+            { type: 'group', name: 'Profile &amp; Access', label: 'Profile &amp; Access', isHidden: false, isToggled: true, isToggleable: true, columns: [entry('is_admin'), entry('avatar_url')] },
+        ]
+        config.initialData.records = [
+            { key: '1', cells: { name: { type: 'text', formatted: 'Jane' }, is_admin: { type: 'text', formatted: 'yes' }, avatar_url: { type: 'text', formatted: 'a.png' } }, can: {} },
+        ]
+
+        wrapper = mount(VueTable, { props: { config }, attachTo: document.body })
+
+        const groupCell = () => wrapper.find('.fi-ta-table-head-groups-row .fi-ta-header-group-cell')
+
+        expect(groupCell().attributes('colspan')).toBe('2')
+        // The manager's key is the ESCAPED label; the raw one is rendered.
+        expect(groupCell().text()).toBe('Profile & Access')
+        wrapper.unmount()
+
+        // Toggling one member off shrinks the span rather than misaligning the
+        // cells below it.
+        const partial = JSON.parse(JSON.stringify(config))
+        partial.state.columns[1].columns[1].isToggled = false
+
+        wrapper = mount(VueTable, { props: { config: partial }, attachTo: document.body })
+        expect(groupCell().attributes('colspan')).toBe('1')
+        expect(wrapper.findAll('thead tr')[1].findAll('th')).toHaveLength(2)
+        wrapper.unmount()
+
+        // With no member left, stock renders no group cell — and with no group
+        // left, no row at all.
+        const empty = JSON.parse(JSON.stringify(config))
+        empty.state.columns[1].columns.forEach((groupColumn) => { groupColumn.isToggled = false })
+
+        wrapper = mount(VueTable, { props: { config: empty }, attachTo: document.body })
+        expect(wrapper.find('.fi-ta-table-head-groups-row').exists()).toBe(false)
+    })
+
     it('uses the localized empty state heading', async () => {
         const config = makeConfig({
             initialData: {

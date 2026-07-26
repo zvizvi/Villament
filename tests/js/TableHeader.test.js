@@ -136,3 +136,78 @@ describe('TableHeader cell modifiers (stock @class parity)', () => {
         expect(cell.attributes('style')).toBe('width: 12rem;')
     })
 })
+
+describe('TableHeader column groups row', () => {
+    /**
+     * @param {Array} columnGroups
+     * @param {object} [extra]
+     * @returns {import('@vue/test-utils').VueWrapper}
+     */
+    function mountGroups(columnGroups, extra = {}) {
+        wrapper = mount(TableHeader, {
+            props: {
+                columns: [
+                    { key: 'name', label: 'Name', sortable: false },
+                    { key: 'is_admin', label: 'Admin', sortable: false },
+                    { key: 'avatar_url', label: 'Avatar', sortable: false },
+                ],
+                columnGroups,
+                sort: null,
+                icons,
+                ...extra,
+            },
+        })
+
+        return wrapper
+    }
+
+    it('renders no groups row when no segment carries a group', () => {
+        expect(mountGroups([]).find('.fi-ta-table-head-groups-row').exists()).toBe(false)
+    })
+
+    it('spans each segment over the cells below it, with stock classes', () => {
+        const row = mountGroups([
+            { span: 1, group: null },
+            { span: 2, group: { label: 'Profile & Access', wrapHeader: true, alignment: 'center', hiddenFrom: 'md', visibleFrom: null } },
+        ]).get('.fi-ta-table-head-groups-row')
+
+        const cells = row.findAll('th')
+        expect(cells).toHaveLength(2)
+
+        // A bare column contributes an empty, unlabelled placeholder cell.
+        expect(cells[0].attributes('colspan')).toBeUndefined()
+        expect(cells[0].classes()).toEqual([])
+        expect(cells[0].text()).toBe('')
+
+        expect(cells[1].attributes('colspan')).toBe('2')
+        expect(cells[1].classes()).toEqual([
+            'fi-ta-header-group-cell',
+            'fi-wrapped',
+            'fi-align-center',
+            'md:fi-hidden',
+        ])
+        // Escaped exactly once — the label arrives raw, Vue escapes on render.
+        expect(cells[1].text()).toBe('Profile & Access')
+        expect(cells[1].html()).toContain('Profile &amp; Access')
+    })
+
+    it('mirrors the selection and actions placeholders of the row below', () => {
+        const wrapper = mountGroups(
+            [{ span: 3, group: { label: 'All' } }],
+            { selectable: true, hasActionsColumn: true },
+        )
+
+        const groupsRow = wrapper.get('.fi-ta-table-head-groups-row')
+        const columnsRow = wrapper.findAll('thead tr')[1]
+
+        // The invariant that matters: both rows cover the same number of table
+        // columns once colspans are counted. Placeholders included, or the
+        // group row sits one cell to the left of what it labels.
+        const spanned = groupsRow
+            .findAll('th')
+            .reduce((total, cell) => total + Number(cell.attributes('colspan') ?? 1), 0)
+
+        expect(spanned).toBe(columnsRow.findAll('th').length)
+        expect(spanned).toBe(5) // selection + 3 columns + actions
+    })
+})

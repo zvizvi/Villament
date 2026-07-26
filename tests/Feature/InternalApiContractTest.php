@@ -9,6 +9,7 @@ use Filament\Resources\Pages\ListRecords;
 use Filament\Resources\Pages\PageRegistration;
 use Filament\Resources\Resource;
 use Filament\Tables\Columns\Column;
+use Filament\Tables\Columns\ColumnGroup;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
@@ -46,6 +47,9 @@ $methodContract = [
     [Table::class, 'getFiltersFormWidth'],
     [Table::class, 'getFiltersFormColumns'],
     [Table::class, 'getFiltersFormMaxHeight'],
+    // Summary row toggles (`summaries(pageCondition:, allTableCondition:)`).
+    [Table::class, 'hasPageSummary'],
+    [Table::class, 'hasAllTableSummary'],
     [Table::class, 'getColumns'],
     [Table::class, 'getVisibleColumns'],
     [Table::class, 'getColumn'],
@@ -58,6 +62,15 @@ $methodContract = [
     [Table::class, 'getDefaultPaginationPageOption'],
     [Table::class, 'getPaginationMode'],
     [Table::class, 'getGroups'],
+    // Column groups: `getColumnGroups()` is keyed by `e($label)`, exactly as
+    // the column-manager state keys its group entries — the island matches the
+    // two on that key.
+    [Table::class, 'getColumnGroups'],
+    [ColumnGroup::class, 'getLabel'],
+    [ColumnGroup::class, 'canHeaderWrap'],
+    [ColumnGroup::class, 'getAlignment'],
+    [ColumnGroup::class, 'getHiddenFrom'],
+    [ColumnGroup::class, 'getVisibleFrom'],
     [Table::class, 'getGroup'],
     [Table::class, 'getGrouping'],
     [Table::class, 'getDefaultGroup'],
@@ -89,6 +102,14 @@ $methodContract = [
     [Column::class, 'isToggleable'],
     [Column::class, 'isToggledHiddenByDefault'],
     [Column::class, 'getAlignment'],
+    // Header/cell modifiers — the class set stock builds into its `<th>`/`<td>`.
+    [Column::class, 'getVerticalAlignment'],
+    [Column::class, 'canHeaderWrap'],
+    [Column::class, 'canGrow'],
+    [Column::class, 'getWidth'],
+    [Column::class, 'getGroup'],
+    [Column::class, 'getHiddenFrom'],
+    [Column::class, 'getVisibleFrom'],
     [Column::class, 'isHidden'],
     [Column::class, 'toHtml'],
     [TextColumn::class, 'isBadge'],

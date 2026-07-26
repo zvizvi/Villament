@@ -64,6 +64,7 @@ final class SchemaSerializer
 
         return [
             'columns' => $columns,
+            'columnGroups' => $this->columnGroups($table),
             'defaultSort' => $defaultSortColumn === null ? null : [
                 'column' => $defaultSortColumn,
                 'direction' => $table->getDefaultSortDirection() ?? 'asc',
@@ -227,6 +228,39 @@ final class SchemaSerializer
             'hiddenFrom' => $column->getHiddenFrom(),
             'visibleFrom' => $column->getVisibleFrom(),
         ];
+    }
+
+    /**
+     * Display modifiers for the `ColumnGroup` header row, keyed exactly as
+     * Filament's own column-manager state keys its group entries
+     * (`e($group->getLabel())`) — the island already receives that state and
+     * walks it for order and visibility, so this only has to supply what the
+     * manager omits.
+     *
+     * `label` is the RAW label: the manager's copy is pre-escaped for use as a
+     * key, and Vue escapes on render. An `Htmlable` label is flattened to a
+     * string here (rendered as text, not markup) — the same trade the column
+     * labels already make.
+     *
+     * @return array<string, array{label: string, wrapHeader: bool, alignment: ?string, hiddenFrom: ?string, visibleFrom: ?string}>
+     */
+    private function columnGroups(Table $table): array
+    {
+        $groups = [];
+
+        foreach ($table->getColumnGroups() as $key => $group) {
+            $alignment = $group->getAlignment();
+
+            $groups[$key] = [
+                'label' => (string) $group->getLabel(),
+                'wrapHeader' => $group->canHeaderWrap(),
+                'alignment' => $alignment instanceof Alignment ? $alignment->value : $alignment,
+                'hiddenFrom' => $group->getHiddenFrom(),
+                'visibleFrom' => $group->getVisibleFrom(),
+            ];
+        }
+
+        return $groups;
     }
 
     private function columnType(Column $column): string

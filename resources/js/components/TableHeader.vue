@@ -11,6 +11,15 @@ const props = defineProps({
         required: true,
     },
     /**
+     * Segments of the `ColumnGroup` header row, aligned 1:1 with `columns`
+     * through their spans: `{ span, group: { label, wrapHeader, alignment,
+     * hiddenFrom, visibleFrom } | null }`. Empty renders no row.
+     */
+    columnGroups: {
+        type: Array,
+        default: () => [],
+    },
+    /**
      * Current sort expression, e.g. `"name:asc"`, or null.
      */
     sort: {
@@ -160,6 +169,32 @@ function headerCellClasses(column) {
 }
 
 /**
+ * @param {object} group Group definition from `schema.columnGroups`.
+ * @returns {string[]} Group header cell classes matching Filament's own markup.
+ */
+function headerGroupCellClasses(group) {
+    const classes = ['fi-ta-header-group-cell']
+
+    if (group.wrapHeader) {
+        classes.push('fi-wrapped')
+    }
+
+    if (group.alignment) {
+        classes.push(`fi-align-${group.alignment}`)
+    }
+
+    if (group.hiddenFrom) {
+        classes.push(`${group.hiddenFrom}:fi-hidden`)
+    }
+
+    if (group.visibleFrom) {
+        classes.push(`${group.visibleFrom}:fi-visible`)
+    }
+
+    return classes
+}
+
+/**
  * @param {object} column
  * @returns {Object<string, string>|undefined} Stock sets `->width()` as an
  *   inline style on the header cell only. Physical `width` (not the logical
@@ -183,6 +218,36 @@ function onSortClick(column) {
 
 <template>
     <thead>
+        <!--
+            The ColumnGroup header row. Every segment spans the cells of the
+            row below it — a bare column contributes a single empty cell, a
+            group one labelled cell with its colspan. The leading/trailing
+            placeholders mirror the row below so the two never drift.
+        -->
+        <tr
+            v-if="columnGroups.length"
+            class="fi-ta-table-head-groups-row"
+        >
+            <th v-if="selectable" />
+
+            <template
+                v-for="(segment, index) in columnGroups"
+                :key="index"
+            >
+                <th
+                    v-if="segment.group"
+                    :colspan="segment.span"
+                    :class="headerGroupCellClasses(segment.group)"
+                >
+                    {{ segment.group.label }}
+                </th>
+
+                <th v-else />
+            </template>
+
+            <th v-if="hasActionsColumn" />
+        </tr>
+
         <tr>
             <th
                 v-if="selectable"

@@ -301,41 +301,85 @@ function isColumnVisible(column) {
 }
 
 /**
- * Visible columns in COLUMN MANAGER STATE order (reordering support);
- * columns unknown to the manager state keep their schema position, appended
- * after the managed ones.
+ * The visible columns as the SEGMENTS a `ColumnGroup` header row spans: a
+ * bare column, or a group with its visible members. In COLUMN MANAGER STATE
+ * order (reordering support); columns unknown to the manager state keep their
+ * schema position, appended after the managed ones.
+ *
+ * The group row and the column row derive from this one walk on purpose —
+ * computing them separately lets a `colspan` drift out of step with the cells
+ * it is supposed to cover.
  */
-const visibleColumns = computed(() => {
+const columnLayout = computed(() => {
     const bySchemaKey = new Map(schema.columns.map((column) => [column.key, column]))
-    const ordered = []
+    const segments = []
     const seen = new Set()
 
-    const push = (name) => {
+    // Consumes a name once: an already-taken or unknown name yields nothing,
+    // and an invisible one is still consumed so the schema pass below cannot
+    // resurrect it out of position.
+    const take = (name) => {
         const column = bySchemaKey.get(name)
 
-        if (column && ! seen.has(name)) {
-            seen.add(name)
-            ordered.push(column)
+        if (! column || seen.has(name)) {
+            return null
         }
+
+        seen.add(name)
+
+        return isColumnVisible(column) ? column : null
     }
 
     for (const entry of columnsState.value) {
         if (entry.type === 'group') {
-            for (const groupColumn of entry.columns ?? []) {
-                push(groupColumn.name)
+            const columns = (entry.columns ?? []).map((groupColumn) => take(groupColumn.name)).filter(Boolean)
+
+            // Stock's `hasColumnGroups()`: a group with no visible columns
+            // contributes no header cell at all.
+            if (columns.length) {
+                segments.push({ type: 'group', name: entry.name, columns })
             }
 
             continue
         }
 
-        push(entry.name)
+        const column = take(entry.name)
+
+        if (column) {
+            segments.push({ type: 'column', columns: [column] })
+        }
     }
 
-    for (const column of schema.columns) {
-        push(column.key)
+    for (const schemaColumn of schema.columns) {
+        const column = take(schemaColumn.key)
+
+        if (column) {
+            segments.push({ type: 'column', columns: [column] })
+        }
     }
 
-    return ordered.filter(isColumnVisible)
+    return segments
+})
+
+/** Visible columns, flattened out of the layout above. */
+const visibleColumns = computed(() => columnLayout.value.flatMap((segment) => segment.columns))
+
+/**
+ * Segments for the `ColumnGroup` header row, each carrying the `colspan` it
+ * covers and (for groups) the display modifiers from the schema. Empty when no
+ * group survives — stock renders no row at all then.
+ */
+const columnGroupRow = computed(() => {
+    if (! columnLayout.value.some((segment) => segment.type === 'group')) {
+        return []
+    }
+
+    const definitions = schema.columnGroups ?? {}
+
+    return columnLayout.value.map((segment) => ({
+        span: segment.columns.length,
+        group: segment.type === 'group' ? (definitions[segment.name] ?? { label: segment.name }) : null,
+    }))
 })
 
 const cellComponents = {
@@ -947,6 +991,7 @@ function recordCellClasses(column) {
                         <table class="fi-ta-table">
                             <TableHeader
                                 :columns="visibleColumns"
+                                :column-groups="columnGroupRow"
                                 :sort="state.sort.value"
                                 :icons="icons"
                                 :selectable="isSelectionEnabled"
