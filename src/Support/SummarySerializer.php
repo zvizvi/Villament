@@ -67,10 +67,21 @@ final class SummarySerializer
     }
 
     /**
-     * One summary row per group present on the page (in order). The per-group
-     * aggregates come from Filament's own grouped selected-state query (a
-     * `GROUP BY` over the whole filtered set, keyed by group key), and each
-     * cell is scoped to its group via `Group::scopeQuery()` — never
+     * One summary row per group on the page, mirroring the stock blade's own
+     * emission rules exactly:
+     *
+     * - a row is emitted for the PREVIOUS group whenever the group TITLE
+     *   changes (stock compares titles, not keys);
+     * - groups whose title is BLANK are skipped entirely (stock's
+     *   `filled($previousRecordGroupTitle)` gate) — so records with no group
+     *   value produce no row at all;
+     * - the trailing group is emitted only when it does not continue onto the
+     *   next page (`shouldRenderTrailingGroupedTableSummary()`), so a group
+     *   spanning a page boundary yields exactly one row, on the page it ends.
+     *
+     * The per-group aggregates come from Filament's own grouped selected-state
+     * query (a `GROUP BY` over the whole filtered set, keyed by group key), and
+     * each cell is scoped to its group via `Group::scopeQuery()` — never
      * reimplementing a summarizer's own SQL.
      *
      * @param  iterable<int, Model|array<string, mixed>>  $records
@@ -85,7 +96,6 @@ final class SummarySerializer
         }
 
         $model = $allQuery->getModel();
-        $groupColumn = $group->getColumn();
 
         // Per-group summarizer state for every group, keyed by group key —
         // computed ONCE (stock's `$groupedSummarySelectedState`).
@@ -95,44 +105,60 @@ final class SummarySerializer
         );
 
         $rows = [];
-        $seen = [];
+
+        $previousRecord = null;
+        $previousKey = null;
+        $previousTitle = null;
 
         foreach ($records as $record) {
-            $key = $group->getStringKey($record);
+            $title = $this->stringable($group->getTitle($record));
 
-            // Records arrive grouped/contiguous — one row per distinct group.
-            if (in_array($key, $seen, true)) {
-                continue;
+            if ($title !== $previousTitle && filled($previousTitle)) {
+                $rows[] = $this->groupRow($livewire, $table, $group, $previousRecord, $previousKey, $previousTitle, $groupedState);
             }
 
-            $seen[] = $key;
+            $previousRecord = $record;
+            $previousKey = $group->getStringKey($record);
+            $previousTitle = $title;
+        }
 
-            $scopedQuery = $group->scopeQuery($livewire->getAllTableSummaryQuery(), $record);
-            $selectedState = $groupedState[$key] ?? [];
-
-            $cells = [];
-
-            foreach ($table->getVisibleColumns() as $column) {
-                // The group column itself is dropped (stock): its value is the
-                // row heading, not a summarized cell.
-                if ($column->getName() === $groupColumn || ! $column->hasSummary($scopedQuery)) {
-                    continue;
-                }
-
-                $cells[$column->getName()] = implode('', array_map(
-                    fn ($summarizer): string => $summarizer->query($scopedQuery)->selectedState($selectedState)->toHtml(),
-                    $column->getSummarizers($scopedQuery),
-                ));
-            }
-
-            $rows[] = [
-                'key' => $key,
-                'heading' => $this->stringable($group->getTitle($record)),
-                'cells' => $cells,
-            ];
+        if (
+            filled($previousTitle) &&
+            $livewire->shouldRenderTrailingGroupedTableSummary($previousRecord)
+        ) {
+            $rows[] = $this->groupRow($livewire, $table, $group, $previousRecord, $previousKey, $previousTitle, $groupedState);
         }
 
         return $rows;
+    }
+
+    /**
+     * @param  Model|array<string, mixed>  $record
+     * @param  array<string, mixed>  $groupedState
+     * @return array{key: ?string, heading: string, cells: array<string, string>}
+     */
+    private function groupRow(ListRecords $livewire, Table $table, Group $group, Model|array $record, ?string $key, string $title, array $groupedState): array
+    {
+        $groupColumn = $group->getColumn();
+        $scopedQuery = $group->scopeQuery($livewire->getAllTableSummaryQuery(), $record);
+        $selectedState = $groupedState[$key] ?? [];
+
+        $cells = [];
+
+        foreach ($table->getVisibleColumns() as $column) {
+            // The group column itself is dropped (stock): its value is the row
+            // heading, not a summarized cell.
+            if ($column->getName() === $groupColumn || ! $column->hasSummary($scopedQuery)) {
+                continue;
+            }
+
+            $cells[$column->getName()] = implode('', array_map(
+                fn ($summarizer): string => $summarizer->query($scopedQuery)->selectedState($selectedState)->toHtml(),
+                $column->getSummarizers($scopedQuery),
+            ));
+        }
+
+        return ['key' => $key, 'heading' => $title, 'cells' => $cells];
     }
 
     private function stringable(mixed $value): string

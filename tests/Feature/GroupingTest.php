@@ -282,3 +282,46 @@ it('computes groupsOnly summaries through the group query closures', function ()
         UserResource::$groupsOnly = false;
     }
 });
+
+it('omits the blank group from groupsOnly rows, like the stock table', function (): void {
+    // Only some users get a team; the rest group to a blank title.
+    $team = Team::query()->create(['name' => 'Alpha', 'slug' => 'alpha']);
+    User::query()->where('is_banned', false)->limit(10)->update(['team_id' => $team->getKey()]);
+
+    UserResource::$groupsOnly = true;
+
+    try {
+        $summaries = getJson('/admin/villament/users/data'.'?grouping=team.name&perPage=50')
+            ->assertOk()->json('summaries');
+
+        $headings = array_column($summaries['groups'], 'heading');
+        $keys = array_column($summaries['groups'], 'key');
+
+        // Stock gates each group row on `filled($title)`: the teamless records
+        // are grouped, but contribute NO summary row.
+        expect($headings)->toBe(['Alpha'])
+            ->and($keys)->not->toContain(null)
+            ->and($headings)->not->toContain('');
+    } finally {
+        UserResource::$groupsOnly = false;
+    }
+});
+
+it('disables pagination in groupsOnly mode, so every group yields a row', function (): void {
+    UserResource::$groupsOnly = true;
+
+    try {
+        // Stock's `Table::isPaginated()` is false whenever `isGroupsOnly()`, so
+        // the requested perPage is ignored and every record (hence every group)
+        // is returned at once.
+        $payload = getJson('/admin/villament/users/data'.'?grouping=status&perPage=10')->assertOk()->json();
+
+        $total = User::query()->where('is_banned', false)->count();
+
+        expect($payload['meta']['perPage'])->toBe($total)
+            ->and($payload['meta']['lastPage'])->toBe(1)
+            ->and(array_column($payload['summaries']['groups'], 'key'))->toBe(['active', 'archived', 'pending']);
+    } finally {
+        UserResource::$groupsOnly = false;
+    }
+});

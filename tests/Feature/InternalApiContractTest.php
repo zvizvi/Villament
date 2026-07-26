@@ -37,6 +37,7 @@ $methodContract = [
     [ListRecords::class, 'getAllTableSummaryQuery'],
     [ListRecords::class, 'getPageTableSummaryQuery'],
     [ListRecords::class, 'getTableSummarySelectedState'],
+    [ListRecords::class, 'shouldRenderTrailingGroupedTableSummary'],
     [ListRecords::class, 'removeTableFilter'],
     [ListRecords::class, 'resetTableFiltersForm'],
     [ListRecords::class, 'removeTableFilters'],
