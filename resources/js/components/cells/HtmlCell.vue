@@ -15,11 +15,13 @@ defineProps({
 <template>
     <!--
         `fi-ta-text` is Filament's own text-cell wrapper: `.fi-ta-text:not(.fi-inline)`
-        provides the standard cell padding + full width natively.
+        provides the standard cell padding + full width natively, and `inline()`
+        is what opts out of it — exactly as on a serialized text cell.
     -->
     <!-- eslint-disable-next-line vue/no-v-html — server-rendered content (documented contract) -->
     <div
         class="fi-ta-text"
+        :class="cell.inline ? 'fi-inline' : null"
         v-html="cell.html"
     />
 </template>

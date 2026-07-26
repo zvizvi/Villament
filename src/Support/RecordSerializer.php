@@ -277,6 +277,17 @@ final class RecordSerializer
             $payload['extraCellAttributes'] = $extraCellAttributes;
         }
 
+        // `inline()`. Every column type that renders a wrapper of its own puts
+        // `fi-inline` on it, and Filament's CSS keys the standalone cell
+        // padding off its ABSENCE (`.fi-ta-text:not(.fi-inline)`), so dropping
+        // the flag silently double-pads a table that sets it — typically from
+        // a global `Column::configureUsing()`. Read here rather than from the
+        // schema because it evaluates like any other modifier: a closure may
+        // answer differently per record.
+        if ($column->isInline()) {
+            $payload['inline'] = true;
+        }
+
         if (
             $column->hasDynamicAlignment()
             || $column->hasDynamicVerticalAlignment()

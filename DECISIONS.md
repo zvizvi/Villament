@@ -325,6 +325,14 @@ So the harness now mirrors `SupportLifecycleHooks` exactly: `boot` → `initiali
 
 `mount` stays deliberately unreplayed. That is not an oversight to fix later: skipping it is precisely what keeps the session and query-string hydration inside `mountInteractsWithTable()` off, which is what makes the endpoint stateless. Livewire itself runs boot/initialize/booted on every hydrate with no mount, so nothing in a `booted` hook may assume mount ran.
 
+## 2026-07-27 — `inline()` was dropped, and the CSS reads its absence
+
+Every column type puts `fi-inline` on its own wrapper when `inline()` is set, and Filament's CSS keys the standalone cell padding off the **absence** of that class (`.fi-ta-text:not(.fi-inline)`). Villament never serialized the flag, so a table that sets it — typically once, globally, via `Column::configureUsing(fn ($column) => $column->inline()->extraAttributes(['class' => 'px-4']))` — got padding on the island that the stock table does not have.
+
+Worth recording how this was nearly mis-diagnosed. `Column::renderInLayout()` does call `$this->inline()` unconditionally, which reads like "every cell is inline". It is not: `renderInLayout()` serves the Split/Stack layout path, while a plain column's cell is wrapped by `index.blade.php` itself, which never touches the flag. So `fi-inline` on an ordinary cell only ever comes from the app.
+
+It lives in `RecordSerializer::cellAttributes()`, next to `extraAttributes` — per record, because `isInline()` evaluates like any other modifier and a closure may answer differently per row, and omitted entirely when false so the ordinary payload is untouched.
+
 ## 2026-07-26 — `listWithLineBreaks()` / `limitList()`: the join was hiding three behaviours
 
 An array-valued text cell was serialized as `implode(', ', $items)`. That is stock's behaviour for exactly one configuration — no line breaks, no badge — and villament applied it to all of them, so `listWithLineBreaks()`, `bulleted()`, `limitList()` and `expandableLimitedList()` all silently did nothing.

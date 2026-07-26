@@ -26,6 +26,7 @@ const tooltip = computed(() => filamentTooltip(props.cell.tooltip))
     <div
         v-bind="cell.extraAttributes ?? {}"
         class="fi-ta-icon"
+        :class="cell.inline ? 'fi-inline' : null"
         :x-tooltip="cell.empty && tooltip ? tooltip : undefined"
     >
         <!-- Blank state renders no icon — just the optional placeholder (stock). -->

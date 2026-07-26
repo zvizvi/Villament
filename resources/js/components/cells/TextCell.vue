@@ -50,6 +50,7 @@ const isBoxed = computed(() => hasDescriptions.value || overLimitCount.value > 0
 
 const wrapperClasses = computed(() => [
     'fi-ta-text',
+    props.cell.inline ? 'fi-inline' : null,
     props.cell.bulleted ? 'fi-bulleted' : null,
     props.cell.listWithLineBreaks ? 'fi-ta-text-has-line-breaks' : null,
     hasDescriptions.value ? 'fi-ta-text-has-descriptions' : null,
@@ -81,6 +82,7 @@ function isItemVisible(index) {
         v-if="cell.empty"
         v-bind="cell.extraAttributes ?? {}"
         class="fi-ta-text"
+        :class="cell.inline ? 'fi-inline' : null"
         :x-tooltip="tooltip || undefined"
     >
         <p
@@ -96,7 +98,7 @@ function isItemVisible(index) {
         v-else-if="isSimple"
         v-bind="cell.extraAttributes ?? {}"
         class="fi-ta-text-item fi-ta-text"
-        :class="sizeClass"
+        :class="[sizeClass, cell.inline ? 'fi-inline' : null]"
     >
         <span
             v-if="tooltip"

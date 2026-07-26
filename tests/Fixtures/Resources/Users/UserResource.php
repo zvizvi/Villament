@@ -17,6 +17,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\Alignment;
 use Filament\Support\Enums\VerticalAlignment;
+use Filament\Tables\Columns\Column;
 use Filament\Tables\Columns\ColumnGroup;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\ImageColumn;
@@ -62,6 +63,12 @@ class UserResource extends Resource
 
     /** Test seam: the three `persist*InSession()` toggles, flipped together. */
     public static bool $persistsInSession = false;
+
+    /**
+     * Test seam: `inline()` on every column, the way an app applies it — a
+     * global `Column::configureUsing()`.
+     */
+    public static bool $inlineColumns = false;
 
     /** Test seams: the table's own header block (`heading()`, `description()`). */
     public static ?string $heading = null;
@@ -189,6 +196,10 @@ class UserResource extends Resource
 
     public static function table(Table $table): Table
     {
+        if (static::$inlineColumns) {
+            Column::configureUsing(fn (Column $column): Column => $column->inline());
+        }
+
         return $table
             ->columns([
                 TextColumn::make('name')

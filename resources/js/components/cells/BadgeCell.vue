@@ -30,6 +30,7 @@ const hasDescriptions = computed(() => Boolean(props.cell.descriptionAbove || pr
         v-if="cell.empty"
         v-bind="cell.extraAttributes ?? {}"
         class="fi-ta-text"
+        :class="cell.inline ? 'fi-inline' : null"
         :x-tooltip="tooltip || undefined"
     >
         <p
@@ -45,6 +46,7 @@ const hasDescriptions = computed(() => Boolean(props.cell.descriptionAbove || pr
         v-else-if="hasDescriptions"
         v-bind="cell.extraAttributes ?? {}"
         class="fi-ta-text-has-badges fi-ta-text fi-ta-text-has-descriptions"
+        :class="cell.inline ? 'fi-inline' : null"
     >
         <p
             v-if="cell.descriptionAbove"
@@ -75,6 +77,7 @@ const hasDescriptions = computed(() => Boolean(props.cell.descriptionAbove || pr
         v-else
         v-bind="cell.extraAttributes ?? {}"
         class="fi-ta-text-item fi-ta-text-has-badges fi-ta-text"
+        :class="cell.inline ? 'fi-inline' : null"
     >
         <span
             :class="[cell.colorClasses || '', 'fi-badge', `fi-size-${cell.size || 'sm'}`]"

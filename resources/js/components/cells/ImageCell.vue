@@ -31,7 +31,7 @@ const tooltip = computed(() => filamentTooltip(props.cell.tooltip))
     <div
         v-bind="cell.extraAttributes ?? {}"
         class="fi-ta-image"
-        :class="{ 'fi-circular': cell.circular }"
+        :class="{ 'fi-circular': cell.circular, 'fi-inline': cell.inline }"
         :x-tooltip="cell.empty && tooltip ? tooltip : undefined"
     >
         <!-- Blank state with no default image renders the placeholder (stock). -->

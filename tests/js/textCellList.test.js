@@ -118,3 +118,31 @@ describe('text cell lists', () => {
         expect(cell.find('ul').exists()).toBe(false)
     })
 })
+
+describe('inline cells', () => {
+    it('adds fi-inline to the simple wrapper', () => {
+        expect(mountCell({ formatted: 'Jane', inline: true }).get('div').classes()).toContain('fi-inline')
+    })
+
+    it('adds it to a boxed list wrapper too', () => {
+        const cell = mountCell({
+            items: ['Alpha', 'Beta'],
+            listWithLineBreaks: true,
+            overLimitCount: 1,
+            listLimitMessage: '+1 more',
+            inline: true,
+        })
+
+        expect(cell.get('div').classes()).toContain('fi-inline')
+    })
+
+    it('adds it to a plain list wrapper too', () => {
+        const cell = mountCell({ items: ['Alpha', 'Beta'], listWithLineBreaks: true, inline: true })
+
+        expect(cell.get('ul').classes()).toContain('fi-inline')
+    })
+
+    it('leaves it off when the column is not inline', () => {
+        expect(mountCell({ formatted: 'Jane' }).get('div').classes()).not.toContain('fi-inline')
+    })
+})

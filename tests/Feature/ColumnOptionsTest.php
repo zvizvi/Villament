@@ -290,3 +290,28 @@ describe('list modifiers', function (): void {
             ->and($cells['nicknames']['items'])->toContain('Gamma');
     });
 });
+
+describe('inline', function (): void {
+    afterEach(function (): void {
+        UserResource::$inlineColumns = false;
+    });
+
+    it('carries inline() through, so the cell does not double up the padding', function (): void {
+        UserResource::$inlineColumns = true;
+        User::factory()->create(['name' => 'Inlined']);
+
+        $cells = columnOptionsCellsFor('Inlined');
+
+        // Filament's CSS keys the standalone padding off the ABSENCE of the
+        // class, so every cell type that renders its own wrapper needs it.
+        expect($cells['name']['inline'])->toBeTrue()
+            ->and($cells['status']['inline'])->toBeTrue()
+            ->and($cells['avatar_url']['inline'])->toBeTrue();
+    });
+
+    it('omits the key entirely when the column is not inline', function (): void {
+        User::factory()->create(['name' => 'Blocky']);
+
+        expect(columnOptionsCellsFor('Blocky')['name'])->not->toHaveKey('inline');
+    });
+});
