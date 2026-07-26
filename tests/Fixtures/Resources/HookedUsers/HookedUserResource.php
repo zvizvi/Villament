@@ -28,6 +28,8 @@ class HookedUserResource extends Resource
                 TextColumn::make('email')
                     ->label(new HtmlString('<span class="fcf-header">Email<span class="fcf-trigger"></span></span>'))
                     ->extraHeaderAttributes(['class' => 'fcf-th']),
+                // Left plain, so the undecorated path stays covered.
+                TextColumn::make('status'),
             ])
             ->defaultSort('name');
     }

@@ -7,6 +7,7 @@ namespace Zvizvi\Villament\Tests\Fixtures\Resources\HookedUsers;
 use Filament\Forms\Components\TextInput;
 use Filament\Tables\Filters\Filter;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\HtmlString;
 
 /**
  * Stands in for third-party packages (e.g. header-filter plugins) that add
@@ -16,6 +17,18 @@ use Illuminate\Database\Eloquent\Builder;
  */
 trait PushesFilterOnBoot
 {
+    /**
+     * Stands in for a header-decorating plugin (`filament-column-filters`):
+     * it rewrites the column label on Livewire's `render` event, which the
+     * rendered page fires and the data endpoint never can.
+     */
+    public function renderingPushesFilterOnBoot(): void
+    {
+        $this->getTable()->getColumn('name')?->label(
+            new HtmlString('<span class="decorated">Name<span class="trigger"></span></span>'),
+        );
+    }
+
     public function bootedPushesFilterOnBoot(): void
     {
         $this->getTable()->pushFilters([

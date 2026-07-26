@@ -15,6 +15,7 @@ use Filament\Tables\Enums\RecordActionsPosition;
 use Filament\Tables\Table;
 use Filament\Tables\View\TablesIconAlias;
 use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Support\Arr;
 
 use function Filament\Support\generate_icon_html;
 
@@ -305,6 +306,19 @@ final class SchemaSerializer
     }
 
     /**
+     * Header fields a plugin can rewrite at RENDER time, and which the hash
+     * must therefore ignore. `zvizvi/filament-column-filters` is the case that
+     * proved it: on Livewire's `render` event it swaps the column label for an
+     * `HtmlString` carrying its trigger and tags the `<th>`. The page fires
+     * that event; the data endpoint, which renders nothing, cannot — so the
+     * two would hash differently forever and the island would reload on every
+     * fetch, reload, fetch. Excluding them costs nothing real: the endpoint
+     * never ships a schema, so the client keeps the one it painted with and a
+     * cosmetic difference is unobservable.
+     */
+    private const DECORATABLE_COLUMN_KEYS = ['label', 'labelHtml', 'headerTooltip', 'extraHeaderAttributes'];
+
+    /**
      * Drift-detection hash. Column-manager reordering changes the order of
      * `schema.columns` PER USER SESSION — canonicalize it so the hash only
      * reacts to real definition changes (deploys), never to user state;
@@ -315,6 +329,11 @@ final class SchemaSerializer
     public function version(array $schema): string
     {
         if (isset($schema['columns']) && is_array($schema['columns'])) {
+            $schema['columns'] = array_map(
+                fn (array $column): array => Arr::except($column, self::DECORATABLE_COLUMN_KEYS),
+                $schema['columns'],
+            );
+
             usort(
                 $schema['columns'],
                 fn (array $a, array $b): int => strcmp((string) ($a['key'] ?? ''), (string) ($b['key'] ?? '')),
