@@ -334,9 +334,18 @@ final class SchemaSerializer
         $width = $column->getWidth();
         $headerTooltip = $column->getHeaderTooltip();
 
+        // Stock echoes `getLabel()` into the `<th>`, so an `Htmlable` label
+        // renders as markup — the seam a plugin decorates a header through
+        // (`->label(new HtmlString(...))`) without touching the table view.
+        // `label` stays the accessible plain text (stock strips tags for
+        // accessible names too); `labelHtml` carries what gets displayed.
+        $label = $column->getLabel();
+        $labelHtml = $label instanceof Htmlable ? $label->toHtml() : null;
+
         return [
             'key' => $column->getName(),
-            'label' => (string) $column->getLabel(),
+            'label' => $labelHtml === null ? (string) $label : trim(strip_tags($labelHtml)),
+            'labelHtml' => $labelHtml,
             'headerTooltip' => $headerTooltip instanceof Htmlable ? $headerTooltip->toHtml() : $headerTooltip,
             // Developer-authored `extraHeaderAttributes()`. Per column, not per
             // record — the header renders once.

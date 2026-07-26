@@ -325,6 +325,16 @@ So the harness now mirrors `SupportLifecycleHooks` exactly: `boot` → `initiali
 
 `mount` stays deliberately unreplayed. That is not an oversight to fix later: skipping it is precisely what keeps the session and query-string hydration inside `mountInteractsWithTable()` off, which is what makes the endpoint stateless. Livewire itself runs boot/initialize/booted on every hydrate with no mount, so nothing in a `booted` hook may assume mount ran.
 
+## 2026-07-26 — An `Htmlable` column label is a seam, and escaping it closed one
+
+`zvizvi/filament-column-filters` decorates a header without touching the table view at all: it swaps the column's label for an `HtmlString` carrying its trigger + Alpine popup, and adds `extraHeaderAttributes(['class' => 'fcf-th'])`. Stock renders it because `{{ $columnLabel }}` echoes an `Htmlable` raw. Villament serialized `(string) getLabel()` and Vue escaped it, so the plugin's markup printed as visible tags.
+
+No slot needed here — this is a straight parity bug, and the fix is to stop lying about the type. `labelHtml` carries the markup (null for plain labels, so nothing changes for tables that don't do this), `label` keeps the plain text, and the header renders one or the other. The split matters because villament puts the label in the sort button's `aria-label`, where raw markup would be worse than the escaping it replaced; Filament strips tags for accessible names in exactly the same spot (`index.blade.php`'s table `aria-label`).
+
+`TrustedHtml` renders it as a **fragment** rather than reusing `TrustedIcon`. An icon is one `<svg>` by contract; a decorated label is whatever the plugin author wrote — one element, several, or an element beside bare text — and any wrapper villament invented would land inside `.fi-ta-header-cell-sort-btn`, whose Filament CSS uses direct-child combinators. Alpine needs no help: its mutation observer initializes what Vue inserts, which is what makes the popup's `x-data` work inside a Vue-rendered `<th>`.
+
+Worth naming the pattern: two header-filter plugins, two completely different seams. One renders into the table's markup and needed a teleport target; this one only needed villament to be honest about a type it already had. The lesson for the next one is to look at *how* it renders before assuming it needs a slot.
+
 ## 2026-07-26 — The slot belongs in the header filter row, not the header cell
 
 First cut put the outlet inside the `<th>`, next to the label. Wrong: stock does not render header filters there. `leek/filament-header-filters` overrides `filament-tables::index` and drops each filter into the **individual column search row** — the first `<tr>` of `<tbody>`, one `<td>` per column, holding either a search field or a header filter, never both. Villament already renders that row; the slot simply belongs in it.

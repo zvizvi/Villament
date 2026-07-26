@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import TrustedIcon from './TrustedIcon.js'
 import ActionsHeaderCell from './ActionsHeaderCell.vue'
+import ColumnLabel from './ColumnLabel.vue'
 import { filamentTooltip } from '../support/tooltip.js'
 
 const props = defineProps({
@@ -386,8 +387,11 @@ function onSortClick(column) {
                         v-if="headerTooltipFor(column)"
                         class="fi-ta-header-cell-tooltip"
                         :x-tooltip="headerTooltipFor(column)"
-                    >{{ column.label }}</span>
-                    <template v-else>{{ column.label }}</template>
+                    ><ColumnLabel :column="column" /></span>
+                    <ColumnLabel
+                        v-else
+                        :column="column"
+                    />
 
                     <TrustedIcon :html="sortIconFor(column)" />
                 </span>
@@ -397,8 +401,11 @@ function onSortClick(column) {
                         v-if="headerTooltipFor(column)"
                         class="fi-ta-header-cell-tooltip"
                         :x-tooltip="headerTooltipFor(column)"
-                    >{{ column.label }}</span>
-                    <template v-else>{{ column.label }}</template>
+                    ><ColumnLabel :column="column" /></span>
+                    <ColumnLabel
+                        v-else
+                        :column="column"
+                    />
                 </template>
             </th>
 

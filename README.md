@@ -87,6 +87,10 @@ The classes are yours to choose because the styling a header-filter package ship
 
 Slots exist for named columns whether or not the column is currently visible: the cell adopts its slot when it renders and hands it back when it stops, so toggling a column never destroys what you teleported (or its Alpine state).
 
+### Plugins that decorate the header itself
+
+A plugin that works by replacing the column's label with an `HtmlString` — a filter trigger, a badge, an Alpine popup — needs nothing from you. Villament renders an `Htmlable` label as markup exactly as stock does, keeps the plain text for the accessible name, and passes `extraHeaderAttributes()` through to the `<th>`. Alpine initializes what it finds there on its own.
+
 ## Development
 
 ```bash

@@ -8,6 +8,7 @@ use Filament\Resources\Pages\PageRegistration;
 use Filament\Resources\Resource;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Support\HtmlString;
 use Zvizvi\Villament\Tests\Fixtures\Models\User;
 use Zvizvi\Villament\Tests\Fixtures\Resources\HookedUsers\Pages\HookedListUsers;
 
@@ -22,7 +23,11 @@ class HookedUserResource extends Resource
         return $table
             ->columns([
                 TextColumn::make('name')->sortable(),
-                TextColumn::make('email'),
+                // How a header-decorating plugin gets its trigger into the
+                // `<th>`: it swaps the label for markup and tags the cell.
+                TextColumn::make('email')
+                    ->label(new HtmlString('<span class="fcf-header">Email<span class="fcf-trigger"></span></span>'))
+                    ->extraHeaderAttributes(['class' => 'fcf-th']),
             ])
             ->defaultSort('name');
     }
