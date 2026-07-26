@@ -65,7 +65,7 @@ npm run build       # Vite → dist/
 npm test            # Vitest
 ```
 
-Design decisions and every internal Filament API the package touches are logged in [DECISIONS.md](DECISIONS.md). The full spec lives in [AGENTS.md](AGENTS.md).
+Design decisions and every internal Filament API the package touches are logged in [DECISIONS.md](DECISIONS.md). Understood-but-unscheduled work lives in [BACKLOG.md](BACKLOG.md). The full spec lives in [AGENTS.md](AGENTS.md).
 
 ### Test fixtures
 
