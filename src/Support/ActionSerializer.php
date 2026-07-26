@@ -7,24 +7,28 @@ namespace Zvizvi\Villament\Support;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkAction;
-use Filament\Support\View\Components\ButtonComponent;
-use Filament\Support\View\Components\DropdownComponent\ItemComponent;
-use Filament\Support\View\Components\DropdownComponent\ItemComponent\IconComponent;
 use Filament\Tables\Table;
 
 use function Filament\Support\generate_icon_html;
-use function Filament\Support\get_component_color_classes;
 
 /**
  * Serializes the table's action STRUCTURE (names, grouping, bulk actions).
  * Per-record action props (label/color/icon/url closures, visibility) are
  * evaluated by RecordSerializer for every row — closures never leave the
- * server. Bulk actions carry no record, so their props are evaluated here.
+ * server. Header, toolbar and bulk actions carry no record, so their triggers
+ * are evaluated once, here.
  */
 final class ActionSerializer
 {
+    private readonly ActionTriggerSerializer $triggerSerializer;
+
+    public function __construct()
+    {
+        $this->triggerSerializer = new ActionTriggerSerializer;
+    }
+
     /**
-     * @return array{record: list<array<string, mixed>>, bulk: list<array<string, mixed>>}
+     * @return array{record: list<array<string, mixed>>, bulk: list<array<string, mixed>>, toolbar: list<array<string, mixed>>, header: list<array<string, mixed>>}
      */
     public function serializeStructure(Table $table): array
     {
@@ -38,7 +42,7 @@ final class ActionSerializer
                     'iconHtml' => $this->iconHtml($item->getIcon()),
                     'actions' => array_values(array_map(
                         fn (Action $action): string => $action->getName(),
-                        $item->getFlatActions(),
+                        $this->triggerSerializer->groupChildren($item),
                     )),
                 ];
 
@@ -56,14 +60,14 @@ final class ActionSerializer
 
         foreach ($table->getToolbarActions() as $item) {
             if ($item instanceof BulkAction) {
-                $bulk[] = ['type' => 'action', ...$this->serializeBulkAction($item)];
+                $bulk[] = ['type' => 'action', ...$this->triggerSerializer->serialize($item)];
 
                 continue;
             }
 
             if (! $item instanceof ActionGroup) {
                 if ($item->isVisible()) {
-                    $toolbar[] = ['type' => 'action', ...$this->serializeToolbarAction($item)];
+                    $toolbar[] = ['type' => 'action', ...$this->triggerSerializer->serialize($item)];
                 }
 
                 continue;
@@ -74,11 +78,11 @@ final class ActionSerializer
             $bulkChildren = [];
             $toolbarChildren = [];
 
-            foreach ($item->getFlatActions() as $action) {
+            foreach ($this->triggerSerializer->groupChildren($item) as $action) {
                 if ($action instanceof BulkAction) {
-                    $bulkChildren[] = $this->serializeBulkAction($action, grouped: true);
+                    $bulkChildren[] = $this->triggerSerializer->serialize($action);
                 } elseif ($action->isVisible()) {
-                    $toolbarChildren[] = $this->serializeToolbarAction($action, grouped: true);
+                    $toolbarChildren[] = $this->triggerSerializer->serialize($action);
                 }
             }
 
@@ -101,75 +105,69 @@ final class ActionSerializer
             }
         }
 
-        return ['record' => $record, 'bulk' => $bulk, 'toolbar' => $toolbar];
-    }
-
-    /**
-     * Toolbar (non-bulk) actions carry no record context — statically
-     * evaluated, like bulk actions, plus their optional URL behavior.
-     *
-     * @return array<string, mixed>
-     */
-    private function serializeToolbarAction(Action $action, bool $grouped = false): array
-    {
-        $color = $action->getColor();
-        $color = is_string($color) ? $color : null;
-        $url = $action->getUrl();
-        $newTab = filled($url) && $action->shouldOpenUrlInNewTab();
-
         return [
-            'name' => $action->getName(),
-            'label' => $this->stringable($action->getLabel()),
-            'color' => $color,
-            ...$this->colorClasses($color, $grouped),
-            'iconHtml' => $this->iconHtml($action->getIcon(default: $action->getTable() !== null ? $action->getTableIcon() : null)),
-            'disabled' => $action->isDisabled(),
-            'url' => $url,
-            'newTab' => $newTab,
+            'record' => $record,
+            'bulk' => $bulk,
+            'toolbar' => $toolbar,
+            'header' => $this->serializeHeaderActions($table),
         ];
     }
 
     /**
-     * @return array<string, mixed>
-     */
-    private function serializeBulkAction(BulkAction $action, bool $grouped = false): array
-    {
-        $color = $action->getColor();
-        $color = is_string($color) ? $color : null;
-
-        return [
-            'name' => $action->getName(),
-            'label' => $this->stringable($action->getLabel()),
-            'color' => $color,
-            ...$this->colorClasses($color, $grouped),
-            'iconHtml' => $this->iconHtml($action->getIcon()),
-        ];
-    }
-
-    /**
-     * The Filament-computed color classes for an action, chosen by render
-     * context: a standalone action is a `fi-btn` (ButtonComponent — includes
-     * the background/text shades), a grouped one is a dropdown list item
-     * (ItemComponent — text shades only, gray by default). A null/gray color
-     * yields empty strings so the element keeps its default styling.
+     * `$table->headerActions()`. Unlike the toolbar — where stock splits the
+     * bulk bar out — the header renders ONE ordered row containing both kinds,
+     * so the list stays in definition order and each entry says whether it is
+     * bulk. Stock hides a bulk trigger with `x-show="getSelectedRecordsCount()"`
+     * (see `BulkAction::getExtraAttributes()` and `BulkActionGroup`), which is
+     * exactly what the `bulk` flag drives on the client.
      *
-     * @return array{colorClasses: string, iconColorClasses: string}
+     * @return list<array<string, mixed>>
      */
-    private function colorClasses(?string $color, bool $grouped): array
+    private function serializeHeaderActions(Table $table): array
     {
-        if ($grouped) {
-            // Dropdown items default to gray (HasDefaultGrayColor) → no classes.
-            return [
-                'colorClasses' => implode(' ', get_component_color_classes(ItemComponent::class, $color)),
-                'iconColorClasses' => implode(' ', get_component_color_classes(IconComponent::class, $color)),
+        $header = [];
+
+        foreach ($table->getHeaderActions() as $item) {
+            if (! $item instanceof ActionGroup) {
+                if (! $item->isVisible()) {
+                    continue;
+                }
+
+                $header[] = [
+                    'type' => 'action',
+                    'bulk' => $item instanceof BulkAction,
+                    ...$this->triggerSerializer->serialize($item),
+                ];
+
+                continue;
+            }
+
+            $children = [];
+
+            foreach ($this->triggerSerializer->groupChildren($item) as $action) {
+                if (! $action->isVisible()) {
+                    continue;
+                }
+
+                $children[] = $this->triggerSerializer->serialize($action);
+            }
+
+            if ($children === []) {
+                continue;
+            }
+
+            $header[] = [
+                'type' => 'group',
+                // A group whose every action is bulk (i.e. a `BulkActionGroup`)
+                // hides as a whole, like stock's dropdown-level `x-show`.
+                'bulk' => ! $item->hasNonBulkAction(),
+                'label' => $this->stringable($item->getLabel()),
+                'iconHtml' => $this->iconHtml($item->getIcon()),
+                'actions' => $children,
             ];
         }
 
-        // Standalone action buttons default to primary (the blade prop default).
-        return [
-            'colorClasses' => implode(' ', get_component_color_classes(ButtonComponent::class, $color ?? 'primary')),
-            'iconColorClasses' => '',
-        ];
+        return $header;
     }
 
     private function iconHtml(mixed $icon): ?string

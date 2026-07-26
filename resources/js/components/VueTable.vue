@@ -136,10 +136,76 @@ const toolbarActionsStructure = computed(() => schema.actions?.toolbar ?? [])
 const hasRecordActions = computed(() => recordActionsStructure.value.length > 0)
 
 /**
- * Selection UI (checkbox column, indicator, bulk bar) exists only when bulk
- * actions do — and never in groups-only mode (stock disables it there too).
+ * Where the record-actions cell sits and how it looks
+ * (`recordActions(position:)`, `recordActionsAlignment()`,
+ * `recordActionsColumnLabel()`). Pre-`recordActions` payloads keep the old
+ * trailing cell, which is Filament's default anyway.
  */
-const isSelectionEnabled = computed(() => bulkActionsStructure.value.length > 0 && ! isGroupsOnly.value)
+const recordActionsConfig = computed(() => schema.recordActions ?? {})
+
+const recordActionsPosition = computed(() => recordActionsConfig.value.position ?? 'AfterCells')
+
+/**
+ * The three slots the actions cell can occupy, relative to the (leading)
+ * selection cell. `TableHeader` derives the very same three from the same
+ * position string — they must agree or the columns misalign.
+ */
+const actionsBeforeSelection = computed(
+    () => hasRecordActions.value && recordActionsPosition.value === 'BeforeCells',
+)
+
+const actionsAfterSelection = computed(
+    () => hasRecordActions.value && recordActionsPosition.value === 'BeforeColumns',
+)
+
+const actionsAfterColumns = computed(
+    () => hasRecordActions.value && ! actionsBeforeSelection.value && ! actionsAfterSelection.value,
+)
+
+/**
+ * `$table->headerActions()`. Bulk entries only show once something is
+ * selected, exactly like stock's `x-show="getSelectedRecordsCount()"` on a
+ * `BulkAction` (and on a whole `BulkActionGroup`).
+ */
+const headerActionsStructure = computed(() => schema.actions?.header ?? [])
+
+const visibleHeaderActions = computed(
+    () => headerActionsStructure.value.filter((item) => ! item.bulk || selectedCount.value > 0),
+)
+
+const headerConfig = computed(() => schema.header ?? {})
+
+/**
+ * Stock's own condition for the `fi-ta-header` block: a heading, a
+ * description, or at least one visible header action.
+ */
+const hasHeaderBlock = computed(
+    () => Boolean(headerConfig.value.heading)
+        || Boolean(headerConfig.value.description)
+        || headerActionsStructure.value.length > 0,
+)
+
+/**
+ * The table's own selection config (`Table::isSelectionEnabled()`,
+ * `maxSelectableRecords()`, `selectCurrentPageOnly()`, …), resolved
+ * server-side. Pre-`selection` payloads fall back to the old heuristic —
+ * "there are bulk actions" — which is exactly Filament's own fallback when
+ * `selectable()` was never called.
+ */
+const selectionConfig = computed(() => schema.selection ?? {
+    enabled: bulkActionsStructure.value.length > 0,
+})
+
+/**
+ * Selection UI (checkbox column, indicator, bulk bar) follows the table's
+ * answer — and is never on in groups-only mode (stock disables it there too).
+ */
+const isSelectionEnabled = computed(
+    () => Boolean(selectionConfig.value.enabled) && ! isGroupsOnly.value,
+)
+
+/** `maxSelectableRecords(1)`: a radio group — no page checkbox, no indicator. */
+const isSingleSelect = computed(() => selectionConfig.value.maxRecords === 1)
 
 const state = useTableState(props.config.state ?? {})
 
@@ -150,7 +216,15 @@ const state = useTableState(props.config.state ?? {})
  */
 const columnsState = ref(JSON.parse(JSON.stringify(props.config.state?.columns ?? [])))
 
-const selection = useSelection()
+const selection = useSelection({
+    maxRecords: schema.selection?.maxRecords ?? null,
+    currentPageOnly: Boolean(schema.selection?.currentPageOnly),
+    canTrackDeselected: schema.selection?.canTrackDeselected ?? true,
+    // Deferred lookups: `bridge` and `meta` are created below, and neither is
+    // read until the user actually interacts.
+    fetchAllSelectableKeys: () => bridge.getAllSelectableRecordKeys(),
+    getAllSelectableCount: () => meta.value?.allSelectableCount ?? meta.value?.total ?? null,
+})
 
 const groupCollapse = useGroupCollapse(Boolean(schema.grouping?.collapsedByDefault))
 
@@ -213,6 +287,14 @@ const bridge = useLivewireBridge({
         fetchNow()
     },
     onDeselectAll: () => selection.deselectAll(),
+    // Stock pushes the selection before EVERY action mount (table.js's
+    // `mountAction()` wrapper), which is what makes `accessSelectedRecords()`
+    // work on a record or toolbar action — not just on bulk ones.
+    getSelection: () => ({
+        isTracking: selection.isTrackingDeselected.value,
+        selected: selection.selectedRecords.value,
+        deselected: selection.deselectedRecords.value,
+    }),
 })
 
 /**
@@ -525,17 +607,79 @@ const hasColumnSearches = computed(
  */
 const hasColumnManager = computed(() => Boolean(schema.hasColumnManager))
 
-const pageRecordKeys = computed(() => records.value.map((record) => record.key))
+/**
+ * Whether this record may be selected. Only present when the table uses
+ * `checkIfRecordIsSelectableUsing()`; otherwise every record is selectable.
+ *
+ * @param {object} record
+ * @returns {boolean}
+ */
+function isRecordSelectable(record) {
+    return record.selectable !== false
+}
 
-const selectedCount = computed(() => selection.selectedCount(meta.value?.total ?? null))
+/**
+ * The page's SELECTABLE keys — stock's `getRecordsOnPage()`, which reads the
+ * rendered checkboxes and therefore never sees an unselectable record.
+ */
+const pageRecordKeys = computed(
+    () => records.value.filter(isRecordSelectable).map((record) => record.key),
+)
+
+const selectedCount = computed(() => selection.selectedCount())
 
 const areAllPageRecordsSelected = computed(
     () => selection.areRecordsSelected(pageRecordKeys.value),
 )
 
+const isPagePartiallySelected = computed(
+    () => selection.areRecordsPartiallySelected(pageRecordKeys.value),
+)
+
+/**
+ * Stock disables the select-page checkbox when selection is disabled outright,
+ * or when selecting the rest of the page would break `maxSelectableRecords()`.
+ */
+const isPageCheckboxDisabled = computed(
+    () => Boolean(selectionConfig.value.disabled)
+        || (pageRecordKeys.value.length > 0 && ! selection.areRecordsToggleable(pageRecordKeys.value)),
+)
+
+const canSelectAllRecords = computed(
+    () => ! selectionConfig.value.groupsOnly && selection.canSelectAll(pageRecordKeys.value),
+)
+
 const hasBulkActionsBar = computed(
     () => isSelectionEnabled.value && selectedCount.value > 0,
 )
+
+/**
+ * Whether a record's checkbox is disabled: selection disabled outright, or
+ * selecting THIS record would exceed the cap (stock binds the same test).
+ *
+ * @param {string} key
+ * @returns {boolean}
+ */
+function isRecordCheckboxDisabled(key) {
+    return Boolean(selectionConfig.value.disabled)
+        || ! selection.areRecordsToggleable([key])
+}
+
+/**
+ * Toggles a record from its checkbox, forwarding the shift key and the page's
+ * checkbox order so a shift-click selects the whole range (stock's
+ * `handleCheckboxClick`).
+ *
+ * @param {MouseEvent} event
+ * @param {string} key
+ * @returns {void}
+ */
+function onRecordCheckboxClick(event, key) {
+    selection.toggleRecord(key, {
+        shiftKey: Boolean(event.shiftKey),
+        orderedKeys: pageRecordKeys.value,
+    })
+}
 
 const hasHeaderToolbar = computed(
     () => Boolean(schema.globallySearchable)
@@ -546,13 +690,17 @@ const hasHeaderToolbar = computed(
         || toolbarActionsStructure.value.length > 0,
 )
 
+/** The header CONTAINER wraps both the header block and the toolbar. */
+const hasHeaderContainer = computed(() => hasHeaderBlock.value || hasHeaderToolbar.value)
+
 /**
  * Colspan for a group-header row's content cell: it spans every column plus
  * the trailing actions cell, but NOT the leading selection cell (rendered
  * separately), matching stock's `fi-ta-group-header-cell`.
  */
 const groupHeaderColspan = computed(
-    () => visibleColumns.value.length + (hasRecordActions.value ? 1 : 0),
+    () => visibleColumns.value.length
+        + (actionsAfterSelection.value || actionsAfterColumns.value ? 1 : 0),
 )
 
 /**
@@ -618,7 +766,9 @@ const renderItems = computed(() => {
                 stripeIndex = 0
             }
 
-            currentHeader?.keys.push(row.original.key)
+            if (isRecordSelectable(row.original)) {
+                currentHeader?.keys.push(row.original.key)
+            }
         }
 
         items.push({ type: 'record', id: row.id, row, stripeIndex })
@@ -630,21 +780,6 @@ const renderItems = computed(() => {
 
     return items
 })
-
-/**
- * Mounts a bulk action on the host Livewire component, pushing the complete
- * selection state first (table.js semantics, replicated in the bridge).
- *
- * @param {string} name
- * @returns {void}
- */
-function onMountBulkAction(name) {
-    bridge.mountBulkAction(name, {
-        isTracking: selection.isTrackingDeselected.value,
-        selected: selection.selectedRecords.value,
-        deselected: selection.deselectedRecords.value,
-    })
-}
 
 /**
  * @param {object} record
@@ -868,7 +1003,7 @@ function recordCellClasses(column, cellValue = null) {
         <div
             class="fi-ta-ctn fi-ta-ctn-with-footer"
             :class="{
-                'fi-ta-ctn-with-header': hasHeaderToolbar,
+                'fi-ta-ctn-with-header': hasHeaderContainer,
                 'fi-loading': isLoading,
             }"
         >
@@ -877,13 +1012,52 @@ function recordCellClasses(column, cellValue = null) {
 
             <div class="fi-ta-main">
                 <div
-                    v-if="hasHeaderToolbar"
+                    v-if="hasHeaderContainer"
                     class="fi-ta-header-ctn"
                 >
+                    <!--
+                        The table's own header block: `heading()`,
+                        `description()` and `headerActions()`. Separate from
+                        the toolbar below, exactly as in stock.
+                    -->
+                    <div
+                        v-if="hasHeaderBlock"
+                        class="fi-ta-header"
+                        :class="{
+                            'fi-ta-header-adaptive-actions-position':
+                                headerActionsStructure.length > 0 && headerConfig.actionsPosition !== 'Bottom',
+                        }"
+                    >
+                        <div v-if="headerConfig.heading || headerConfig.description">
+                            <h2
+                                v-if="headerConfig.heading"
+                                class="fi-ta-header-heading"
+                            >
+                                {{ headerConfig.heading }}
+                            </h2>
+
+                            <p
+                                v-if="headerConfig.description"
+                                class="fi-ta-header-description"
+                            >
+                                {{ headerConfig.description }}
+                            </p>
+                        </div>
+
+                        <BulkActions
+                            v-if="visibleHeaderActions.length"
+                            :actions="visibleHeaderActions"
+                            @mount="bridge.mountTableAction($event)"
+                        />
+                    </div>
+
                     <!-- AboveContent filters teleport here (stock: inside the header ctn, before the toolbar). -->
                     <div v-if="filtersSlot === 'above'" data-villament-filters-outlet="above" />
 
-                    <div class="fi-ta-header-toolbar">
+                    <div
+                        v-if="hasHeaderToolbar"
+                        class="fi-ta-header-toolbar"
+                    >
                         <!--
                             The grouping settings live INSIDE the leading
                             `fi-ta-actions` row (stock parity), as a trailing
@@ -894,7 +1068,7 @@ function recordCellClasses(column, cellValue = null) {
                         <BulkActions
                             v-if="hasBulkActionsBar"
                             :actions="bulkActionsStructure"
-                            @mount="onMountBulkAction"
+                            @mount="bridge.mountBulkAction($event)"
                         >
                             <TableGrouping
                                 v-if="hasGrouping && ! toolbarActionsStructure.length"
@@ -962,12 +1136,15 @@ function recordCellClasses(column, cellValue = null) {
                     </div>
                 </div>
 
+                <!-- Stock drops the indicator entirely for single-select tables. -->
                 <SelectionIndicator
-                    v-if="isSelectionEnabled && selectedCount > 0"
+                    v-if="isSelectionEnabled && ! isSingleSelect && selectedCount > 0"
                     :count="selectedCount"
-                    :total="meta?.total ?? null"
+                    :total="meta?.allSelectableCount ?? meta?.total ?? null"
+                    :can-select-all="canSelectAllRecords"
+                    :disabled="Boolean(selectionConfig.disabled)"
                     :strings="strings"
-                    @select-all="selection.selectAllMatching()"
+                    @select-all="selection.selectAll()"
                     @deselect-all="selection.deselectAll()"
                 />
 
@@ -1018,7 +1195,12 @@ function recordCellClasses(column, cellValue = null) {
                                 :selectable="isSelectionEnabled"
                                 :has-selectable-records="hasRecords"
                                 :all-selected="areAllPageRecordsSelected"
+                                :show-page-checkbox="! isSingleSelect && ! selectionConfig.groupsOnly"
+                                :page-indeterminate="isPagePartiallySelected"
+                                :page-checkbox-disabled="isPageCheckboxDisabled"
                                 :has-actions-column="hasRecordActions"
+                                :actions-position="recordActionsPosition"
+                                :actions-column-label="recordActionsConfig.columnLabel ?? null"
                                 :strings="strings"
                                 @sort="onSort"
                                 @toggle-select-page="selection.toggleSelectPage(pageRecordKeys)"
@@ -1030,8 +1212,18 @@ function recordCellClasses(column, cellValue = null) {
                                     class="fi-ta-row fi-ta-row-not-reorderable"
                                 >
                                     <td
+                                        v-if="actionsBeforeSelection"
+                                        class="fi-ta-cell"
+                                    />
+
+                                    <td
                                         v-if="isSelectionEnabled"
                                         class="fi-ta-cell fi-ta-selection-cell"
+                                    />
+
+                                    <td
+                                        v-if="actionsAfterSelection"
+                                        class="fi-ta-cell"
                                     />
 
                                     <td
@@ -1056,7 +1248,7 @@ function recordCellClasses(column, cellValue = null) {
                                     </td>
 
                                     <td
-                                        v-if="hasRecordActions"
+                                        v-if="actionsAfterColumns"
                                         class="fi-ta-cell"
                                     />
                                 </tr>
@@ -1108,6 +1300,8 @@ function recordCellClasses(column, cellValue = null) {
                                         v-if="item.type === 'group-header'"
                                         class="fi-ta-row fi-ta-group-header-row"
                                     >
+                                        <td v-if="actionsBeforeSelection" />
+
                                         <td
                                             v-if="isSelectionEnabled"
                                             class="fi-ta-cell fi-ta-group-selection-cell"
@@ -1117,6 +1311,8 @@ function recordCellClasses(column, cellValue = null) {
                                                 type="checkbox"
                                                 class="fi-ta-group-checkbox fi-checkbox-input"
                                                 :checked="selection.areRecordsSelected(item.keys)"
+                                                :indeterminate="selection.areRecordsPartiallySelected(item.keys)"
+                                                :disabled="Boolean(selectionConfig.disabled)"
                                                 @change="selection.toggleSelectPage(item.keys)"
                                             >
                                         </td>
@@ -1177,7 +1373,11 @@ function recordCellClasses(column, cellValue = null) {
                                         v-else-if="item.type === 'group-summary'"
                                         class="fi-ta-row fi-ta-summary-row"
                                     >
+                                        <td v-if="actionsBeforeSelection" />
+
                                         <td v-if="isSelectionEnabled" />
+
+                                        <td v-if="actionsAfterSelection" />
 
                                         <template
                                             v-for="(column, columnIndex) in visibleColumns"
@@ -1201,7 +1401,7 @@ function recordCellClasses(column, cellValue = null) {
                                             </td>
                                         </template>
 
-                                        <td v-if="hasRecordActions" />
+                                        <td v-if="actionsAfterColumns" />
                                     </tr>
 
                                     <tr
@@ -1212,17 +1412,49 @@ function recordCellClasses(column, cellValue = null) {
                                         ]"
                                     >
                                         <td
+                                            v-if="actionsBeforeSelection"
+                                            class="fi-ta-cell"
+                                        >
+                                            <RecordActions
+                                                :structure="recordActionsStructure"
+                                                :actions="item.row.original.actions ?? {}"
+                                                :alignment-class="recordActionsConfig.alignmentClass ?? null"
+                                                @mount="bridge.mountRecordAction($event, item.row.original.key)"
+                                            />
+                                        </td>
+
+                                        <td
                                             v-if="isSelectionEnabled"
                                             class="fi-ta-cell fi-ta-selection-cell"
                                         >
+                                            <!--
+                                                An unselectable record
+                                                (`checkIfRecordIsSelectableUsing`)
+                                                renders NO checkbox — stock
+                                                leaves the cell empty.
+                                            -->
                                             <input
+                                                v-if="isRecordSelectable(item.row.original)"
                                                 :aria-label="formatString(strings.bulkSelectRecord, { key: item.row.original.key })"
                                                 type="checkbox"
                                                 :value="item.row.original.key"
                                                 :checked="selection.isRecordSelected(item.row.original.key)"
+                                                :disabled="isRecordCheckboxDisabled(item.row.original.key)"
                                                 class="fi-ta-record-checkbox fi-checkbox-input"
-                                                @change="selection.toggleRecord(item.row.original.key)"
+                                                @click="onRecordCheckboxClick($event, item.row.original.key)"
                                             >
+                                        </td>
+
+                                        <td
+                                            v-if="actionsAfterSelection"
+                                            class="fi-ta-cell"
+                                        >
+                                            <RecordActions
+                                                :structure="recordActionsStructure"
+                                                :actions="item.row.original.actions ?? {}"
+                                                :alignment-class="recordActionsConfig.alignmentClass ?? null"
+                                                @mount="bridge.mountRecordAction($event, item.row.original.key)"
+                                            />
                                         </td>
 
                                         <td
@@ -1250,12 +1482,13 @@ function recordCellClasses(column, cellValue = null) {
                                         </td>
 
                                         <td
-                                            v-if="hasRecordActions"
+                                            v-if="actionsAfterColumns"
                                             class="fi-ta-cell"
                                         >
                                             <RecordActions
                                                 :structure="recordActionsStructure"
                                                 :actions="item.row.original.actions ?? {}"
+                                                :alignment-class="recordActionsConfig.alignmentClass ?? null"
                                                 @mount="bridge.mountRecordAction($event, item.row.original.key)"
                                             />
                                         </td>
@@ -1274,7 +1507,11 @@ function recordCellClasses(column, cellValue = null) {
                                     v-if="summaryHeader"
                                     class="fi-ta-row fi-ta-summary-header-row fi-striped"
                                 >
+                                    <td v-if="actionsBeforeSelection" />
+
                                     <td v-if="isSelectionEnabled" />
+
+                                    <td v-if="actionsAfterSelection" />
 
                                     <td
                                         v-for="(column, columnIndex) in visibleColumns"
@@ -1290,7 +1527,7 @@ function recordCellClasses(column, cellValue = null) {
                                         {{ columnIndex === 0 ? summaryHeader.heading : (summaryHeader.labels[column.key] ?? '') }}
                                     </td>
 
-                                    <td v-if="hasRecordActions" />
+                                    <td v-if="actionsAfterColumns" />
                                 </tr>
 
                                 <tr
@@ -1299,7 +1536,11 @@ function recordCellClasses(column, cellValue = null) {
                                     class="fi-ta-row fi-ta-summary-row"
                                     :class="{ 'fi-striped': row.striped }"
                                 >
+                                    <td v-if="actionsBeforeSelection" />
+
                                     <td v-if="isSelectionEnabled" />
+
+                                    <td v-if="actionsAfterSelection" />
 
                                     <template
                                         v-for="(column, columnIndex) in visibleColumns"
@@ -1323,7 +1564,7 @@ function recordCellClasses(column, cellValue = null) {
                                         </td>
                                     </template>
 
-                                    <td v-if="hasRecordActions" />
+                                    <td v-if="actionsAfterColumns" />
                                 </tr>
                             </tbody>
                         </table>

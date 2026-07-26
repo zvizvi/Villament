@@ -29,11 +29,12 @@
  *
  * Phase 3 additions:
  *
- * - `mountRecordAction()` / `mountBulkAction()` mount table actions on the
- *   host component; the bulk variant replicates Filament's own `table.js`
- *   `mountAction()` exactly (three silent `$wire.set(..., false)` pushes of
- *   the selection state, then `$wire.mountAction(name, {}, { table: true,
- *   bulk: true })`).
+ * - `mountRecordAction()` / `mountTableAction()` / `mountBulkAction()` mount
+ *   table actions on the host component, all three replicating Filament's own
+ *   `table.js` `mountAction()` exactly: three silent `$wire.set(..., false)`
+ *   pushes of the selection state, then `$wire.mountAction(...)`. Stock wraps
+ *   EVERY action mount that way, not just bulk ones — that is what makes
+ *   `accessSelectedRecords()` work on a record or toolbar action.
  * - `applyColumnManager()` / `resetColumnManager()` / `getTableColumns()`
  *   drive Filament's column manager Livewire API.
  * - The commit watcher notifies `onActionCompleted(methods)` after a
@@ -47,7 +48,8 @@
  * @property {(name: string, recordKey: string) => void} mountRecordAction
  * @property {(columnName: string, recordKey: string) => void} callColumnAction
  * @property {(method: string, recordKey: string) => void} callRecordMethod
- * @property {(name: string, selection: { isTracking: boolean, selected: Iterable<string>, deselected: Iterable<string> }) => void} mountBulkAction
+ * @property {(name: string, selection?: ?TableSelection) => void} mountBulkAction
+ * @property {() => Promise<string[]>} getAllSelectableRecordKeys
  * @property {(columns: object[]) => void} applyColumnManager
  * @property {() => void} resetColumnManager
  * @property {() => *} getTableColumns
@@ -102,12 +104,17 @@ function wireFor(livewireId) {
 }
 
 /**
+ * @typedef {{ isTracking: boolean, selected: Iterable<string>, deselected: Iterable<string> }} TableSelection
+ */
+
+/**
  * @param {{
  *     livewireId: string,
  *     initialFilters?: Object<string, *>,
  *     onFiltersChanged?: (filters: Object<string, *>) => void,
  *     onActionCompleted?: (methods: string[]) => void,
  *     onDeselectAll?: () => void,
+ *     getSelection?: () => TableSelection,
  * }} options
  * @returns {LivewireBridge}
  */
@@ -117,6 +124,7 @@ export function useLivewireBridge(options) {
         onFiltersChanged = null,
         onActionCompleted = null,
         onDeselectAll = null,
+        getSelection = null,
     } = options
 
     let lastKnownFiltersJson = JSON.stringify(options.initialFilters ?? {})
@@ -168,6 +176,29 @@ export function useLivewireBridge(options) {
     }
 
     /**
+     * Pushes the island's selection onto the host component, silently (no
+     * network request), exactly as `table.js`'s `mountAction()` wrapper does
+     * before EVERY mount — record, toolbar and bulk alike. A record action
+     * with `accessSelectedRecords()` reads these three properties, so skipping
+     * the push on the non-bulk paths would hand it a stale selection.
+     *
+     * @param {object} wire
+     * @param {?TableSelection} [selection] Explicit snapshot; defaults to `getSelection()`.
+     * @returns {void}
+     */
+    function pushSelection(wire, selection = null) {
+        const current = selection ?? getSelection?.() ?? null
+
+        if (! current) {
+            return
+        }
+
+        wire.set('isTrackingDeselectedTableRecords', current.isTracking, false)
+        wire.set('selectedTableRecords', [...current.selected], false)
+        wire.set('deselectedTableRecords', [...current.deselected], false)
+    }
+
+    /**
      * Mounts a record (row) action on the host component. `{ table: true,
      * recordKey }` is the exact context Filament's own record-action buttons
      * pass to `mountAction()`.
@@ -184,6 +215,7 @@ export function useLivewireBridge(options) {
         }
 
         try {
+            pushSelection(wire)
             wire.mountAction(name, {}, { table: true, recordKey })
         } catch {
             // Never break the island on a mid-teardown component.
@@ -242,10 +274,10 @@ export function useLivewireBridge(options) {
      * action mounts with `{ table: true, bulk: true }`.
      *
      * @param {string} name
-     * @param {{ isTracking: boolean, selected: Iterable<string>, deselected: Iterable<string> }} selection
+     * @param {?TableSelection} [selection] Explicit snapshot; defaults to `getSelection()`.
      * @returns {void}
      */
-    function mountBulkAction(name, selection) {
+    function mountBulkAction(name, selection = null) {
         const wire = wireFor(livewireId)
 
         if (! wire) {
@@ -253,9 +285,7 @@ export function useLivewireBridge(options) {
         }
 
         try {
-            wire.set('isTrackingDeselectedTableRecords', selection.isTracking, false)
-            wire.set('selectedTableRecords', [...selection.selected], false)
-            wire.set('deselectedTableRecords', [...selection.deselected], false)
+            pushSelection(wire, selection)
             wire.mountAction(name, {}, { table: true, bulk: true })
         } catch {
             // Never break the island on a mid-teardown component.
@@ -276,6 +306,7 @@ export function useLivewireBridge(options) {
         }
 
         try {
+            pushSelection(wire)
             wire.mountAction(name, {}, { table: true })
         } catch {
             // Never break the island on a mid-teardown component.
@@ -303,6 +334,31 @@ export function useLivewireBridge(options) {
             wire.applyTableColumnManager(columns, wasReordered)
         } catch {
             // Never break the island on a mid-teardown component.
+        }
+    }
+
+    /**
+     * Every selectable record key for the current filter/search state, from
+     * Filament's own `getAllSelectableTableRecordKeys()`. Stock calls exactly
+     * this when "select all" cannot use inversion tracking (`selectCurrentPageOnly()`
+     * or `trackDeselectedRecords(false)`), so the island never re-derives the
+     * list — `checkIfRecordIsSelectableUsing()` is applied server-side.
+     *
+     * @returns {Promise<string[]>}
+     */
+    async function getAllSelectableRecordKeys() {
+        const wire = wireFor(livewireId)
+
+        if (! wire) {
+            return []
+        }
+
+        try {
+            const keys = await wire.getAllSelectableTableRecordKeys()
+
+            return Array.isArray(keys) ? keys : []
+        } catch {
+            return []
         }
     }
 
@@ -434,6 +490,7 @@ export function useLivewireBridge(options) {
         callRecordMethod,
         mountBulkAction,
         mountTableAction,
+        getAllSelectableRecordKeys,
         applyColumnManager,
         resetColumnManager,
         getTableColumns,

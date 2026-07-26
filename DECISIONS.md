@@ -257,6 +257,26 @@ Per-record `alignment(fn)` / `verticalAlignment(fn)` / `hiddenFrom(fn)` / `visib
 
 Left alone deliberately: `defaultSortOptionLabel()` renders only inside `stackedOnMobile()` / the content layout, neither of which the island implements.
 
+## 2026-07-26 — Closing the Actions-docs gaps: triggers, placement, and the whole selection API
+
+The same audit against the Tables "Actions" page. Five clusters, one of them a silent correctness bug.
+
+**`accessSelectedRecords()` was broken on anything but a bulk action.** Stock's `table.js` wraps EVERY `mountAction()` — record, toolbar, bulk alike — with three silent `$wire.set()` pushes of the selection state. We only did it for bulk actions, so the documented `copyToSelected` row-action pattern read a stale or empty selection, with no error to show for it. The push now lives in one `pushSelection()` in the bridge, fed by a `getSelection` callback, and every mount path calls it.
+
+**The trigger is now serialized, not reinvented.** `RecordActions.vue` hard-coded `fi-link fi-size-sm`, so `->button()`, `->iconButton()`, `->badge()`, `->size()`, `->tooltip()`, `->hiddenLabel()`, `->badge(count)` and `->extraAttributes()` were all inert — including the docs' own `modifyUngroupedRecordActionsUsing(fn ($action) => $action->iconButton())`. The new `ActionTriggerSerializer` rebuilds each trigger's **finished `class`/`style` strings server-side**, through the very same `->class([...])->color(Component::class, $color)` chain Filament's `generate*Html()` methods use — so a palette override, an array color or a Filament upgrade flows through untouched, and `ActionTrigger.vue` decides element structure only, never styling. Serializing the whole trigger HTML per record was rejected: it embeds `wire:click`, which is dead inside the island's `wire:ignore` region, and it is per-row cost for a one-shot answer.
+
+A subtlety worth recording: **only `ActionGroup::getActions()` stamps a group's children with the dropdown-item view** (`defaultView(GROUPED_VIEW)`); `getFlatActions()` returns the same objects unstamped. Reading the flat list — which is what we did — serialized a grouped `DeleteBulkAction` as a standalone button. Both serializers now walk groups structurally.
+
+Not carried, and deliberately: `keyBindings()` (needs Alpine's `x-mousetrap`), `labeledFrom()` (stock renders a SECOND breakpoint-swapped element), and `postToUrl()` (a `<form>` tag). Filed in BACKLOG.md.
+
+**`headerActions()` was never rendered at all** — `ActionSerializer` only read `getRecordActions()` and `getToolbarActions()`, and the island's `fi-ta-header-ctn` contained only the toolbar. The whole `fi-ta-header` block is now there: `heading()`, `description()`, the actions row and the `HeaderActionsPosition::Adaptive` modifier. Header actions ship as ONE ordered list (definition order matters there, unlike the toolbar) with a per-entry `bulk` flag, which is what stock's `x-show="getSelectedRecordsCount()"` amounts to — on a `BulkAction`, and on a whole `BulkActionGroup`. `header()` (a fully custom Blade view replacing the block) is NOT carried: it is arbitrary developer markup with its own possible Livewire/Alpine bindings.
+
+**`RecordActionsPosition`** now moves the cell for real. Header and body derive the same three slots — before the checkbox, after it, or trailing — from one position string; deriving them independently is how a `colspan` drifts out of step with the cells it covers. `recordActionsAlignment()` maps to stock's own class list (End/Right deliberately produce NO class) and `recordActionsColumnLabel()` swaps the empty, aria-labelled header cell for a real one.
+
+**The selection API was a single boolean.** `isSelectionEnabled` in Vue meant "are there bulk actions" — Filament's *fallback*, not its answer. Six documented methods were unreachable: `selectable()` in both directions, `checkIfRecordIsSelectableUsing()` (stock renders no checkbox at all for an unselectable record, so the flag has to be per record — and only when the table asks for it, or it is dead weight on every row), `maxSelectableRecords()` (1 = a radio group with no page checkbox and no indicator; anything else caps and disables), `selectCurrentPageOnly()` and `trackDeselectedRecords(false)` (no inversion — stock materializes the keys through `getAllSelectableTableRecordKeys()`, and so do we), `selectGroupsOnly()` and `disabledSelection()`.
+
+The count behind "Select all N" was `meta.total`, which is wrong twice over: `checkIfRecordIsSelectableUsing()` narrows it, and under simple/cursor pagination it is `null`, so the button disappeared entirely. `meta.allSelectableCount` now carries stock's own `getAllSelectableTableRecordsCount()`. Two smaller fidelity items came along: the page/group checkboxes get their `indeterminate` state, and shift-click selects a range (stock's `handleCheckboxClick`, including its refusal to complete a range that would break the cap). The record checkbox moved from `@change` to `@click` — stock's own event, and the only one that carries `shiftKey`.
+
 ## Verified Filament v5 internal API map (§4.1, §4.8)
 
 Verified against **filament/filament v5.6.8** + **livewire/livewire v4.3.3** by reading installed vendor source on 2026-07-15. Paths relative to `vendor/filament/`.

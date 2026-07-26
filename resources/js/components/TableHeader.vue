@@ -1,5 +1,7 @@
 <script setup>
+import { computed } from 'vue'
 import TrustedIcon from './TrustedIcon.js'
+import ActionsHeaderCell from './ActionsHeaderCell.vue'
 import { filamentTooltip } from '../support/tooltip.js'
 
 const props = defineProps({
@@ -58,11 +60,53 @@ const props = defineProps({
         default: false,
     },
     /**
-     * Whether the trailing record-actions column renders.
+     * Whether the select-page checkbox itself renders. Stock drops it for
+     * single-select tables (`maxSelectableRecords(1)`) and for
+     * `selectGroupsOnly()`, keeping the (empty) selection cell either way.
+     */
+    showPageCheckbox: {
+        type: Boolean,
+        default: true,
+    },
+    /**
+     * Whether the page is PARTLY selected — stock's `indeterminate` state.
+     */
+    pageIndeterminate: {
+        type: Boolean,
+        default: false,
+    },
+    /**
+     * Whether the select-page checkbox is disabled (`disabledSelection()`, or
+     * selecting the page would exceed `maxSelectableRecords()`).
+     */
+    pageCheckboxDisabled: {
+        type: Boolean,
+        default: false,
+    },
+    /**
+     * Whether the record-actions column renders at all.
      */
     hasActionsColumn: {
         type: Boolean,
         default: false,
+    },
+    /**
+     * Where that column sits, from `recordActions(position:)`:
+     * `'BeforeCells'` (before the checkbox), `'BeforeColumns'` (after the
+     * checkbox, before the columns) or `'AfterCells'` / `'AfterColumns'`
+     * (the default trailing cell).
+     */
+    actionsPosition: {
+        type: String,
+        default: 'AfterCells',
+    },
+    /**
+     * `recordActionsColumnLabel()` — when set, stock renders a REAL header
+     * cell with this label instead of the empty, aria-labelled one.
+     */
+    actionsColumnLabel: {
+        type: String,
+        default: null,
     },
     /**
      * Localized UI strings; `bulkSelectPage` is used here.
@@ -74,6 +118,23 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['sort', 'toggleSelectPage'])
+
+/**
+ * The three slots the actions column can occupy, relative to the (leading)
+ * selection cell — matching the record rows exactly, or the header drifts out
+ * of alignment with the body.
+ */
+const actionsBeforeSelection = computed(
+    () => props.hasActionsColumn && props.actionsPosition === 'BeforeCells',
+)
+
+const actionsAfterSelection = computed(
+    () => props.hasActionsColumn && props.actionsPosition === 'BeforeColumns',
+)
+
+const actionsAfterColumns = computed(
+    () => props.hasActionsColumn && ! actionsBeforeSelection.value && ! actionsAfterSelection.value,
+)
 
 /**
  * @param {object} column
@@ -237,7 +298,11 @@ function onSortClick(column) {
             v-if="columnGroups.length"
             class="fi-ta-table-head-groups-row"
         >
+            <th v-if="actionsBeforeSelection" />
+
             <th v-if="selectable" />
+
+            <th v-if="actionsAfterSelection" />
 
             <template
                 v-for="(segment, index) in columnGroups"
@@ -254,23 +319,42 @@ function onSortClick(column) {
                 <th v-else />
             </template>
 
-            <th v-if="hasActionsColumn" />
+            <th v-if="actionsAfterColumns" />
         </tr>
 
         <tr>
+            <!--
+                The record-actions header cell renders in whichever of the
+                three slots `recordActions(position:)` chose — and the record
+                rows place their own cell in exactly the same slot.
+            -->
+            <ActionsHeaderCell
+                v-if="actionsBeforeSelection"
+                :label="actionsColumnLabel"
+                :aria-label="strings.recordActionsHeading"
+            />
+
             <th
                 v-if="selectable"
                 class="fi-ta-cell fi-ta-selection-cell"
             >
                 <input
-                    v-if="hasSelectableRecords"
+                    v-if="hasSelectableRecords && showPageCheckbox"
                     :aria-label="strings.bulkSelectPage"
                     type="checkbox"
                     :checked="allSelected"
+                    :indeterminate="pageIndeterminate"
+                    :disabled="pageCheckboxDisabled"
                     class="fi-ta-page-checkbox fi-checkbox-input"
                     @change="emit('toggleSelectPage')"
                 >
             </th>
+
+            <ActionsHeaderCell
+                v-if="actionsAfterSelection"
+                :label="actionsColumnLabel"
+                :aria-label="strings.recordActionsHeading"
+            />
 
             <th
                 v-for="column in columns"
@@ -318,10 +402,10 @@ function onSortClick(column) {
                 </template>
             </th>
 
-            <!-- Stock actions header: an empty labelled cell after the columns. -->
-            <th
-                v-if="hasActionsColumn"
-                class="fi-ta-actions-header-cell fi-ta-empty-header-cell"
+            <ActionsHeaderCell
+                v-if="actionsAfterColumns"
+                :label="actionsColumnLabel"
+                :aria-label="strings.recordActionsHeading"
             />
         </tr>
     </thead>

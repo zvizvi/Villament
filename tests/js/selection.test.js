@@ -7,6 +7,39 @@ const ENDPOINT = 'https://host.test/admin/villament/users/data'
 const LIVEWIRE_ID = 'lw-users'
 
 /**
+ * A serialized bulk-action trigger (`ActionTriggerSerializer` shape) with the
+ * defaults a toolbar bulk action gets: button view, medium size.
+ *
+ * @param {string} name
+ * @param {string} label
+ * @param {object} [overrides]
+ * @returns {object}
+ */
+function bulkTrigger(name, label, overrides = {}) {
+    return {
+        name,
+        label,
+        view: 'button',
+        tag: 'button',
+        class: 'fi-ac-btn-action fi-btn fi-size-md',
+        style: null,
+        labelHidden: false,
+        iconHtml: null,
+        iconPosition: 'before',
+        badge: null,
+        badgeClass: null,
+        badgeStyle: null,
+        tooltip: null,
+        disabled: false,
+        url: null,
+        newTab: false,
+        wireNavigate: false,
+        extraAttributes: {},
+        ...overrides,
+    }
+}
+
+/**
  * @returns {object} Island config with bulk actions (selection enabled) and 2 of 5 records on the page.
  */
 function makeConfig() {
@@ -26,13 +59,16 @@ function makeConfig() {
             actions: {
                 record: [],
                 bulk: [
-                    { type: 'action', name: 'export', label: 'Export', color: null, iconHtml: null },
+                    { type: 'action', ...bulkTrigger('export', 'Export') },
                     {
                         type: 'group',
                         label: null,
                         iconHtml: '<svg data-icon="bulk-group" class="fi-icon fi-size-md" viewBox="0 0 20 20"><path d="M3 10h14" /></svg>',
                         actions: [
-                            { name: 'delete', label: 'Delete selected', color: 'danger', colorClasses: 'fi-color fi-color-danger fi-text-color-600', iconColorClasses: 'fi-color fi-color-danger', iconHtml: null },
+                            bulkTrigger('delete', 'Delete selected', {
+                                view: 'grouped',
+                                class: 'fi-ac-grouped-action fi-dropdown-list-item fi-color fi-color-danger fi-text-color-600',
+                            }),
                         ],
                     },
                 ],
@@ -224,7 +260,7 @@ describe('VueTable selection + bulk actions', () => {
     it('selecting a single record pluralizes the indicator correctly', async () => {
         const wrapper = mountTable()
 
-        await wrapper.findAll('tbody input.fi-ta-record-checkbox')[0].setValue(true)
+        await wrapper.findAll('tbody input.fi-ta-record-checkbox')[0].trigger('click')
 
         expect(wrapper.get('.fi-ta-selection-indicator').text()).toContain('1 record selected')
     })
@@ -245,7 +281,7 @@ describe('VueTable selection + bulk actions', () => {
         expect(wrapper.find('.villament-select-all-btn').exists()).toBe(false)
 
         // Unchecking a record in all-matching mode tracks it as deselected.
-        await wrapper.findAll('tbody input.fi-ta-record-checkbox')[0].setValue(false)
+        await wrapper.findAll('tbody input.fi-ta-record-checkbox')[0].trigger('click')
 
         expect(wrapper.get('.fi-ta-selection-indicator').text()).toContain('4 records selected')
         expect(wrapper.findAll('tbody input.fi-ta-record-checkbox')[0].element.checked).toBe(false)
@@ -273,7 +309,7 @@ describe('VueTable selection + bulk actions', () => {
         expect(wrapper.findAll('tbody input.fi-ta-record-checkbox').some((checkbox) => checkbox.element.checked)).toBe(false)
 
         // Back in normal mode: a bulk mount pushes empty, non-tracking state.
-        await wrapper.findAll('tbody input.fi-ta-record-checkbox')[1].setValue(true)
+        await wrapper.findAll('tbody input.fi-ta-record-checkbox')[1].trigger('click')
         await wrapper.get('.fi-ta-header-toolbar button.fi-btn').trigger('click')
 
         expect(wireCalls).toEqual([
@@ -287,7 +323,7 @@ describe('VueTable selection + bulk actions', () => {
     it('bulk click produces the exact 4-call $wire sequence (order + args)', async () => {
         const wrapper = mountTable()
 
-        await wrapper.findAll('tbody input.fi-ta-record-checkbox')[0].setValue(true)
+        await wrapper.findAll('tbody input.fi-ta-record-checkbox')[0].trigger('click')
         await wrapper.get('.fi-ta-header-toolbar button.fi-btn').trigger('click')
 
         expect(wireCalls).toEqual([
@@ -301,7 +337,7 @@ describe('VueTable selection + bulk actions', () => {
     it('mounts grouped bulk actions from the dropdown', async () => {
         const wrapper = mountTable()
 
-        await wrapper.findAll('tbody input.fi-ta-record-checkbox')[0].setValue(true)
+        await wrapper.findAll('tbody input.fi-ta-record-checkbox')[0].trigger('click')
 
         const group = wrapper.get('.fi-ta-header-toolbar .villament-actions-group')
         // aria-expanded lives on the trigger DIV (stock markup); the button inside opens it.
@@ -325,7 +361,7 @@ describe('VueTable selection + bulk actions', () => {
 
         expect(wrapper.find('.fi-ta-header-toolbar button.fi-btn').exists()).toBe(false)
 
-        await wrapper.findAll('tbody input.fi-ta-record-checkbox')[0].setValue(true)
+        await wrapper.findAll('tbody input.fi-ta-record-checkbox')[0].trigger('click')
         expect(wrapper.find('.fi-ta-header-toolbar button.fi-btn').exists()).toBe(true)
     })
 

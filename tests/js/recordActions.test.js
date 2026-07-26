@@ -9,6 +9,39 @@ const LIVEWIRE_ID = 'lw-users'
 const EDIT_URL = 'https://host.test/admin/users/1/edit'
 
 /**
+ * A serialized action trigger (`ActionTriggerSerializer` shape), with the
+ * defaults a plain table record action gets: link view, small size, no icon.
+ *
+ * @param {string} name
+ * @param {string} label
+ * @param {object} [overrides]
+ * @returns {object}
+ */
+function trigger(name, label, overrides = {}) {
+    return {
+        name,
+        label,
+        view: 'link',
+        tag: 'button',
+        class: 'fi-ac-link-action fi-link fi-size-sm',
+        style: null,
+        labelHidden: false,
+        iconHtml: null,
+        iconPosition: 'before',
+        badge: null,
+        badgeClass: null,
+        badgeStyle: null,
+        tooltip: null,
+        disabled: false,
+        url: null,
+        newTab: false,
+        wireNavigate: false,
+        extraAttributes: {},
+        ...overrides,
+    }
+}
+
+/**
  * @param {object} [overrides]
  * @returns {object} Island config with a Phase-3 record actions contract.
  */
@@ -43,9 +76,9 @@ function makeConfig(overrides = {}) {
                     key: '1',
                     cells: { name: { type: 'text', formatted: 'Jane' } },
                     actions: {
-                        edit: { label: 'Edit', color: 'primary', colorClasses: 'fi-color fi-color-primary fi-text-color-700 dark:fi-text-color-400', iconHtml: null, disabled: false, url: EDIT_URL, newTab: false },
-                        delete: { label: 'Delete', color: 'danger', iconHtml: null, disabled: false, url: null, newTab: false },
-                        restore: { label: 'Restore', color: null, iconHtml: null, disabled: false, url: null, newTab: false },
+                        edit: trigger('edit', 'Edit', { class: 'fi-ac-link-action fi-link fi-size-sm fi-color fi-color-primary fi-text-color-700 dark:fi-text-color-400', url: EDIT_URL, tag: 'a' }),
+                        delete: trigger('delete', 'Delete'),
+                        restore: trigger('restore', 'Restore', { view: 'grouped', class: 'fi-ac-grouped-action fi-dropdown-list-item' }),
                     },
                     can: {},
                     url: null,
@@ -56,7 +89,7 @@ function makeConfig(overrides = {}) {
                     key: '2',
                     cells: { name: { type: 'text', formatted: 'John' } },
                     actions: {
-                        delete: { label: 'Delete', color: 'danger', iconHtml: null, disabled: true, url: null, newTab: false },
+                        delete: trigger('delete', 'Delete', { disabled: true, class: 'fi-ac-link-action fi-link fi-disabled fi-size-sm' }),
                     },
                     can: {},
                     url: null,
@@ -183,7 +216,13 @@ describe('VueTable record actions', () => {
 
         await deleteButton.trigger('click')
 
+        // The selection is pushed before EVERY mount (stock's table.js
+        // `mountAction()` wrapper) — that is what feeds a record action's
+        // `accessSelectedRecords()`.
         expect(wireCalls).toEqual([
+            ['set', ['isTrackingDeselectedTableRecords', false, false]],
+            ['set', ['selectedTableRecords', [], false]],
+            ['set', ['deselectedTableRecords', [], false]],
             ['mountAction', ['delete', {}, { table: true, recordKey: '1' }]],
         ])
     })
@@ -233,6 +272,9 @@ describe('VueTable record actions', () => {
         await items[0].trigger('click')
 
         expect(wireCalls).toEqual([
+            ['set', ['isTrackingDeselectedTableRecords', false, false]],
+            ['set', ['selectedTableRecords', [], false]],
+            ['set', ['deselectedTableRecords', [], false]],
             ['mountAction', ['restore', {}, { table: true, recordKey: '1' }]],
         ])
         expect(group.find('.fi-dropdown-panel').exists()).toBe(false)

@@ -5,13 +5,12 @@ declare(strict_types=1);
 namespace Zvizvi\Villament\Support;
 
 use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Resources\Resource;
 use Filament\Support\Enums\Alignment;
-use Filament\Support\Enums\IconSize;
 use Filament\Support\Enums\Size;
 use Filament\Support\Enums\VerticalAlignment;
 use Filament\Support\Facades\FilamentView;
-use Filament\Support\View\Components\LinkComponent;
 use Filament\Tables\Columns\Column;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Grouping\Group;
@@ -21,9 +20,6 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Contracts\Pagination\Paginator;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Model;
-
-use function Filament\Support\generate_icon_html;
-use function Filament\Support\get_component_color_classes;
 
 /**
  * Turns the current page of records into pre-formatted cell payloads.
@@ -37,11 +33,15 @@ final class RecordSerializer
      */
     private readonly array $columnSerializers;
 
+    private readonly ActionTriggerSerializer $triggerSerializer;
+
     /**
      * @param  list<ColumnSerializers\ColumnSerializer>|null  $columnSerializers  Chain links tried in order; the html fallback always terminates it.
      */
     public function __construct(?array $columnSerializers = null)
     {
+        $this->triggerSerializer = new ActionTriggerSerializer;
+
         $this->columnSerializers = $columnSerializers ?? [
             new ColumnSerializers\IconColumnSerializer,
             new ColumnSerializers\ImageColumnSerializer,
@@ -73,6 +73,11 @@ final class RecordSerializer
             : array_values($records);
 
         $recordCount = count($records);
+
+        // `checkIfRecordIsSelectableUsing()` is the only per-record selection
+        // input; without it every record is selectable and the flag would be
+        // dead weight on every row.
+        $checksSelectable = $table->checksIfRecordIsSelectable();
 
         $payload = [];
 
@@ -108,6 +113,9 @@ final class RecordSerializer
                 'urlWireNavigate' => filled($recordUrl) && ! $recordUrlNewTab && FilamentView::hasSpaMode($recordUrl),
                 'action' => $recordAction,
                 'actions' => $this->serializeRecordActions($table, $record),
+                // Stock renders NO checkbox at all for an unselectable record
+                // (an empty selection cell), so the flag has to be per record.
+                ...($checksSelectable ? ['selectable' => $table->isRecordSelectable($record)] : []),
                 'can' => $record instanceof Model ? [
                     'view' => $resourceClass::canView($record),
                     'edit' => $resourceClass::canEdit($record),
@@ -354,44 +362,38 @@ final class RecordSerializer
     {
         $actions = [];
 
-        foreach ($table->getFlatRecordActions() as $action) {
+        // Walked STRUCTURALLY rather than through `getFlatRecordActions()`:
+        // only a group can tell its children they render as dropdown items,
+        // and the flat list has already lost that relationship.
+        $flat = [];
+
+        foreach ($table->getRecordActions() as $item) {
+            if ($item instanceof ActionGroup) {
+                foreach ($this->triggerSerializer->groupChildren($item) as $child) {
+                    $flat[] = $child;
+                }
+
+                continue;
+            }
+
+            $flat[] = $item;
+        }
+
+        foreach ($flat as $action) {
             $action->record($record);
 
             if (! $action->isVisible()) {
                 continue;
             }
 
-            $color = $action->getColor();
-            $color = is_string($color) ? $color : null;
-            $url = $action->getUrl();
-            $newTab = filled($url) && $action->shouldOpenUrlInNewTab();
-
-            // Same icon resolution as Action::toLinkHtml(): the explicit icon,
-            // falling back to the table-context icon (v5 ViewAction/EditAction
-            // only define tableIcon()/groupedIcon()).
-            $icon = $action->getIcon(default: $action->getTable() !== null ? $action->getTableIcon() : null);
-
-            $actions[$action->getName()] = [
-                'label' => $this->stringable($action->getLabel()),
-                'color' => $color,
-                'colorClasses' => implode(' ', get_component_color_classes(LinkComponent::class, $color)),
-                'iconHtml' => $this->iconHtml($icon, $action->getIconSize() ?? $this->iconSizeForActionSize($action->getSize())),
-                'disabled' => $action->isDisabled(),
-                'url' => $url,
-                'newTab' => $newTab,
-                'wireNavigate' => filled($url) && ! $newTab && FilamentView::hasSpaMode($url),
-            ];
+            // Every trigger modifier (`button()`, `iconButton()`, `badge()`,
+            // `size()`, `tooltip()`, `hiddenLabel()`, `badge(count)`,
+            // `extraAttributes()`) is resolved here, per record — including
+            // whatever `modifyUngroupedRecordActionsUsing()` stamped on it.
+            $actions[$action->getName()] = $this->triggerSerializer->serialize($action);
         }
 
         return $actions;
-    }
-
-    private function iconSizeForActionSize(mixed $size): IconSize
-    {
-        return match ($size) {
-            Size::ExtraSmall, Size::Small, 'xs', 'sm' => IconSize::Small,
-            default => IconSize::Medium,
-        };
     }
 
     /**
@@ -430,15 +432,6 @@ final class RecordSerializer
         // Unreachable with the default chain (html fallback), kept for
         // custom chains that forget a terminal link.
         return ['type' => 'html', 'html' => $column->toHtml()];
-    }
-
-    private function iconHtml(mixed $icon, ?IconSize $size = null): ?string
-    {
-        if (blank($icon)) {
-            return null;
-        }
-
-        return generate_icon_html($icon, size: $size)?->toHtml();
     }
 
     private function stringable(mixed $value): ?string

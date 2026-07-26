@@ -61,6 +61,52 @@ class UserResource extends Resource
     /** Test seam: the three `persist*InSession()` toggles, flipped together. */
     public static bool $persistsInSession = false;
 
+    /** Test seams: the table's own header block (`heading()`, `description()`). */
+    public static ?string $heading = null;
+
+    public static ?string $description = null;
+
+    /**
+     * Test seam: `headerActions()`. A closure so a test can mix plain and bulk
+     * actions (both are legal there) without the fixture importing them.
+     *
+     * @var ?Closure(): array<mixed>
+     */
+    public static ?Closure $headerActions = null;
+
+    /** Test seams: `recordActions(position:)` + its alignment/label options. */
+    public static mixed $recordActionsPosition = null;
+
+    public static ?string $recordActionsAlignment = null;
+
+    public static ?string $recordActionsColumnLabel = null;
+
+    /**
+     * Test seam: `modifyUngroupedRecordActionsUsing()` — Filament's global hook
+     * for restyling every ungrouped record action (the docs' example is
+     * `->iconButton()`).
+     *
+     * @var ?Closure(Action): mixed
+     */
+    public static ?Closure $modifyUngroupedRecordActions = null;
+
+    /** Test seams: the record-selection options. */
+    public static ?bool $selectable = null;
+
+    public static ?int $maxSelectableRecords = null;
+
+    public static bool $selectCurrentPageOnly = false;
+
+    public static bool $selectGroupsOnly = false;
+
+    public static bool $disabledSelection = false;
+
+    /**
+     * Test seam: `checkIfRecordIsSelectableUsing()`. When true, only ACTIVE
+     * users are selectable.
+     */
+    public static bool $checksIfRecordIsSelectable = false;
+
     /**
      * Test seam: the table's `defaultGroup()`. Set to an id that is also in
      * `groups()` for a SELECTABLE default (stock's mount hook seeds
@@ -246,10 +292,30 @@ class UserResource extends Resource
                         ? 'Created from '.$data['created_from']
                         : null),
             ])
+            ->heading(static::$heading)
+            ->description(static::$description)
+            ->headerActions(static::$headerActions === null ? [] : (static::$headerActions)())
+            // Selection options. `selectable(null)` leaves Filament's own
+            // fallback in place ("are any bulk actions visible?").
+            ->selectable(static::$selectable)
+            ->maxSelectableRecords(static::$maxSelectableRecords)
+            ->selectCurrentPageOnly(static::$selectCurrentPageOnly)
+            ->selectGroupsOnly(static::$selectGroupsOnly)
+            ->disabledSelection(static::$disabledSelection)
+            ->checkIfRecordIsSelectableUsing(
+                static::$checksIfRecordIsSelectable
+                    ? fn (User $record): bool => $record->status === 'active'
+                    : null,
+            )
+            // MUST precede `recordActions()`: Filament applies it as each
+            // action is pushed, not at render time.
+            ->modifyUngroupedRecordActionsUsing(static::$modifyUngroupedRecordActions)
             ->recordActions([
                 EditAction::make(),
                 DeleteAction::make(),
-            ])
+            ], position: static::$recordActionsPosition)
+            ->recordActionsAlignment(static::$recordActionsAlignment)
+            ->recordActionsColumnLabel(static::$recordActionsColumnLabel)
             ->toolbarActions([
                 Action::make('announce')
                     ->url('https://example.test/announce')

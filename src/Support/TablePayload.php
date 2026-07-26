@@ -41,11 +41,26 @@ final class TablePayload
         // derived from them — just never turned into cells.
         $isGroupsOnly = $table->isGroupsOnly() && $table->getGrouping() !== null;
 
+        // Stock's own `$isSelectionEnabled` line — groups-only mode disables
+        // selection outright.
+        $isSelectionEnabled = $table->isSelectionEnabled() && (! $isGroupsOnly);
+
         return [
             'records' => $isGroupsOnly
                 ? []
                 : $this->recordSerializer->serialize($component, $resourceClass, $records),
-            'meta' => $this->recordSerializer->meta($records),
+            'meta' => [
+                ...$this->recordSerializer->meta($records),
+                // Stock's `$allSelectableRecordsCount`: what "Select all N"
+                // counts and what the inversion math subtracts from. NOT the
+                // paginator's `total` — `checkIfRecordIsSelectableUsing()`
+                // narrows this, and it exists under simple/cursor pagination,
+                // where `total` is null. Computed only when selection is on,
+                // because with a selectability check it walks the query.
+                'allSelectableCount' => $isSelectionEnabled
+                    ? $component->getAllSelectableTableRecordsCount()
+                    : null,
+            ],
             'indicators' => $this->indicatorSerializer->serialize($table),
             'summaries' => $this->summarySerializer->serialize($component),
             'schemaVersion' => $this->schemaSerializer->version($schema),

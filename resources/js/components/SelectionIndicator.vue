@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue'
-import { formatString, formatTransChoice } from '../support/strings.js'
+import { formatTransChoice } from '../support/strings.js'
 
 const props = defineProps({
     /**
@@ -11,12 +11,29 @@ const props = defineProps({
         required: true,
     },
     /**
-     * Total matching records (`meta.total`); null for simple/cursor
-     * pagination, which hides the "Select all" affordance.
+     * Server-computed selectable total (`meta.allSelectableCount`) — what the
+     * "Select all :count" label counts. Stock's `$allSelectableRecordsCount`.
      */
     total: {
         type: Number,
         default: null,
+    },
+    /**
+     * Whether the "Select all" link shows at all — the caller's
+     * `selection.canSelectAll()` (stock's `canSelectAllRecords()`), already
+     * gated on `selectGroupsOnly()`.
+     */
+    canSelectAll: {
+        type: Boolean,
+        default: false,
+    },
+    /**
+     * `disabledSelection()`: stock renders the indicator but drops the whole
+     * actions container.
+     */
+    disabled: {
+        type: Boolean,
+        default: false,
     },
     /**
      * Localized UI strings (already resolved with English fallbacks).
@@ -33,12 +50,9 @@ const selectedCountLabel = computed(
     () => formatTransChoice(props.strings.selectedCount, props.count),
 )
 
-const canSelectAll = computed(
-    () => props.total !== null && props.total > 0 && props.count < props.total,
-)
-
+// Stock uses `trans_choice()` here too, on the selectable total.
 const selectAllLabel = computed(
-    () => formatString(props.strings.selectAll, { count: props.total ?? 0 }),
+    () => formatTransChoice(props.strings.selectAll, props.total ?? 0),
 )
 </script>
 
@@ -48,7 +62,7 @@ const selectAllLabel = computed(
             <span>{{ selectedCountLabel }}</span>
         </div>
 
-        <div>
+        <div v-if="! disabled">
             <div class="fi-ta-selection-indicator-actions-ctn">
                 <!--
                     `fi-text-color-600` / `dark:fi-text-color-400` are

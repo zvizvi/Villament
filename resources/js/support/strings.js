@@ -29,6 +29,7 @@ export const defaultStrings = Object.freeze({
     bulkSelectRecord: 'Select/deselect item :key for bulk actions.',
     bulkSelectGroup: 'Select/deselect group :title for bulk actions.',
     selectedCount: '1 record selected|:count records selected',
+    recordActionsHeading: 'Actions',
     selectAll: 'Select all :count',
     deselectAll: 'Deselect all',
     groupTrigger: 'Group',

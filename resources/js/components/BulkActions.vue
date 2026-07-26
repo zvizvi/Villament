@@ -1,14 +1,15 @@
 <script setup>
 import { onBeforeUnmount, ref } from 'vue'
 import TrustedIcon from './TrustedIcon.js'
+import ActionTrigger from './ActionTrigger.vue'
 
 defineProps({
     /**
-     * Bulk action structure from `schema.actions.bulk`:
-     * `{ type: 'action', name, label, color, iconHtml }` or
-     * `{ type: 'group', label, iconHtml, actions: [{ name, label, color, iconHtml }] }`.
-     * Bulk actions carry no record, so their props are evaluated server-side
-     * once, in the structure itself.
+     * Action structure from `schema.actions.bulk` / `.toolbar` / `.header`:
+     * `{ type: 'action', ...trigger }` or
+     * `{ type: 'group', label, iconHtml, actions: [trigger, ...] }`.
+     * These actions carry no record, so their triggers are evaluated
+     * server-side once, in the structure itself.
      */
     actions: {
         type: Array,
@@ -62,40 +63,9 @@ onBeforeUnmount(() => {
  * @param {string} name
  * @returns {void}
  */
-function onActionClick(name) {
+function onMount(name) {
     openGroup.value = null
     emit('mount', name)
-}
-
-/**
- * Standalone action button classes. `action.colorClasses` is the exact
- * ButtonComponent color string Filament computes server-side (bg + text
- * shades per palette); empty for a null/gray color.
- *
- * @param {object} action
- * @returns {(string[]|string)[]}
- */
-function buttonClasses(action) {
-    return ['fi-btn', 'fi-size-md', action.colorClasses || '']
-}
-
-/**
- * Grouped-action dropdown item classes. `action.colorClasses` is the
- * ItemComponent color string (text shades only; empty for gray/default).
- *
- * @param {object} action
- * @returns {(string[]|string)[]}
- */
-function itemClasses(action) {
-    return ['fi-dropdown-list-item', 'fi-ac-grouped-action', action.colorClasses || '']
-}
-
-/**
- * @param {object} action
- * @returns {string} Server-computed color classes for the item's icon svg.
- */
-function itemIconClasses(action) {
-    return action.iconColorClasses || ''
 }
 </script>
 
@@ -108,29 +78,11 @@ function itemIconClasses(action) {
             v-for="(item, index) in actions"
             :key="item.type === 'group' ? `group-${index}` : item.name"
         >
-            <a
-                v-if="item.type === 'action' && item.url"
-                :class="buttonClasses(item)"
-                :href="item.url"
-                :target="item.newTab ? '_blank' : undefined"
-                :rel="item.newTab ? 'noopener noreferrer' : undefined"
-            >
-                <TrustedIcon :html="item.iconHtml" />
-
-                {{ item.label }}
-            </a>
-
-            <button
-                v-else-if="item.type === 'action'"
-                type="button"
-                :class="buttonClasses(item)"
-                :disabled="isLoading"
-                @click="onActionClick(item.name)"
-            >
-                <TrustedIcon :html="item.iconHtml" />
-
-                {{ item.label }}
-            </button>
+            <ActionTrigger
+                v-if="item.type === 'action'"
+                :action="isLoading ? { ...item, disabled: true } : item"
+                @mount="onMount"
+            />
 
             <!--
                 Stock `BulkActionGroup`: `button()` trigger + `labeledFrom('sm')`
@@ -192,22 +144,12 @@ function itemIconClasses(action) {
                     class="fi-dropdown-panel fi-width-default"
                 >
                     <div class="fi-dropdown-list">
-                        <button
+                        <ActionTrigger
                             v-for="action in item.actions"
                             :key="action.name"
-                            type="button"
-                            :class="itemClasses(action)"
-                            @click="onActionClick(action.name)"
-                        >
-                            <TrustedIcon
-                                :html="action.iconHtml"
-                                :class="itemIconClasses(action)"
-                            />
-
-                            <span class="fi-dropdown-list-item-label">
-                                {{ action.label }}
-                            </span>
-                        </button>
+                            :action="action"
+                            @mount="onMount"
+                        />
                     </div>
                 </div>
             </div>

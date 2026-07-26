@@ -34,10 +34,12 @@ describe('action structure serialization', function (): void {
         // A primary standalone action must carry the ButtonComponent bg+text
         // shade classes, not just fi-color-primary — otherwise the button
         // renders without its fill.
-        expect($toolbar->get('announce')['colorClasses'])
+        expect($toolbar->get('announce')['class'])
+            ->toContain('fi-ac-btn-action fi-btn fi-size-md')
             ->toContain('fi-color fi-color-primary')
             ->toContain('fi-bg-color-')
-            ->toContain('fi-text-color-');
+            ->toContain('fi-text-color-')
+            ->and($toolbar->get('announce')['view'])->toBe('button');
     });
 
     it('ships column manager state and UI vocabulary', function (): void {
@@ -109,8 +111,10 @@ describe('per-record action evaluation', function (): void {
 
         expect($record['actions']['edit']['url'])->toContain("/admin/users/{$user->id}/edit")
             ->and($record['actions']['edit']['label'])->toBe('Edit')
+            ->and($record['actions']['edit']['tag'])->toBe('a')
             ->and($record['actions']['delete']['url'])->toBeNull()
-            ->and($record['actions']['delete']['color'])->toBe('danger');
+            ->and($record['actions']['delete']['tag'])->toBe('button')
+            ->and($record['actions']['delete']['class'])->toContain('fi-color-danger');
     });
 
     it('renders action icons in the table-context micro variant with Filament-computed color classes', function (): void {
@@ -122,8 +126,8 @@ describe('per-record action evaluation', function (): void {
         // exactly what the stock blade emits; color class strings come from
         // FilamentColor::getComponentClasses itself.
         expect($record['actions']['edit']['iconHtml'])->toContain('fi-size-sm')->toContain('viewBox="0 0 16 16"')
-            ->and($record['actions']['edit']['colorClasses'])->toBe('fi-color fi-color-primary fi-text-color-700 dark:fi-text-color-400')
-            ->and($record['actions']['delete']['colorClasses'])->toBe('fi-color fi-color-danger fi-text-color-600 dark:fi-text-color-300')
+            ->and($record['actions']['edit']['class'])->toBe('fi-ac-link-action fi-link fi-size-sm fi-color fi-color-primary fi-text-color-700 dark:fi-text-color-400')
+            ->and($record['actions']['delete']['class'])->toBe('fi-ac-link-action fi-link fi-size-sm fi-color fi-color-danger fi-text-color-600 dark:fi-text-color-300')
             ->and($record['cells']['status']['size'])->toBe('sm')
             ->and($record['cells']['status']['colorClasses'])->toBe('fi-color fi-color-warning fi-text-color-700 dark:fi-text-color-400');
     });

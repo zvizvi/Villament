@@ -151,7 +151,11 @@ describe('extra attributes', function (): void {
 describe('cell click model', function (): void {
     it('resolves the wrapper element server-side, per stock precedence', function (): void {
         $team = Team::query()->create(['name' => 'Clickers', 'slug' => 'clickers']);
-        User::factory()->create(['name' => 'Clickable', 'team_id' => $team->id]);
+        // `is_admin` is pinned: the factory randomizes it, the policy denies
+        // `update` to admins, and ListRecords derives the RECORD url from that
+        // — so an admin record would have no url and every wrapper below would
+        // collapse to a div.
+        User::factory()->create(['name' => 'Clickable', 'team_id' => $team->id, 'is_admin' => false]);
 
         $cells = columnOptionsCellsFor('Clickable');
 

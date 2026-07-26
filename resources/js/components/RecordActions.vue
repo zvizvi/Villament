@@ -1,6 +1,7 @@
 <script setup>
 import { onBeforeUnmount, ref } from 'vue'
 import TrustedIcon from './TrustedIcon.js'
+import ActionTrigger from './ActionTrigger.vue'
 
 const props = defineProps({
     /**
@@ -13,16 +14,22 @@ const props = defineProps({
         required: true,
     },
     /**
-     * This record's evaluated action props, keyed by action name:
-     * `{ label, color, colorClasses, iconHtml, disabled, url, newTab, wireNavigate }`.
-     * Only VISIBLE actions are present — a structure name absent here must
-     * not render. `colorClasses` is the exact string Filament computes
-     * server-side (LinkComponent); empty for color-less actions, which stock
-     * renders with NO color classes at all.
+     * This record's evaluated action triggers, keyed by action name — the
+     * `ActionTriggerSerializer` payload (view, tag, finished class/style,
+     * icon, badge, tooltip, url, …). Only VISIBLE actions are present: a
+     * structure name absent here must not render.
      */
     actions: {
         type: Object,
         default: () => ({}),
+    },
+    /**
+     * `recordActionsAlignment()` as Filament's own `fi-align-*` class, or null
+     * for the default (end).
+     */
+    alignmentClass: {
+        type: String,
+        default: null,
     },
 })
 
@@ -69,82 +76,10 @@ function visibleGroupActions(group) {
 }
 
 /**
- * Stock record-action link classes (`HasRecordActions` applies
- * `defaultView(LINK_VIEW)` + `defaultSize(Size::Small)`): the
- * server-computed color classes come FIRST, then
- * `fi-link fi-size-sm fi-ac-link-action` — and a color-less action
- * carries no color classes at all, exactly like stock.
- *
- * @param {object} action Evaluated action props.
- * @returns {string[]}
- */
-function linkClasses(action) {
-    return [
-        ...(action.colorClasses ? [action.colorClasses] : []),
-        'fi-link',
-        'fi-size-sm',
-        'fi-ac-link-action',
-        ...(action.disabled ? ['fi-disabled'] : []),
-    ]
-}
-
-/**
- * Stock grouped-action item classes (`fi-ac-grouped-action`): gray default
- * renders NO color classes; a real color adds the text-shade quartet
- * Filament computes for dropdown items.
- *
- * @param {object} action Evaluated action props.
- * @returns {string[]}
- */
-function itemClasses(action) {
-    const base = ['fi-dropdown-list-item', 'fi-ac-grouped-action']
-
-    if (! action.color || action.color === 'gray') {
-        return [...base, ...(action.disabled ? ['fi-disabled'] : [])]
-    }
-
-    return [
-        'fi-color',
-        `fi-color-${action.color}`,
-        'fi-text-color-600',
-        'hover:fi-text-color-700',
-        'dark:fi-text-color-400',
-        'dark:hover:fi-text-color-400',
-        ...base,
-        ...(action.disabled ? ['fi-disabled'] : []),
-    ]
-}
-
-/**
- * @param {object} action Evaluated action props.
- * @returns {string} Color classes stock appends to a grouped item's icon svg.
- */
-function itemIconClasses(action) {
-    if (! action.color || action.color === 'gray') {
-        return ''
-    }
-
-    return `fi-color fi-color-${action.color}`
-}
-
-/**
- * @param {object} action Evaluated action props.
- * @returns {object} `wire:navigate` attribute for SPA-mode links, like stock anchors.
- */
-function linkNavigateAttrs(action) {
-    return action.wireNavigate ? { 'wire:navigate': '' } : {}
-}
-
-/**
  * @param {string} name
- * @param {object} action Evaluated action props.
  * @returns {void}
  */
-function onActionClick(name, action) {
-    if (action.disabled) {
-        return
-    }
-
+function onMount(name) {
     openGroup.value = null
     emit('mount', name)
 }
@@ -154,45 +89,22 @@ function onActionClick(name, action) {
     <div
         ref="root"
         class="fi-ta-actions"
+        :class="alignmentClass || undefined"
     >
         <template
             v-for="(item, index) in structure"
             :key="item.type === 'group' ? `group-${index}` : item.name"
         >
             <!-- Plain action: rendered only when evaluated for this record. -->
-            <template v-if="item.type === 'action'">
-                <template v-if="actions[item.name]">
-                    <a
-                        v-if="actions[item.name].url && ! actions[item.name].disabled"
-                        :class="linkClasses(actions[item.name])"
-                        :href="actions[item.name].url"
-                        :target="actions[item.name].newTab ? '_blank' : undefined"
-                        :rel="actions[item.name].newTab ? 'noopener noreferrer' : undefined"
-                        v-bind="linkNavigateAttrs(actions[item.name])"
-                    >
-                        <TrustedIcon :html="actions[item.name].iconHtml" />
-
-                        {{ actions[item.name].label }}
-                    </a>
-
-                    <button
-                        v-else
-                        type="button"
-                        :class="linkClasses(actions[item.name])"
-                        :disabled="actions[item.name].disabled"
-                        :aria-disabled="actions[item.name].disabled ? 'true' : undefined"
-                        @click.prevent.stop="onActionClick(item.name, actions[item.name])"
-                    >
-                        <TrustedIcon :html="actions[item.name].iconHtml" />
-
-                        {{ actions[item.name].label }}
-                    </button>
-                </template>
-            </template>
+            <ActionTrigger
+                v-if="item.type === 'action' && actions[item.name]"
+                :action="actions[item.name]"
+                @mount="onMount"
+            />
 
             <!-- Group: dropdown, rendered only when any of its actions is visible. -->
             <div
-                v-else-if="visibleGroupActions(item).length > 0"
+                v-else-if="item.type === 'group' && visibleGroupActions(item).length > 0"
                 class="fi-dropdown villament-dropdown villament-actions-group"
             >
                 <div
@@ -215,46 +127,12 @@ function onActionClick(name, action) {
                     class="fi-dropdown-panel fi-width-default"
                 >
                     <div class="fi-dropdown-list">
-                        <template
+                        <ActionTrigger
                             v-for="name in visibleGroupActions(item)"
                             :key="name"
-                        >
-                            <a
-                                v-if="actions[name].url && ! actions[name].disabled"
-                                :class="itemClasses(actions[name])"
-                                :href="actions[name].url"
-                                :target="actions[name].newTab ? '_blank' : undefined"
-                                :rel="actions[name].newTab ? 'noopener noreferrer' : undefined"
-                                v-bind="linkNavigateAttrs(actions[name])"
-                            >
-                                <TrustedIcon
-                                    :html="actions[name].iconHtml"
-                                    :class="itemIconClasses(actions[name])"
-                                />
-
-                                <span class="fi-dropdown-list-item-label">
-                                    {{ actions[name].label }}
-                                </span>
-                            </a>
-
-                            <button
-                                v-else
-                                type="button"
-                                :class="itemClasses(actions[name])"
-                                :disabled="actions[name].disabled"
-                                :aria-disabled="actions[name].disabled ? 'true' : undefined"
-                                @click.prevent.stop="onActionClick(name, actions[name])"
-                            >
-                                <TrustedIcon
-                                    :html="actions[name].iconHtml"
-                                    :class="itemIconClasses(actions[name])"
-                                />
-
-                                <span class="fi-dropdown-list-item-label">
-                                    {{ actions[name].label }}
-                                </span>
-                            </button>
-                        </template>
+                            :action="actions[name]"
+                            @mount="onMount"
+                        />
                     </div>
                 </div>
             </div>

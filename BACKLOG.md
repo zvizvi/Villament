@@ -63,3 +63,55 @@ explicitly out of scope per `AGENTS.md` §8.
 **Done means.** The spinner HTML comes from the server (no hand-written SVG in the
 Vue layer); only the clicked control spins; JS tests cover the swap and the
 per-control targeting; the class list on each control still matches stock.
+
+---
+
+## Action trigger options the island cannot express yet
+
+`ActionTriggerSerializer` carries the whole documented trigger surface —
+`link()` / `button()` / `iconButton()` / `badge()`, `size()`, `color()`,
+`icon()` + `iconPosition()` + `iconSize()`, `tooltip()`, `hiddenLabel()`,
+`outlined()`, `badge(count)` + `badgeColor()`, `extraAttributes()`, `url()` +
+`openUrlInNewTab()` and `disabled()` — with the class strings computed
+server-side through Filament's own component bags. Three modifiers are
+deliberately left out:
+
+1. **`keyBindings()`** (`support/.../link.blade.php:80-83`). Stock emits
+   `x-bind:id="$id('key-bindings')"` plus an `x-mousetrap.global.…` directive.
+   Both need Alpine, which never walks the island. Done means: either a Vue
+   keydown listener that reproduces Mousetrap's combo syntax (and its
+   input-focus exclusions), or an explicit "not supported inside the island"
+   note in the README.
+2. **`labeledFrom($breakpoint)`** (`button/index.blade.php:75-99`). Stock
+   renders TWO sibling elements — an icon button for small screens and the
+   labeled button carrying `fi-labeled-from-{bp}` — and lets CSS swap them.
+   `ActionTrigger` renders one. Done means the trigger emits both, keyed off a
+   serialized `labeledFrom`, matching stock's class pair exactly. (The
+   `BulkActionGroup` TRIGGER already hand-renders this pair in
+   `BulkActions.vue`; the gap is the per-action one.)
+3. **`postToUrl()`**. Stock wraps the trigger in a real `<form method="post">`
+   with a CSRF field. Done means serializing the form action/method and
+   rendering the wrapper, with the token pulled from the page.
+
+**Out of scope.** The `ActionGroup` TRIGGER's own options (`dropdownPlacement()`,
+`dropdownWidth()`, `dropdownOffset()`) — the island anchors its dropdowns in
+pure CSS (see `table.css`), which is a separate decision from the trigger
+markup.
+
+---
+
+## `Table::header()` — the custom-view escape hatch
+
+`heading()`, `description()` and `headerActions()` all render in the island now,
+but `->header(view(...))` — which replaces that whole block with a developer's
+own Blade view — does not. It is arbitrary markup that may carry its own
+Livewire or Alpine bindings, so serializing its HTML into Vue would render it
+inert.
+
+**Done means** it goes NATIVE, the way the filters and the column manager did:
+Blade renders it into an `x-teleport` template with a hidden `wire:ignore`
+slot holder, and Vue adopts the slot into a `data-villament-header-outlet` at
+the top of `.fi-ta-header-ctn`. The plumbing is already proven twice over —
+`resources/views/partials/filters.blade.php` is the template to copy, and
+`adoptNativeSlots()` in `VueTable.vue` only needs a third family name. This is
+a one-shot region, so it costs nothing per row.

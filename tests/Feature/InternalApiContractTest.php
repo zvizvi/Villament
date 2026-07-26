@@ -8,6 +8,8 @@ use Filament\Panel;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Resources\Pages\PageRegistration;
 use Filament\Resources\Resource;
+use Filament\Support\View\ComponentAttributeBag;
+use Filament\Support\View\Components\ButtonComponent;
 use Filament\Tables\Columns\Column;
 use Filament\Tables\Columns\ColumnGroup;
 use Filament\Tables\Columns\IconColumn;
@@ -172,11 +174,51 @@ $methodContract = [
     [Table::class, 'getRecordActions'],
     [Table::class, 'getFlatRecordActions'],
     [Table::class, 'getToolbarActions'],
+    [Table::class, 'getHeaderActions'],
+    [Table::class, 'getHeaderActionsPosition'],
+    [Table::class, 'getHeading'],
+    [Table::class, 'getDescription'],
+    // Record-actions placement (`recordActions(position:)` + its options).
+    [Table::class, 'getRecordActionsPosition'],
+    [Table::class, 'getRecordActionsAlignment'],
+    [Table::class, 'getRecordActionsColumnLabel'],
+    // The record-selection surface, all of it read by the schema serializer.
+    [Table::class, 'isSelectionEnabled'],
+    [Table::class, 'isSelectionDisabled'],
+    [Table::class, 'getMaxSelectableRecords'],
+    [Table::class, 'selectsCurrentPageOnly'],
+    [Table::class, 'selectsGroupsOnly'],
+    [Table::class, 'canTrackDeselectedRecords'],
+    [Table::class, 'checksIfRecordIsSelectable'],
+    [Table::class, 'isRecordSelectable'],
+    [ListRecords::class, 'getAllSelectableTableRecordsCount'],
+    [ListRecords::class, 'getAllSelectableTableRecordKeys'],
+    // `getActions()` is what stamps a group's children with the dropdown-item
+    // view; `getFlatActions()` returns the same objects UNstamped.
+    [ActionGroup::class, 'getActions'],
     [ActionGroup::class, 'getFlatActions'],
+    [ActionGroup::class, 'hasNonBulkAction'],
     [Action::class, 'record'],
     [Action::class, 'isVisible'],
     [Action::class, 'getUrl'],
     [Action::class, 'isDisabled'],
+    // The trigger surface `ActionTriggerSerializer` reads to rebuild each
+    // action's markup client-side.
+    [Action::class, 'getView'],
+    [Action::class, 'getSize'],
+    [Action::class, 'getColor'],
+    [Action::class, 'getIcon'],
+    [Action::class, 'getIconSize'],
+    [Action::class, 'getIconPosition'],
+    [Action::class, 'getGroupedIcon'],
+    [Action::class, 'getTableIcon'],
+    [Action::class, 'isLabelHidden'],
+    [Action::class, 'isOutlined'],
+    [Action::class, 'getBadge'],
+    [Action::class, 'getBadgeColor'],
+    [Action::class, 'getTooltip'],
+    [Action::class, 'getExtraAttributes'],
+    [Action::class, 'shouldOpenUrlInNewTab'],
     [LivewireManager::class, 'new'],
     [Resource::class, 'canViewAny'],
     [Resource::class, 'canView'],
@@ -218,4 +260,16 @@ it('still finds every Livewire state property the package injects', function (st
 
 it('still finds the icon rendering helper', function (): void {
     expect(function_exists('Filament\Support\generate_icon_html'))->toBeTrue();
+});
+
+it('still finds every Action trigger view constant', function (string $constant): void {
+    expect(defined(Action::class.'::'.$constant))
+        ->toBeTrue("Filament internal API drift: constant [Action::{$constant}] no longer exists.");
+})->with(['BADGE_VIEW', 'BUTTON_VIEW', 'GROUPED_VIEW', 'ICON_BUTTON_VIEW', 'LINK_VIEW']);
+
+it('still finds the component color bag the trigger serializer builds classes with', function (): void {
+    // `ActionTriggerSerializer` rebuilds each trigger's class string through
+    // the very same bag chain Filament's own `generate*Html()` methods use.
+    expect(method_exists(ComponentAttributeBag::class, 'color'))->toBeTrue()
+        ->and(method_exists(ButtonComponent::class, 'make'))->toBeTrue();
 });
