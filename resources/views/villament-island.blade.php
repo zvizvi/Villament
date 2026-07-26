@@ -50,8 +50,8 @@
         @include('villament::partials.header')
     @endif
 
-    @if ($withColumnHeaderSlots)
-        @include('villament::partials.column-header-slots')
+    @if ($withColumnFilterSlots)
+        @include('villament::partials.column-filter-slots')
     @endif
 
     {{--

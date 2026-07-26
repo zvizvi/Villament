@@ -38,33 +38,42 @@ trait HasVillamentTable
                     withNativeFilters: (bool) ($config['schema']['hasFilters'] ?? false),
                     withNativeColumnManager: (bool) ($config['schema']['hasColumnManager'] ?? false),
                     withNativeHeader: (bool) ($config['schema']['header']['hasCustomView'] ?? false),
-                    withColumnHeaderSlots: $this->hasVillamentColumnHeaderSlots(),
+                    withColumnFilterSlots: $this->getVillamentColumnFilterSlots() !== [],
                 ),
                 RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_AFTER),
             ]);
     }
 
     /**
-     * Opt in to a teleport slot inside every column header cell.
+     * Opt in to a teleport slot in the header filter row, per column.
      *
-     * The island rebuilds the header row in Vue, so Filament content that
-     * belongs to a specific column header — a header filter form being the
-     * case this exists for — has nowhere to land. Turning this on renders one
-     * `[data-villament-column-header-slot="{column}"]` target per column
-     * (scoped by `data-villament-owner`), which the header cell adopts; what
-     * goes into it is entirely up to the caller:
+     * That row — the one directly under the header, which stock fills with the
+     * individual column search fields — is also where a header-filter package
+     * puts its inputs. The island rebuilds it in Vue, so those inputs have
+     * nowhere to land. Naming a column here renders one
+     * `[data-villament-column-filter-slot="{column}"]` target for it (scoped by
+     * `data-villament-owner`), which that column's cell adopts; what goes into
+     * it is entirely up to the caller:
      *
-     *     <template x-teleport="[data-villament-column-header-slot='flight_date'][data-villament-owner='{{ $this->getId() }}']">
-     *         {{ $form->getComponent('scheduled_departure') }}
+     *     <template x-teleport="[data-villament-column-filter-slot='flight_date'][data-villament-owner='{{ $this->getId() }}']">
+     *         {{ $form->getComponent('scheduled_departure')?->getChildSchema() }}
      *     </template>
      *
      * Teleport from Livewire-morphable markup that is already server-rendered
      * when Alpine walks the DOM — the render hook right before the island is
-     * the natural place. Off by default: an outlet per column is not free.
+     * the natural place.
+     *
+     * The value is the extra classes for that column's `<td>`. Villament has
+     * no opinion on them: the styling a header-filter package ships keys off
+     * its own cell class (`fi-ta-header-filter-cell` and friends), and only the
+     * caller knows which one it is. A column that is individually searchable
+     * keeps its search field and is skipped, exactly as stock does.
+     *
+     * @return array<string, string|array<int, string>|null>
      */
-    public function hasVillamentColumnHeaderSlots(): bool
+    public function getVillamentColumnFilterSlots(): array
     {
-        return false;
+        return [];
     }
 
     /**
@@ -148,7 +157,7 @@ trait HasVillamentTable
             // Not part of `schema`: this is a page-level rendering opt-in, not
             // anything the table() definition says, and it must not move the
             // schema hash for tables that never turn it on.
-            'columnHeaderSlots' => $this->hasVillamentColumnHeaderSlots(),
+            'columnFilterSlots' => $this->getVillamentColumnFilterSlots(),
             'schema' => $schema,
             'initialData' => [
                 // The endpoint is not the only consumer of the record payload:

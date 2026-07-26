@@ -325,17 +325,25 @@ So the harness now mirrors `SupportLifecycleHooks` exactly: `boot` → `initiali
 
 `mount` stays deliberately unreplayed. That is not an oversight to fix later: skipping it is precisely what keeps the session and query-string hydration inside `mountInteractsWithTable()` off, which is what makes the endpoint stateless. Livewire itself runs boot/initialize/booted on every hydrate with no mount, so nothing in a `booted` hook may assume mount ran.
 
-## 2026-07-26 — Column header slots: the primitive ships, the bridge does not
+## 2026-07-26 — The slot belongs in the header filter row, not the header cell
 
-Header filters (`leek/filament-header-filters` and anything shaped like it) render inputs into the stock `<th>`. The island rebuilds that row in Vue, so they land nowhere. Two ways to close it: villament detects the package via `Table::hasMacro('getHeaderFilters')` and teleports its forms itself, or villament exposes a slot per column and the app teleports whatever it wants.
+First cut put the outlet inside the `<th>`, next to the label. Wrong: stock does not render header filters there. `leek/filament-header-filters` overrides `filament-tables::index` and drops each filter into the **individual column search row** — the first `<tr>` of `<tbody>`, one `<td>` per column, holding either a search field or a header filter, never both. Villament already renders that row; the slot simply belongs in it.
+
+The move also settled what the opt-in has to be. A boolean was enough for a slot in the `<th>`, but that row's cells carry `fi-ta-header-filter-cell` (+ a per-column variant), and the package's CSS hangs almost everything off them — padding, z-index, and `:has()` rules that widen a column once a multi-select holds badges. Villament emitting those class names would be exactly the coupling this design refused. So `getVillamentColumnFilterSlots()` returns `column => cell classes`: the caller names its columns and brings its own class names, and villament stays ignorant of both.
+
+Two behaviours fall out of matching stock rather than inventing: the row renders as soon as one column is slotted (a table with header filters and no individual search still needs it), and an individually searchable column keeps its search field and gets no outlet — stock's `@if searchable @elseif headerFilter`, mirrored.
+
+## 2026-07-26 — Column filter slots: the primitive ships, the bridge does not
+
+Header filters (`leek/filament-header-filters` and anything shaped like it) render inputs into the stock table's own markup. The island rebuilds it in Vue, so they land nowhere. Two ways to close it: villament detects the package via `Table::hasMacro('getHeaderFilters')` and teleports its forms itself, or villament exposes a slot per column and the app teleports whatever it wants.
 
 Chose the second, deliberately, over the first's better out-of-the-box experience. A macro check is soft coupling but it is still coupling: villament would carry a second package's internals (`getTableHeaderFiltersForm()`, the `Group` keying, the `columnName()` macro) and inherit its release cycle for a feature villament does not own. The plugins stay independent; the app pays one small Blade template.
 
-That trade only holds if the primitive is genuinely complete, because the app can no longer lean on villament to handle the edges. The one that matters is **column toggling**: an outlet inside a `<th>` disappears with its column, and a slot appended into it would be destroyed with it — Alpine state and all — with nothing to re-adopt when the column comes back. So slots are rendered for *every* column, not the visible ones, and `NativeSlot` moves the node into the cell on mount and **back to the exact holder it came from** on unmount. Toggling is lossless in both directions; the test types into the input and asserts the same node with the same value survives a round trip.
+That trade only holds if the primitive is genuinely complete, because the app can no longer lean on villament to handle the edges. The one that matters is **column toggling**: an outlet inside a cell disappears with its column, and a slot appended into it would be destroyed with it — Alpine state and all — with nothing to re-adopt when the column comes back. So slots are rendered for *every* column, not the visible ones, and `NativeSlot` moves the node into the cell on mount and **back to the exact holder it came from** on unmount. Toggling is lossless in both directions; the test types into the input and asserts the same node with the same value survives a round trip.
 
 That is also why this family is not in `adoptNativeSlots()` with the other four. Filters, column manager, custom header and empty state all have outlets that never unmount, so a one-shot move on mount is correct for them and re-running adoption would be pointless. Column headers are the first family where the outlet's lifetime is shorter than the island's.
 
-Kept off by default (`hasVillamentColumnHeaderSlots()` → false) and out of `schema`: it is a page-level rendering opt-in, not something `table()` says, and folding it into the schema would move the version hash for every table that never uses it.
+Kept off by default (`getVillamentColumnFilterSlots()` → `[]`) and out of `schema`: it is a page-level rendering opt-in, not something `table()` says, and folding it into the schema would move the version hash for every table that never uses it.
 
 ## Verified Filament v5 internal API map (§4.1, §4.8)
 

@@ -24,7 +24,7 @@ final class VillamentIsland extends Component
         bool $withNativeFilters = false,
         bool $withNativeColumnManager = false,
         bool $withNativeHeader = false,
-        bool $withColumnHeaderSlots = false,
+        bool $withColumnFilterSlots = false,
     ): static {
         $static = app(self::class);
         $static->viewData([
@@ -32,7 +32,7 @@ final class VillamentIsland extends Component
             'withNativeFilters' => $withNativeFilters,
             'withNativeColumnManager' => $withNativeColumnManager,
             'withNativeHeader' => $withNativeHeader,
-            'withColumnHeaderSlots' => $withColumnHeaderSlots,
+            'withColumnFilterSlots' => $withColumnFilterSlots,
         ]);
         $static->configure();
 

@@ -10,6 +10,7 @@ import { formatString, resolveStrings } from '../support/strings.js'
 import { resolveCellComponent } from '../support/cellRegistry.js'
 import TrustedIcon from './TrustedIcon.js'
 import TableHeader from './TableHeader.vue'
+import NativeSlot from './NativeSlot.vue'
 import TableSearch from './TableSearch.vue'
 import TableFilterIndicators from './TableFilterIndicators.vue'
 import TableGrouping from './TableGrouping.vue'
@@ -54,12 +55,27 @@ const strings = resolveStrings(schema.strings)
 const icons = schema.icons ?? {}
 
 /**
- * `hasVillamentColumnHeaderSlots()` on the page. When on, every header cell
- * renders a `column-header` outlet and the server rendered one slot per column
- * for it — the contract an app teleports Filament content into (header filter
- * forms, above all). Never inferred: the outlets cost a node per column.
+ * `getVillamentColumnFilterSlots()` on the page: column key → extra classes for
+ * that column's cell in the header filter row. Each named column gets a
+ * `column-filter` outlet there and a matching server-rendered slot — the
+ * contract an app teleports Filament content into (header filter forms, above
+ * all). Never inferred: villament cannot know which columns have one.
  */
-const hasColumnHeaderSlots = props.config.columnHeaderSlots === true
+const columnFilterSlots = props.config.columnFilterSlots ?? {}
+
+const hasColumnFilterSlots = Object.keys(columnFilterSlots).length > 0
+
+/**
+ * Stock gives a cell either an individual search field or a header filter,
+ * never both — the search field wins. Mirrored here, so a column that is both
+ * searchable and slotted behaves exactly as it does without the island.
+ *
+ * @param {object} column
+ * @returns {boolean}
+ */
+function hasColumnFilterSlot(column) {
+    return (! column.individuallySearchable) && Object.hasOwn(columnFilterSlots, column.key)
+}
 
 /**
  * The wrapper element holding BOTH the island and the server-rendered slot
@@ -347,7 +363,7 @@ function adoptNativeSlots() {
 
     // Four families: the filters UI, the column manager, a custom `header()`
     // view and the empty state — all Filament-rendered, all one-shot. The
-    // fifth (`column-header`) is deliberately NOT here: its outlets live
+    // fifth (`column-filter`) is deliberately NOT here: its outlets live
     // inside toggleable `<th>`s, so `NativeSlot` adopts and releases them.
     for (const family of ['filters', 'columns', 'header', 'empty-state']) {
         for (const slot of wrapper.querySelectorAll(`[data-villament-slots] > [data-villament-${family}-slot]`)) {
@@ -1246,14 +1262,20 @@ function recordCellClasses(column, cellValue = null) {
                                 :actions-position="recordActionsPosition"
                                 :actions-column-label="recordActionsConfig.columnLabel ?? null"
                                 :strings="strings"
-                                :column-header-slots="hasColumnHeaderSlots"
                                 @sort="onSort"
                                 @toggle-select-page="selection.toggleSelectPage(pageRecordKeys)"
                             />
 
                             <tbody>
+                                <!--
+                                    The header filter row: stock renders it for
+                                    the individual column search fields, and a
+                                    header-filter package puts its inputs in the
+                                    very same row — so slotted columns bring it
+                                    out on their own.
+                                -->
                                 <tr
-                                    v-if="hasColumnSearches && ! isGroupsOnly"
+                                    v-if="(hasColumnSearches || hasColumnFilterSlots) && ! isGroupsOnly"
                                     class="fi-ta-row fi-ta-row-not-reorderable"
                                 >
                                     <td
@@ -1278,7 +1300,7 @@ function recordCellClasses(column, cellValue = null) {
                                         :class="
                                             column.individuallySearchable
                                                 ? ['fi-ta-individual-search-cell', `fi-ta-individual-search-cell-${kebab(column.key)}`]
-                                                : []
+                                                : (columnFilterSlots[column.key] ?? [])
                                         "
                                     >
                                         <TableSearch
@@ -1289,6 +1311,12 @@ function recordCellClasses(column, cellValue = null) {
                                             :icon="icons.search"
                                             :search-on-blur="Boolean(schema.searchOnBlur)"
                                             @update:model-value="onColumnSearch(column.key, $event)"
+                                        />
+
+                                        <NativeSlot
+                                            v-else-if="hasColumnFilterSlot(column)"
+                                            family="column-filter"
+                                            :name="column.key"
                                         />
                                     </td>
 

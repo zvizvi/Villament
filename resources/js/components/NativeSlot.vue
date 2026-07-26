@@ -19,7 +19,7 @@ import { inject, onBeforeUnmount, onMounted, ref } from 'vue'
 
 const props = defineProps({
     /**
-     * Slot family, e.g. `'column-header'` — the `data-villament-{family}-slot`
+     * Slot family, e.g. `'column-filter'` — the `data-villament-{family}-slot`
      * / `-outlet` attribute pair.
      */
     family: {
@@ -27,7 +27,7 @@ const props = defineProps({
         required: true,
     },
     /**
-     * Slot name within the family (the column key, for `column-header`).
+     * Slot name within the family (the column key, for `column-filter`).
      */
     name: {
         type: String,

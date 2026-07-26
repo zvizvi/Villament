@@ -14,8 +14,11 @@ class HookedListUsers extends VillamentListRecords
 
     protected static string $resource = HookedUserResource::class;
 
-    public function hasVillamentColumnHeaderSlots(): bool
+    /**
+     * @return array<string, string>
+     */
+    public function getVillamentColumnFilterSlots(): array
     {
-        return true;
+        return ['name' => 'fi-ta-header-filter-cell fi-ta-header-filter-cell-name'];
     }
 }
