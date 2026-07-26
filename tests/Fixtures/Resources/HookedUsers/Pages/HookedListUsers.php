@@ -13,4 +13,9 @@ class HookedListUsers extends VillamentListRecords
     use PushesFilterOnBoot;
 
     protected static string $resource = HookedUserResource::class;
+
+    public function hasVillamentColumnHeaderSlots(): bool
+    {
+        return true;
+    }
 }

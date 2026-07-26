@@ -325,6 +325,18 @@ So the harness now mirrors `SupportLifecycleHooks` exactly: `boot` → `initiali
 
 `mount` stays deliberately unreplayed. That is not an oversight to fix later: skipping it is precisely what keeps the session and query-string hydration inside `mountInteractsWithTable()` off, which is what makes the endpoint stateless. Livewire itself runs boot/initialize/booted on every hydrate with no mount, so nothing in a `booted` hook may assume mount ran.
 
+## 2026-07-26 — Column header slots: the primitive ships, the bridge does not
+
+Header filters (`leek/filament-header-filters` and anything shaped like it) render inputs into the stock `<th>`. The island rebuilds that row in Vue, so they land nowhere. Two ways to close it: villament detects the package via `Table::hasMacro('getHeaderFilters')` and teleports its forms itself, or villament exposes a slot per column and the app teleports whatever it wants.
+
+Chose the second, deliberately, over the first's better out-of-the-box experience. A macro check is soft coupling but it is still coupling: villament would carry a second package's internals (`getTableHeaderFiltersForm()`, the `Group` keying, the `columnName()` macro) and inherit its release cycle for a feature villament does not own. The plugins stay independent; the app pays one small Blade template.
+
+That trade only holds if the primitive is genuinely complete, because the app can no longer lean on villament to handle the edges. The one that matters is **column toggling**: an outlet inside a `<th>` disappears with its column, and a slot appended into it would be destroyed with it — Alpine state and all — with nothing to re-adopt when the column comes back. So slots are rendered for *every* column, not the visible ones, and `NativeSlot` moves the node into the cell on mount and **back to the exact holder it came from** on unmount. Toggling is lossless in both directions; the test types into the input and asserts the same node with the same value survives a round trip.
+
+That is also why this family is not in `adoptNativeSlots()` with the other four. Filters, column manager, custom header and empty state all have outlets that never unmount, so a one-shot move on mount is correct for them and re-running adoption would be pointless. Column headers are the first family where the outlet's lifetime is shorter than the island's.
+
+Kept off by default (`hasVillamentColumnHeaderSlots()` → false) and out of `schema`: it is a page-level rendering opt-in, not something `table()` says, and folding it into the schema would move the version hash for every table that never uses it.
+
 ## Verified Filament v5 internal API map (§4.1, §4.8)
 
 Verified against **filament/filament v5.6.8** + **livewire/livewire v4.3.3** by reading installed vendor source on 2026-07-15. Paths relative to `vendor/filament/`.

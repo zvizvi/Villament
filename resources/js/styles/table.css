@@ -60,6 +60,8 @@
 .villament-table [data-villament-header-outlet],
 .villament-table [data-villament-header-slot],
 .villament-table [data-villament-empty-state-outlet],
-.villament-table [data-villament-empty-state-slot] {
+.villament-table [data-villament-empty-state-slot],
+.villament-table [data-villament-column-header-outlet],
+.villament-table [data-villament-column-header-slot] {
     display: contents;
 }

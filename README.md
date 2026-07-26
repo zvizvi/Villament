@@ -53,6 +53,30 @@ Or apply the trait to a customized List page: `use Zvizvi\Villament\Concerns\Has
 
 After the initial paint (schema + first page inlined, no extra requests), sorting, searching and pagination hit a JSON endpoint that runs behind your panel's full middleware stack, checks `canViewAny()`, and whitelists every request parameter against the table schema.
 
+### Putting Filament content inside a column header
+
+The island renders the header row itself, so Filament content that belongs to one column's header — a header filter form, most commonly — has nowhere to land. Opt in on the page and villament renders one teleport target per column for you to fill:
+
+```php
+class ListClaims extends VillamentListRecords
+{
+    public function hasVillamentColumnHeaderSlots(): bool
+    {
+        return true;
+    }
+}
+```
+
+Then teleport whatever you want into it, from anywhere that is server-rendered and Livewire-morphable — the `RESOURCE_PAGES_LIST_RECORDS_TABLE_BEFORE` render hook is the natural spot:
+
+```blade
+<template x-teleport="[data-villament-column-header-slot='flight_date'][data-villament-owner='{{ $this->getId() }}']">
+    {{ $this->getTableHeaderFiltersForm()->getComponent('scheduled_departure') }}
+</template>
+```
+
+The slot name is the column name. Every column gets one, including columns currently toggled off — the header cell adopts its slot when it renders and hands it back when it stops, so toggling a column never destroys what you teleported (or its Alpine state). A slot nobody teleports into renders nothing.
+
 ## Development
 
 ```bash

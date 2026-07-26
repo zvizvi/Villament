@@ -38,9 +38,33 @@ trait HasVillamentTable
                     withNativeFilters: (bool) ($config['schema']['hasFilters'] ?? false),
                     withNativeColumnManager: (bool) ($config['schema']['hasColumnManager'] ?? false),
                     withNativeHeader: (bool) ($config['schema']['header']['hasCustomView'] ?? false),
+                    withColumnHeaderSlots: $this->hasVillamentColumnHeaderSlots(),
                 ),
                 RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_AFTER),
             ]);
+    }
+
+    /**
+     * Opt in to a teleport slot inside every column header cell.
+     *
+     * The island rebuilds the header row in Vue, so Filament content that
+     * belongs to a specific column header — a header filter form being the
+     * case this exists for — has nowhere to land. Turning this on renders one
+     * `[data-villament-column-header-slot="{column}"]` target per column
+     * (scoped by `data-villament-owner`), which the header cell adopts; what
+     * goes into it is entirely up to the caller:
+     *
+     *     <template x-teleport="[data-villament-column-header-slot='flight_date'][data-villament-owner='{{ $this->getId() }}']">
+     *         {{ $form->getComponent('scheduled_departure') }}
+     *     </template>
+     *
+     * Teleport from Livewire-morphable markup that is already server-rendered
+     * when Alpine walks the DOM — the render hook right before the island is
+     * the natural place. Off by default: an outlet per column is not free.
+     */
+    public function hasVillamentColumnHeaderSlots(): bool
+    {
+        return false;
     }
 
     /**
@@ -121,6 +145,10 @@ trait HasVillamentTable
             'endpoint' => $panel->route('villament.data', $endpointParameters),
             'livewireId' => $this->getId(),
             'schemaVersion' => $schemaSerializer->version($schema),
+            // Not part of `schema`: this is a page-level rendering opt-in, not
+            // anything the table() definition says, and it must not move the
+            // schema hash for tables that never turn it on.
+            'columnHeaderSlots' => $this->hasVillamentColumnHeaderSlots(),
             'schema' => $schema,
             'initialData' => [
                 // The endpoint is not the only consumer of the record payload:

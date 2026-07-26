@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import TrustedIcon from './TrustedIcon.js'
 import ActionsHeaderCell from './ActionsHeaderCell.vue'
+import NativeSlot from './NativeSlot.vue'
 import { filamentTooltip } from '../support/tooltip.js'
 
 const props = defineProps({
@@ -114,6 +115,15 @@ const props = defineProps({
     strings: {
         type: Object,
         default: () => ({}),
+    },
+    /**
+     * Whether each header cell renders a `column-header` teleport outlet for
+     * server-rendered Filament content (see `NativeSlot`). Off unless the page
+     * opts in — an empty outlet per column is not free.
+     */
+    columnHeaderSlots: {
+        type: Boolean,
+        default: false,
     },
 })
 
@@ -400,6 +410,18 @@ function onSortClick(column) {
                     >{{ column.label }}</span>
                     <template v-else>{{ column.label }}</template>
                 </template>
+
+                <!--
+                    Opt-in outlet for server-rendered content belonging to THIS
+                    column's header — header filters being the case it exists
+                    for. Layout-transparent, so whatever the app teleports in
+                    lays out as a direct child of the header cell.
+                -->
+                <NativeSlot
+                    v-if="columnHeaderSlots"
+                    family="column-header"
+                    :name="column.key"
+                />
             </th>
 
             <ActionsHeaderCell

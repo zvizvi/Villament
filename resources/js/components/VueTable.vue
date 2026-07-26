@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, provide, ref } from 'vue'
 import { getCoreRowModel, useVueTable } from '@tanstack/vue-table'
 import { useTableState } from '../composables/useTableState.js'
 import { useTableData } from '../composables/useTableData.js'
@@ -52,6 +52,26 @@ const strings = resolveStrings(schema.strings)
  * nothing (never a broken glyph).
  */
 const icons = schema.icons ?? {}
+
+/**
+ * `hasVillamentColumnHeaderSlots()` on the page. When on, every header cell
+ * renders a `column-header` outlet and the server rendered one slot per column
+ * for it — the contract an app teleports Filament content into (header filter
+ * forms, above all). Never inferred: the outlets cost a node per column.
+ */
+const hasColumnHeaderSlots = props.config.columnHeaderSlots === true
+
+/**
+ * The wrapper element holding BOTH the island and the server-rendered slot
+ * holders — the search root for every native-slot lookup, and the scope that
+ * keeps two islands on one page from adopting each other's slots.
+ *
+ * Exposed to descendants (`NativeSlot`) as a getter, not a value: the island
+ * element arrives as a prop and the DOM around it is only settled on mount.
+ */
+const nativeWrapper = () => props.rootElement?.closest('.villament') ?? props.rootElement?.parentElement ?? null
+
+provide('villamentWrapper', nativeWrapper)
 
 /**
  * The ENTIRE filters UI — trigger included — is Filament-native (rendered in
@@ -319,14 +339,16 @@ const bridge = useLivewireBridge({
  * @returns {void}
  */
 function adoptNativeSlots() {
-    const wrapper = props.rootElement?.closest('.villament') ?? props.rootElement?.parentElement
+    const wrapper = nativeWrapper()
 
     if (! wrapper) {
         return
     }
 
     // Four families: the filters UI, the column manager, a custom `header()`
-    // view and the empty state — all Filament-rendered, all one-shot.
+    // view and the empty state — all Filament-rendered, all one-shot. The
+    // fifth (`column-header`) is deliberately NOT here: its outlets live
+    // inside toggleable `<th>`s, so `NativeSlot` adopts and releases them.
     for (const family of ['filters', 'columns', 'header', 'empty-state']) {
         for (const slot of wrapper.querySelectorAll(`[data-villament-slots] > [data-villament-${family}-slot]`)) {
             const outlet = props.rootElement.querySelector(
@@ -1224,6 +1246,7 @@ function recordCellClasses(column, cellValue = null) {
                                 :actions-position="recordActionsPosition"
                                 :actions-column-label="recordActionsConfig.columnLabel ?? null"
                                 :strings="strings"
+                                :column-header-slots="hasColumnHeaderSlots"
                                 @sort="onSort"
                                 @toggle-select-page="selection.toggleSelectPage(pageRecordKeys)"
                             />

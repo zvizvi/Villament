@@ -50,6 +50,10 @@
         @include('villament::partials.header')
     @endif
 
+    @if ($withColumnHeaderSlots)
+        @include('villament::partials.column-header-slots')
+    @endif
+
     {{--
         The empty state is ALWAYS rendered, unconditionally: whether the table
         is empty is decided by the island's own fetches, long after Blade ran.
