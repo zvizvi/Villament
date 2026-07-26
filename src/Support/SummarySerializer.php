@@ -62,7 +62,14 @@ final class SummarySerializer
             ) : null,
             'groupsOnly' => $groupsOnly,
             'groupColumn' => $groupsOnly ? $group->getColumn() : null,
-            'groups' => $groupsOnly ? $this->groupRows($livewire, $table, $group, $records) : null,
+            // Per-group rows serve BOTH layouts: in groupsOnly they replace the
+            // records, otherwise they are the subheading rows interleaved after
+            // each group's records. The early return above already guarantees
+            // `$groupsOnly || $hasSummary` here — stock emits the subheadings
+            // only when the table actually has summarized columns.
+            'groups' => $group !== null
+                ? $this->groupRows($livewire, $table, $group, $records, $groupsOnly)
+                : null,
         ];
     }
 
@@ -87,7 +94,7 @@ final class SummarySerializer
      * @param  iterable<int, Model|array<string, mixed>>  $records
      * @return list<array{key: ?string, heading: string, cells: array<string, string>}>
      */
-    private function groupRows(ListRecords $livewire, Table $table, Group $group, iterable $records): array
+    private function groupRows(ListRecords $livewire, Table $table, Group $group, iterable $records, bool $groupsOnly): array
     {
         $allQuery = $livewire->getAllTableSummaryQuery();
 
@@ -114,7 +121,7 @@ final class SummarySerializer
             $title = $this->stringable($group->getTitle($record));
 
             if ($title !== $previousTitle && filled($previousTitle)) {
-                $rows[] = $this->groupRow($livewire, $table, $group, $previousRecord, $previousKey, $previousTitle, $groupedState);
+                $rows[] = $this->groupRow($livewire, $table, $group, $previousRecord, $previousKey, $previousTitle, $groupedState, $groupsOnly);
             }
 
             $previousRecord = $record;
@@ -126,7 +133,7 @@ final class SummarySerializer
             filled($previousTitle) &&
             $livewire->shouldRenderTrailingGroupedTableSummary($previousRecord)
         ) {
-            $rows[] = $this->groupRow($livewire, $table, $group, $previousRecord, $previousKey, $previousTitle, $groupedState);
+            $rows[] = $this->groupRow($livewire, $table, $group, $previousRecord, $previousKey, $previousTitle, $groupedState, $groupsOnly);
         }
 
         return $rows;
@@ -137,7 +144,7 @@ final class SummarySerializer
      * @param  array<string, mixed>  $groupedState
      * @return array{key: ?string, heading: string, cells: array<string, string>}
      */
-    private function groupRow(ListRecords $livewire, Table $table, Group $group, Model|array $record, ?string $key, string $title, array $groupedState): array
+    private function groupRow(ListRecords $livewire, Table $table, Group $group, Model|array $record, ?string $key, string $title, array $groupedState, bool $groupsOnly): array
     {
         $groupColumn = $group->getColumn();
         $scopedQuery = $group->scopeQuery($livewire->getAllTableSummaryQuery(), $record);
@@ -146,9 +153,14 @@ final class SummarySerializer
         $cells = [];
 
         foreach ($table->getVisibleColumns() as $column) {
-            // The group column itself is dropped (stock): its value is the row
-            // heading, not a summarized cell.
-            if ($column->getName() === $groupColumn || ! $column->hasSummary($scopedQuery)) {
+            // Only groupsOnly drops the group column (its value IS the heading
+            // there); the subheading layout keeps every column, exactly as
+            // stock's `summary.row` gates it on `$groupsOnly && $groupColumn`.
+            if ($groupsOnly && $column->getName() === $groupColumn) {
+                continue;
+            }
+
+            if (! $column->hasSummary($scopedQuery)) {
                 continue;
             }
 
@@ -158,7 +170,18 @@ final class SummarySerializer
             ));
         }
 
-        return ['key' => $key, 'heading' => $title, 'cells' => $cells];
+        return [
+            'key' => $key,
+            // groupsOnly shows the bare title; the subheading layout uses
+            // Filament's own "<group> summary" translation.
+            'heading' => $groupsOnly
+                ? $title
+                : __('filament-tables::table.summary.subheadings.group', [
+                    'group' => $title,
+                    'label' => $table->getPluralModelLabel(),
+                ]),
+            'cells' => $cells,
+        ];
     }
 
     private function stringable(mixed $value): string

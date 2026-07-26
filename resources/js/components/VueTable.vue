@@ -362,8 +362,28 @@ const summaryRows = computed(() => {
  */
 const isGroupsOnly = computed(() => Boolean(summaries.value?.groupsOnly))
 
-/** Ordered per-group summary rows for groups-only mode. */
+/**
+ * Ordered per-group summary rows. In groupsOnly mode these REPLACE the record
+ * rows; otherwise they are the subheading rows interleaved after each group's
+ * records (the server decides which groups get one — blank titles and groups
+ * continuing onto the next page are already excluded).
+ */
 const groupSummaryRows = computed(() => summaries.value?.groups ?? [])
+
+/**
+ * Group summary rows keyed by group key, for placing each one after its own
+ * group's records. Keyed rather than positional because the server omits some
+ * groups, so the list and the record boundaries are not 1:1.
+ */
+const groupSummaryByKey = computed(() => {
+    const byKey = new Map()
+
+    for (const row of groupSummaryRows.value) {
+        byKey.set(String(row.key ?? ''), row)
+    }
+
+    return byKey
+})
 
 /** The active group's column, dropped from each groups-only row (its value is the heading). */
 const groupsOnlyColumn = computed(() => summaries.value?.groupColumn ?? null)
@@ -498,14 +518,37 @@ const groupHeaderColspan = computed(
  * (stock: each group restarts white → striped → …). Ungrouped, it's just the
  * running record index, so the ungrouped stripe pattern is unchanged.
  *
- * @returns {Array<{type: 'group-header', id: string, group: object, keys: string[]} | {type: 'record', id: string, row: object, stripeIndex: number}>}
+ * When the table also has summaries, a `group-summary` item CLOSES each group
+ * (before the next group's header, and once at the end) — stock's per-group
+ * subheading rows. Only groups the server emitted a row for get one.
+ *
+ * @returns {Array<{type: 'group-header', id: string, group: object, keys: string[]} | {type: 'record', id: string, row: object, stripeIndex: number} | {type: 'group-summary', id: string, row: object}>}
  */
 const renderItems = computed(() => {
     const items = []
     let currentHeader = null
     let previousGroupTitle = ''
+    let previousGroupKey = null
     let recordIndex = 0
     let stripeIndex = 0
+
+    /**
+     * Emits the closing subheading row for the group that just ended, if the
+     * server produced one for it.
+     *
+     * @returns {void}
+     */
+    function closeGroup() {
+        if (previousGroupKey === null) {
+            return
+        }
+
+        const summary = groupSummaryByKey.value.get(previousGroupKey)
+
+        if (summary) {
+            items.push({ type: 'group-summary', id: `group-summary:${recordIndex}:${previousGroupKey}`, row: summary })
+        }
+    }
 
     for (const row of table.getRowModel().rows) {
         const group = row.original.group
@@ -514,9 +557,12 @@ const renderItems = computed(() => {
             const title = String(group.title ?? '')
 
             if (title !== previousGroupTitle) {
+                closeGroup()
+
                 currentHeader = { type: 'group-header', id: `group:${recordIndex}:${title}`, group, keys: [] }
                 items.push(currentHeader)
                 previousGroupTitle = title
+                previousGroupKey = String(group.key ?? '')
                 stripeIndex = 0
             }
 
@@ -527,6 +573,8 @@ const renderItems = computed(() => {
         recordIndex += 1
         stripeIndex += 1
     }
+
+    closeGroup()
 
     return items
 })
@@ -1024,6 +1072,43 @@ function recordCellClasses(column) {
                                                 </button>
                                             </div>
                                         </td>
+                                    </tr>
+
+                                    <!--
+                                        Per-group subheading row, closing the
+                                        group's records. Same markup as the
+                                        page/all summary rows (stock renders
+                                        the identical `summary.row` component).
+                                    -->
+                                    <tr
+                                        v-else-if="item.type === 'group-summary'"
+                                        class="fi-ta-row fi-ta-summary-row"
+                                    >
+                                        <td v-if="isSelectionEnabled" />
+
+                                        <template
+                                            v-for="(column, columnIndex) in visibleColumns"
+                                            :key="column.key"
+                                        >
+                                            <td
+                                                v-if="columnIndex === 0"
+                                                :colspan="summaryHeadingColspan(item.row) > 1 ? summaryHeadingColspan(item.row) : undefined"
+                                                class="fi-ta-cell fi-ta-summary-row-heading-cell"
+                                            >
+                                                {{ item.row.heading }}
+                                            </td>
+
+                                            <td
+                                                v-else-if="columnIndex >= summaryHeadingColspan(item.row)"
+                                                class="fi-ta-cell"
+                                                :class="column.alignment ? `fi-align-${column.alignment}` : undefined"
+                                            >
+                                                <!-- eslint-disable-next-line vue/no-v-html — trusted server-rendered summarizer views -->
+                                                <span v-html="item.row.cells[column.key] ?? ''" />
+                                            </td>
+                                        </template>
+
+                                        <td v-if="hasRecordActions" />
                                     </tr>
 
                                     <tr

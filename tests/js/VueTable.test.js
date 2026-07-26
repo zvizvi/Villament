@@ -429,6 +429,49 @@ describe('VueTable filters (native Livewire panel) + indicators', () => {
         expect(groupRows[0].findAll('td')).toHaveLength(2)
     })
 
+    it('interleaves per-group summary subheadings after each group\'s records', () => {
+        const config = makeConfig()
+        config.schema.grouping = { groups: [{ id: 'status', label: 'Status' }], default: null, directionSettingHidden: false }
+        config.state.grouping = 'status'
+        const group = (title) => ({ key: title, title, label: 'Status', description: null })
+        config.initialData.records = [
+            { key: '1', cells: { name: { type: 'text', formatted: 'Jane' } }, can: {}, group: group('active') },
+            { key: '2', cells: { name: { type: 'text', formatted: 'John' } }, can: {}, group: group('active') },
+            { key: '3', cells: { name: { type: 'text', formatted: 'Sue' } }, can: {}, group: group('archived') },
+        ]
+        config.initialData.summaries = {
+            page: null,
+            all: null,
+            groupsOnly: false,
+            groupColumn: null,
+            groups: [
+                { key: 'active', heading: 'active summary', cells: { name: '<span>Sum 40</span>' } },
+                // 'archived' intentionally absent — e.g. the server deferred it
+                // because the group continues onto the next page.
+                { key: 'ghost', heading: 'ghost summary', cells: {} },
+            ],
+        }
+
+        wrapper = mount(VueTable, { props: { config }, attachTo: document.body })
+
+        // Row order: header(active), rec, rec, SUMMARY(active), header(archived), rec.
+        const rows = wrapper.findAll('tbody tr')
+        const kind = (row) => {
+            if (row.classes().includes('fi-ta-group-header-row')) {
+                return 'header'
+            }
+
+            return row.classes().includes('fi-ta-summary-row') ? 'summary' : 'record'
+        }
+
+        expect(rows.map(kind)).toEqual(['header', 'record', 'record', 'summary', 'header', 'record'])
+        expect(rows[3].text()).toContain('active summary')
+
+        // A group with no server row gets none, and a server row for a group
+        // that isn't on the page is never rendered.
+        expect(wrapper.text()).not.toContain('ghost summary')
+    })
+
     it('shows group rows (not the empty state) in groupsOnly, where no records are sent', () => {
         const config = makeConfig()
         config.schema.columns = [

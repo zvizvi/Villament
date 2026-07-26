@@ -372,3 +372,33 @@ it('never serializes record cells in groupsOnly mode, like the stock table', fun
         UserResource::$formatStateCalls = 0;
     }
 });
+
+it('emits per-group summary subheadings in the normal grouped layout', function (): void {
+    $summaries = getJson('/admin/villament/users/data'.'?grouping=status&perPage=50')
+        ->assertOk()->json('summaries');
+
+    // Not groupsOnly — the rows are subheadings interleaved after each group.
+    expect($summaries['groupsOnly'])->toBeFalse()
+        ->and($summaries['groups'])->not->toBeEmpty();
+
+    foreach ($summaries['groups'] as $row) {
+        // Filament's own "<group> summary" translation, not the bare title.
+        expect($row['heading'])->toBe(
+            __('filament-tables::table.summary.subheadings.group', [
+                'group' => $row['key'],
+                'label' => 'users',
+            ]),
+        );
+
+        // Unlike groupsOnly, the group column is NOT dropped here — and each
+        // aggregate is scoped to its own group.
+        $expected = User::query()
+            ->where('is_banned', false)
+            ->where('status', $row['key'])
+            ->sum('logins_count');
+
+        // Summarizers render through Filament's own number formatting, so
+        // compare on the digits alone (thousands separators included).
+        expect(str_replace(',', '', $row['cells']['logins_count']))->toContain((string) $expected);
+    }
+});
