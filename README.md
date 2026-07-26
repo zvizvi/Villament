@@ -1,4 +1,4 @@
-# villament
+# Villament
 
 Replace the built-in Livewire-rendered table on a Filament v5 Resource List page with a **Vue 3 island**, while keeping **100% of the data pipeline in Filament's PHP layer**.
 
