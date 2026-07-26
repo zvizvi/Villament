@@ -415,8 +415,11 @@ describe('VueTable filters (native Livewire panel) + indicators', () => {
 
         wrapper = mount(VueTable, { props: { config }, attachTo: document.body })
 
-        // One summary row per group; no ordinary record rows.
-        const groupRows = wrapper.findAll('tbody .fi-ta-group-summary-row')
+        // One summary row per group; no ordinary record rows. Stock gives the
+        // per-group rows the SAME classes as the page/all rows (there is no
+        // dedicated group-summary class), and this fixture sends no page/all
+        // rows — so every summary row in the body is a group row.
+        const groupRows = wrapper.findAll('tbody tr.fi-ta-summary-row')
         expect(groupRows).toHaveLength(2)
         expect(wrapper.find('tbody .fi-ta-row:not(.fi-ta-summary-row)').exists()).toBe(false)
 
@@ -499,7 +502,7 @@ describe('VueTable filters (native Livewire panel) + indicators', () => {
 
         // The empty state must NOT appear just because `records` is empty.
         expect(wrapper.find('.fi-ta-empty-state').exists()).toBe(false)
-        expect(wrapper.findAll('tbody .fi-ta-group-summary-row')).toHaveLength(1)
+        expect(wrapper.findAll('tbody tr.fi-ta-summary-row')).toHaveLength(1)
 
         wrapper.unmount()
 
@@ -528,6 +531,68 @@ describe('VueTable filters (native Livewire panel) + indicators', () => {
 
         wrapper = mount(VueTable, { props: { config: unpaginated }, attachTo: document.body })
         expect(wrapper.find('.fi-pagination').exists()).toBe(false)
+    })
+
+    it('renders the summary header + page + all rows inside the tbody, striped like stock', () => {
+        const config = makeConfig()
+        config.schema.columns = [
+            { key: 'name', label: 'Name', type: 'text', sortable: true, individuallySearchable: false, toggleable: false, hiddenByDefault: false, alignment: null },
+            { key: 'logins', label: 'Logins', type: 'text', sortable: false, individuallySearchable: false, toggleable: false, hiddenByDefault: false, alignment: 'end' },
+        ]
+        config.initialData.records = [
+            { key: '1', cells: { name: { type: 'text', formatted: 'Jane' }, logins: { type: 'text', formatted: '5' } }, can: {} },
+        ]
+        config.initialData.summaries = {
+            header: { heading: 'Summary', labels: { logins: 'Logins' } },
+            page: { heading: 'This page', striped: false, cells: { logins: '<span>5</span>' } },
+            all: { heading: 'All users', striped: false, cells: { logins: '<span>40</span>' } },
+            groupsOnly: false,
+            groupColumn: null,
+            groups: null,
+        }
+
+        wrapper = mount(VueTable, { props: { config }, attachTo: document.body })
+
+        // Filament's CSS scopes its row/cell rules to `& > tbody > tr` and
+        // paints `& > tfoot` gray for content footers — so summaries belong to
+        // the tbody, and there must be no tfoot at all.
+        expect(wrapper.find('tfoot').exists()).toBe(false)
+
+        const header = wrapper.get('tbody tr.fi-ta-summary-header-row')
+        expect(header.classes()).toContain('fi-striped')
+
+        // First cell is the heading, never a column label; only summarized
+        // columns are labelled, and only they carry the alignment class.
+        const headerCells = header.findAll('td')
+        expect(headerCells.map((cell) => cell.text())).toEqual(['Summary', 'Logins'])
+        expect(headerCells[0].classes()).not.toContain('fi-align-end')
+        expect(headerCells[1].classes()).toContain('fi-align-end')
+
+        const rows = wrapper.findAll('tbody tr.fi-ta-summary-row')
+        expect(rows.map((row) => row.get('.fi-ta-summary-row-heading-cell').text())).toEqual(['This page', 'All users'])
+        // Stock stripes the header row, so neither row below it is striped.
+        expect(rows.some((row) => row.classes().includes('fi-striped'))).toBe(false)
+        expect(rows[1].html()).toContain('40')
+    })
+
+    it('stripes a lone all-records summary row and renders no header row', () => {
+        const config = makeConfig()
+        config.initialData.summaries = {
+            header: null,
+            page: null,
+            all: { heading: 'Summary', striped: true, cells: { name: '<span>1</span>' } },
+            groupsOnly: false,
+            groupColumn: null,
+            groups: null,
+        }
+
+        wrapper = mount(VueTable, { props: { config }, attachTo: document.body })
+
+        expect(wrapper.find('tbody tr.fi-ta-summary-header-row').exists()).toBe(false)
+
+        const rows = wrapper.findAll('tbody tr.fi-ta-summary-row')
+        expect(rows).toHaveLength(1)
+        expect(rows[0].classes()).toContain('fi-striped')
     })
 
     it('uses the localized empty state heading', async () => {

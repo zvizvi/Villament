@@ -110,6 +110,19 @@ Owner decision: the ENTIRE filter panel is Filament's original Livewire UI, not 
 - The schema ships only `hasFilters: bool` (show the trigger or not) — filter definitions never leave the server.
 - Trade-off accepted: applying a filter is one Livewire commit (small form) + one Vue refetch. High-frequency interactions (search/sort/pagination) stay Vue/AJAX. Panel positioning uses the existing CSS anchor (no floating-ui); the trigger button is the one filter element Vue-rendered (pixel-identical) to avoid teleporting a native dropdown into the wire:ignore toolbar.
 
+## 2026-07-26 — Summary rows: closing the gaps against the Summaries docs
+
+Everything the docs page describes about summarizers themselves (`Sum`/`Average`/`Count`/`Range`/custom `using()`, `money()`/`numeric()`/`prefix()`/`limit()`/`icons()`, `label()`, `query()`, `hidden()`/`visible()`) already worked, because the cells are `$summarizer->toHtml()` rendered by Filament. The gaps were all in the surrounding assembly:
+
+- **`summaries(pageCondition:, allTableCondition:)` was ignored.** `SummarySerializer` now applies `hasPageSummary()` / `hasAllTableSummary()`, plus stock's `(! $groupsOnly)` guard on the page row.
+- **The summary header row did not exist.** Stock precedes a page summary with `fi-ta-summary-header-row fi-striped`, repeating each summarized column's label with `summary.heading` in the first cell. Serialized as `summaries.header = {heading, labels}` — `labels` holds only summarized columns, unioned across the page and all queries like stock's `$columnHasSummary`.
+- **The all-records heading was wrong.** Stock uses `subheadings.all` ("All :label") when a page summary sits above it, `summary.heading` when it stands alone; the stripe likewise moves to whichever row is first. Both are decided server-side and shipped as `heading` + `striped`.
+- **The rows lived in a `<tfoot>`.** Filament scopes its row/cell rules to `& > tbody > tr` and paints `& > tfoot` gray for content footers, so the rows lost their padding, mobile stacking and divider while gaining a stray gray background. They now close the `<tbody>`, as in stock. (The per-group subheading rows were already inside it.)
+- **`selectedState` was handed the wrong shape.** Stock takes `getTableSummarySelectedState($query)[0]`; we passed the outer array. `Summarizer::getSelectedState()` does `array_key_exists($selectAlias, $this->selectedState)`, so every lookup missed and `getState()` fell back to a separate aggregate query PER summarizer — discarding the single combined `SELECT` the method exists to build. Measured on the fixture: 6 queries for two rows, now 2. Pinned by a test asserting no `… as aggregate` fallback touches the summarized column.
+- **`fi-ta-group-summary-row`** was a class we invented; stock gives per-group rows the same classes as the page/all rows.
+
+Still unsupported, deliberately: `extraHeadingColumn` / `placeholderColumns: false` belong to the content-layout summary (grid/cards), a layout the island does not implement; `canHeaderWrap()` is unsupported in our table headers generally, not just here.
+
 ## 2026-07-26 — `defaultGroup()` is request state, not schema
 
 The grouping settings control rendered blank while the rows were grouped: `schema.grouping.default` was serialized but nothing consumed it, and the island's inlined `state` had no `grouping` key at all.

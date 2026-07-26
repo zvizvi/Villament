@@ -27,7 +27,7 @@ use Illuminate\Database\Query\Builder as BaseBuilder;
 final class SummarySerializer
 {
     /**
-     * @return array{page: array<string, mixed>|null, all: array<string, mixed>|null, groupsOnly: bool, groupColumn: ?string, groups: list<array{key: ?string, heading: string, cells: array<string, string>}>|null}|null
+     * @return array{header: array{heading: string, labels: array<string, string>}|null, page: array<string, mixed>|null, all: array<string, mixed>|null, groupsOnly: bool, groupColumn: ?string, groups: list<array{key: ?string, heading: string, cells: array<string, string>}>|null}|null
      */
     public function serialize(ListRecords $livewire): ?array
     {
@@ -45,20 +45,42 @@ final class SummarySerializer
         }
 
         $records = $livewire->getTableRecords();
-        $hasPageSummary = $hasSummary && $records instanceof Paginator && $records->hasPages();
+
+        // Both gates verbatim from stock's `summary/index.blade.php`, including
+        // the `summaries(pageCondition:, allTableCondition:)` toggles.
+        $hasPageSummary = $hasSummary
+            && $table->hasPageSummary()
+            && (! $groupsOnly)
+            && $records instanceof Paginator
+            && $records->hasPages();
+
+        $hasAllSummary = $hasSummary && $table->hasAllTableSummary();
+
+        $pageQuery = $hasPageSummary ? $livewire->getPageTableSummaryQuery() : null;
 
         return [
+            // Stock precedes the page summary with a header row repeating each
+            // summarized column's label — never shown without a page summary.
+            'header' => $hasPageSummary ? $this->header($table, $pageQuery, $allQuery) : null,
             'page' => $hasPageSummary ? $this->row(
                 $livewire,
                 $table,
-                $livewire->getPageTableSummaryQuery(),
+                $pageQuery,
                 __('filament-tables::table.summary.subheadings.page', ['label' => $table->getPluralModelLabel()]),
+                // Stock stripes the header row, so the page row that follows it
+                // is the unstriped one.
+                striped: false,
             ) : null,
-            'all' => $hasSummary ? $this->row(
+            'all' => $hasAllSummary ? $this->row(
                 $livewire,
                 $table,
                 $allQuery,
-                __('filament-tables::table.summary.heading', ['label' => $table->getPluralModelLabel()]),
+                // "All <label>" only when it is distinguishing itself from a
+                // page summary above it; otherwise it IS the summary.
+                $hasPageSummary
+                    ? __('filament-tables::table.summary.subheadings.all', ['label' => $table->getPluralModelLabel()])
+                    : __('filament-tables::table.summary.heading', ['label' => $table->getPluralModelLabel()]),
+                striped: ! $hasPageSummary,
             ) : null,
             'groupsOnly' => $groupsOnly,
             'groupColumn' => $groupsOnly ? $group->getColumn() : null,
@@ -194,15 +216,54 @@ final class SummarySerializer
     }
 
     /**
-     * @param  Builder<Model>|null  $query
-     * @return array{heading: string, cells: array<string, string>}
+     * The labels repeated above a page summary, for the summarized columns only
+     * — stock's `$columnHasSummary`, which unions the page and all queries so a
+     * column summarized on just one of them still gets its label.
+     *
+     * @param  Builder<Model>|null  $pageQuery
+     * @param  Builder<Model>|null  $allQuery
+     * @return array{heading: string, labels: array<string, string>}
      */
-    private function row(ListRecords $livewire, Table $table, ?Builder $query, string $heading): array
+    private function header(Table $table, ?Builder $pageQuery, ?Builder $allQuery): array
+    {
+        $labels = [];
+
+        foreach ($table->getVisibleColumns() as $column) {
+            if (! (($pageQuery !== null && $column->hasSummary($pageQuery)) || $column->hasSummary($allQuery))) {
+                continue;
+            }
+
+            $labels[$column->getName()] = (string) $column->getLabel();
+        }
+
+        return [
+            'heading' => __('filament-tables::table.summary.heading', ['label' => $table->getPluralModelLabel()]),
+            'labels' => $labels,
+        ];
+    }
+
+    /**
+     * @param  Builder<Model>|null  $query
+     * @return array{heading: string, striped: bool, cells: array<string, string>}
+     */
+    private function row(ListRecords $livewire, Table $table, ?Builder $query, string $heading, bool $striped): array
     {
         $cells = [];
 
         if ($query !== null) {
-            $selectedState = $livewire->getTableSummarySelectedState($query);
+            // `[0]`: an ungrouped summary query yields exactly ONE row of
+            // aggregates. Handing a summarizer the outer array instead makes
+            // its `array_key_exists($selectAlias, ...)` lookup miss, and
+            // `getState()` silently falls back to running a separate aggregate
+            // query PER summarizer — discarding the single combined SELECT
+            // this method exists to produce.
+            // Filament annotates the return as `array<string, mixed>`, but it
+            // is one entry PER RESULT ROW — keyed by group key when grouped,
+            // and by position otherwise.
+            /** @var array<array-key, array<string, mixed>> $states */
+            $states = $livewire->getTableSummarySelectedState($query);
+
+            $selectedState = $states[0] ?? [];
 
             foreach ($table->getVisibleColumns() as $column) {
                 if (! $column->hasSummary($query)) {
@@ -216,6 +277,6 @@ final class SummarySerializer
             }
         }
 
-        return ['heading' => $heading, 'cells' => $cells];
+        return ['heading' => $heading, 'striped' => $striped, 'cells' => $cells];
     }
 }

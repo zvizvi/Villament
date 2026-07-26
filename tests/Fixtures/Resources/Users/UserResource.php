@@ -43,6 +43,11 @@ class UserResource extends Resource
     /** Test seam: hides the grouping settings selector (`groupingSettingsHidden()`). */
     public static bool $groupingSettingsHidden = false;
 
+    /** Test seams: the two `summaries()` toggles (page row / all-records row). */
+    public static bool $hasPageSummary = true;
+
+    public static bool $hasAllTableSummary = true;
+
     /**
      * Test seam: the table's `defaultGroup()`. Set to an id that is also in
      * `groups()` for a SELECTABLE default (stock's mount hook seeds
@@ -144,6 +149,10 @@ class UserResource extends Resource
                     ->groupQueryUsing(fn (QueryBuilder $query): QueryBuilder => $query->groupByRaw('upper(substr(name, 1, 1))'))
                     ->scopeQueryByKeyUsing(fn (Builder $query, ?string $key): Builder => $query->whereRaw('upper(substr(name, 1, 1)) = ?', [$key])),
             ])
+            ->summaries(
+                pageCondition: fn (): bool => static::$hasPageSummary,
+                allTableCondition: fn (): bool => static::$hasAllTableSummary,
+            )
             ->defaultGroup(fn (): ?string => static::$defaultGroup)
             ->groupsOnly(fn (): bool => static::$groupsOnly)
             ->groupingSettingsHidden(fn (): bool => static::$groupingSettingsHidden)

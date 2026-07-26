@@ -346,14 +346,26 @@ const cellComponents = {
     html: HtmlCell,
 }
 
-/** Summary rows (page + all), server-rendered per response. */
+/**
+ * Summary rows (page + all), server-rendered per response. Which of the two
+ * exist is the SERVER's call — it applies `summaries(pageCondition:,
+ * allTableCondition:)`, the pagination check and the groups-only exclusion —
+ * so anything present here renders, exactly as stock does.
+ */
 const summaryRows = computed(() => {
     if (! summaries.value) {
         return []
     }
 
-    return [summaries.value.page, summaries.value.all].filter((row) => row && Object.keys(row.cells ?? {}).length)
+    return [summaries.value.page, summaries.value.all].filter(Boolean)
 })
+
+/**
+ * The label row stock puts above a page summary (`null` when there is none).
+ * Its first cell carries the summary heading, the rest repeat the label of each
+ * summarized column.
+ */
+const summaryHeader = computed(() => summaries.value?.header ?? null)
 
 /**
  * Groups-only mode (server-authoritative: `groupsOnly()` config AND a group
@@ -978,7 +990,7 @@ function recordCellClasses(column) {
                                     <tr
                                         v-for="grp in groupSummaryRows"
                                         :key="grp.key ?? grp.heading"
-                                        class="fi-ta-row fi-ta-summary-row fi-ta-group-summary-row"
+                                        class="fi-ta-row fi-ta-summary-row"
                                     >
                                         <td class="fi-ta-cell fi-ta-summary-row-heading-cell">
                                             {{ grp.heading }}
@@ -1171,13 +1183,42 @@ function recordCellClasses(column) {
                                     </tr>
                                     </template>
                                 </template>
-                            </tbody>
 
-                            <tfoot v-if="summaryRows.length">
+                                <!--
+                                    Summaries close the TBODY (stock renders
+                                    them there, not in a `<tfoot>` — Filament's
+                                    own CSS scopes the row/cell rules to
+                                    `& > tbody > tr`, and `& > tfoot` carries a
+                                    gray background meant for a content footer).
+                                -->
+                                <tr
+                                    v-if="summaryHeader"
+                                    class="fi-ta-row fi-ta-summary-header-row fi-striped"
+                                >
+                                    <td v-if="isSelectionEnabled" />
+
+                                    <td
+                                        v-for="(column, columnIndex) in visibleColumns"
+                                        :key="column.key"
+                                        class="fi-ta-cell fi-ta-summary-header-cell"
+                                        :class="
+                                            columnIndex > 0 && summaryHeader.labels[column.key] !== undefined && column.alignment
+                                                ? `fi-align-${column.alignment}`
+                                                : undefined
+                                        "
+                                    >
+                                        <!-- The first cell is the heading, never a column label. -->
+                                        {{ columnIndex === 0 ? summaryHeader.heading : (summaryHeader.labels[column.key] ?? '') }}
+                                    </td>
+
+                                    <td v-if="hasRecordActions" />
+                                </tr>
+
                                 <tr
                                     v-for="(row, rowIndex) in summaryRows"
-                                    :key="rowIndex"
+                                    :key="`summary:${rowIndex}`"
                                     class="fi-ta-row fi-ta-summary-row"
+                                    :class="{ 'fi-striped': row.striped }"
                                 >
                                     <td v-if="isSelectionEnabled" />
 
@@ -1205,7 +1246,7 @@ function recordCellClasses(column) {
 
                                     <td v-if="hasRecordActions" />
                                 </tr>
-                            </tfoot>
+                            </tbody>
                         </table>
                     </div>
 
