@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Zvizvi\Villament\Tests\Fixtures\Models\Team;
 use Zvizvi\Villament\Tests\Fixtures\Models\User;
+use Zvizvi\Villament\Tests\Fixtures\Resources\Users\Pages\ListUsers;
 use Zvizvi\Villament\Tests\Fixtures\Resources\Users\Pages\VueListUsers;
 use Zvizvi\Villament\Tests\Fixtures\Resources\Users\UserResource;
 
@@ -227,5 +228,65 @@ describe('session persistence', function (): void {
         getJson('/admin/villament/users/data?sort=name:desc')->assertOk();
 
         expect(session()->has($sortKey))->toBeFalse();
+    });
+});
+
+describe('list modifiers', function (): void {
+    it('slices a limited list server-side and reports what it dropped', function (): void {
+        User::factory()->create(['name' => 'Lister']);
+
+        $cell = columnOptionsCellsFor('Lister')['aliases'];
+
+        // Three values, `limitList(2)`: only two ever cross the wire.
+        expect($cell['items'])->toBe(['Alpha', 'Beta'])
+            ->and($cell['overLimitCount'])->toBe(1)
+            ->and($cell['listWithLineBreaks'])->toBeTrue()
+            ->and($cell['listExpandable'])->toBeFalse()
+            ->and($cell['listLimitMessage'])->toBe(
+                trans_choice('filament-tables::table.columns.text.more_list_items', 1),
+            );
+    });
+
+    it('keeps the overflow for an expandable list, since the reader can ask for it', function (): void {
+        User::factory()->create(['name' => 'Expander']);
+
+        $cell = columnOptionsCellsFor('Expander')['nicknames'];
+
+        expect($cell['items'])->toBe(['Alpha', 'Beta', 'Gamma'])
+            ->and($cell['listLimit'])->toBe(2)
+            ->and($cell['overLimitCount'])->toBe(1)
+            ->and($cell['listExpandable'])->toBeTrue()
+            ->and($cell['listExpandMessage'])->toBe(
+                trans_choice('filament-tables::table.columns.text.actions.expand_list', 1),
+            );
+    });
+
+    it('adds nothing at all to a cell with no list modifiers', function (): void {
+        User::factory()->create(['name' => 'Plain']);
+
+        expect(columnOptionsCellsFor('Plain')['email'])
+            ->not->toHaveKey('items')
+            ->not->toHaveKey('overLimitCount');
+    });
+
+    it('matches stock: same visible values, same overflow message', function (): void {
+        User::factory()->create(['name' => 'Parity Lister']);
+
+        $stock = livewire(ListUsers::class)
+            ->searchTable('Parity Lister')
+            ->html();
+
+        // Both list columns render, so the row carries Alpha/Beta twice — but
+        // Gamma exactly once: dropped from the limited list, kept (hidden) by
+        // the expandable one. That is the same split the endpoint payload has.
+        expect(substr_count($stock, 'Gamma'))->toBe(1)
+            ->and($stock)->toContain(
+                trans_choice('filament-tables::table.columns.text.more_list_items', 1),
+            );
+
+        $cells = columnOptionsCellsFor('Parity Lister');
+
+        expect($cells['aliases']['items'])->not->toContain('Gamma')
+            ->and($cells['nicknames']['items'])->toContain('Gamma');
     });
 });

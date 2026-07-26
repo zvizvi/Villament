@@ -83,6 +83,10 @@ final class TextColumnSerializer implements ColumnSerializer
             ];
         }
 
+        // Applies `limitList()` to `$formattedItems` before anything is joined,
+        // exactly where stock slices the state.
+        $list = $this->list($column, $formattedItems);
+
         $formatted = implode(', ', $formattedItems);
 
         if ($containsHtml) {
@@ -97,6 +101,7 @@ final class TextColumnSerializer implements ColumnSerializer
         $cell = [
             'type' => $column->isBadge() ? 'badge' : 'text',
             'formatted' => $formatted,
+            ...$list,
             'descriptionAbove' => $this->stringable($column->getDescriptionAbove()),
             'description' => $this->stringable($column->getDescriptionBelow()),
             'tooltip' => $this->stringable($column->getTooltip($state)),
@@ -112,6 +117,66 @@ final class TextColumnSerializer implements ColumnSerializer
         }
 
         return $cell;
+    }
+
+    /**
+     * The `listWithLineBreaks()` / `bulleted()` / `limitList()` family, which
+     * decides whether a multi-value cell stays a list at all.
+     *
+     * Stock's order matters and is reproduced here: the limit is applied to
+     * the state FIRST, and only a list that keeps its line breaks AND is
+     * expandable keeps the overflow (hidden until expanded) instead of being
+     * sliced away. A list without line breaks is then collapsed into one
+     * comma-joined item — but still reports how many were dropped, because
+     * stock renders the "+N more" message for it too.
+     *
+     * Returns an empty array for the ordinary single-value cell, so nothing is
+     * added to a payload that has no list in it.
+     *
+     * @param  list<string>  $items
+     * @return array<string, mixed>
+     */
+    private function list(TextColumn $column, array &$items): array
+    {
+        $hasLineBreaks = $column->isListWithLineBreaks();
+        $isBulleted = $column->isBulleted();
+        $isExpandable = $column->isLimitedListExpandable();
+
+        $count = count($items);
+        $limit = $column->getListLimit() ?? $count;
+        $overLimitCount = ($limit > 0 && $count > $limit) ? $count - $limit : 0;
+
+        if ($overLimitCount > 0 && ((! $hasLineBreaks) || (! $isExpandable))) {
+            $items = array_slice($items, 0, $limit);
+        }
+
+        $isList = ($hasLineBreaks && $count > 1) || $isBulleted;
+
+        if (! $isList && $overLimitCount === 0) {
+            return [];
+        }
+
+        return [
+            'items' => $isList ? $items : null,
+            'bulleted' => $isBulleted,
+            'listWithLineBreaks' => $hasLineBreaks,
+            // Only meaningful while the overflow is still in `items` — that is,
+            // for the expandable list, where the client hides it until asked.
+            'listLimit' => $limit,
+            'overLimitCount' => $overLimitCount,
+            'listExpandable' => $overLimitCount > 0 && $hasLineBreaks && $isExpandable,
+            // Resolved here, not in `schema.strings`: these are `trans_choice`
+            // strings whose plural form depends on this cell's own count.
+            'listLimitMessage' => $overLimitCount > 0
+                ? trans_choice('filament-tables::table.columns.text.more_list_items', $overLimitCount)
+                : null,
+            'listExpandMessage' => $overLimitCount > 0
+                ? trans_choice('filament-tables::table.columns.text.actions.expand_list', $overLimitCount)
+                : null,
+            'listCollapseMessage' => $overLimitCount > 0
+                ? trans_choice('filament-tables::table.columns.text.actions.collapse_list', $overLimitCount)
+                : null,
+        ];
     }
 
     private function iconHtml(mixed $icon, ?IconSize $size = null): ?string

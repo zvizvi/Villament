@@ -36,7 +36,7 @@ it('inlines schema and initial records so first paint needs zero extra requests'
     expect($config['endpoint'])->toContain('/admin/villament/users/data')
         ->and($config['livewireId'])->toBeString()->not->toBeEmpty()
         ->and($config['schemaVersion'])->toBeString()
-        ->and(array_column($config['schema']['columns'], 'key'))->toBe(['name', 'status', 'is_admin', 'avatar_url', 'email', 'logins_count', 'team.name', 'created_at'])
+        ->and(array_column($config['schema']['columns'], 'key'))->toBe(['name', 'status', 'is_admin', 'avatar_url', 'email', 'logins_count', 'aliases', 'nicknames', 'team.name', 'created_at'])
         // Header/cell modifiers travel with the column (stock builds the same
         // set into its `<th>`/`<td>` `@class` lists).
         ->and(collect($config['schema']['columns'])->firstWhere('key', 'status'))

@@ -325,6 +325,18 @@ So the harness now mirrors `SupportLifecycleHooks` exactly: `boot` → `initiali
 
 `mount` stays deliberately unreplayed. That is not an oversight to fix later: skipping it is precisely what keeps the session and query-string hydration inside `mountInteractsWithTable()` off, which is what makes the endpoint stateless. Livewire itself runs boot/initialize/booted on every hydrate with no mount, so nothing in a `booted` hook may assume mount ran.
 
+## 2026-07-26 — `listWithLineBreaks()` / `limitList()`: the join was hiding three behaviours
+
+An array-valued text cell was serialized as `implode(', ', $items)`. That is stock's behaviour for exactly one configuration — no line breaks, no badge — and villament applied it to all of them, so `listWithLineBreaks()`, `bulleted()`, `limitList()` and `expandableLimitedList()` all silently did nothing.
+
+The order stock uses is the part worth copying carefully, because it is not the obvious one. The limit is applied to the state FIRST, and the overflow is only *kept* when the list has line breaks AND is expandable — otherwise it is sliced away server-side and only counted. Then, and only then, a list without line breaks is collapsed into the comma-joined item. Which means a limited non-expandable list ships two values and a "+1 more" it can never reveal — correct, and the same thing stock renders.
+
+`items` appears in the payload only when the cell really is a list, so every ordinary cell is byte-identical to before. The three overflow strings ride along per cell rather than in `schema.strings`: they are `trans_choice` forms whose plural depends on that cell's own count, and they only appear when something actually overflowed.
+
+The expander is Vue state, not Alpine's `x-data` — the markup is otherwise stock's, `<div role="button">` and all, kept that way because the cell content may already sit inside the row's `<a>`, where a real `<button>` would be invalid nesting.
+
+Still unhandled, and now the only place the join survives: a **badge** column with several values. Stock renders one badge per item; villament joins them into one. Doing it properly needs per-item color and icon in the payload, which is a different change — filed rather than half-done.
+
 ## 2026-07-26 — An `Htmlable` column label is a seam, and escaping it closed one
 
 `zvizvi/filament-column-filters` decorates a header without touching the table view at all: it swaps the column's label for an `HtmlString` carrying its trigger + Alpine popup, and adds `extraHeaderAttributes(['class' => 'fcf-th'])`. Stock renders it because `{{ $columnLabel }}` echoes an `Htmlable` raw. Villament serialized `(string) getLabel()` and Vue escaped it, so the plugin's markup printed as visible tags.

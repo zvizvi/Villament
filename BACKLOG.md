@@ -50,6 +50,30 @@ it is independent of both.
 
 ---
 
+## A badge column with several values renders one badge
+
+`listWithLineBreaks()` / `bulleted()` / `limitList()` now work for text cells
+(`DECISIONS.md` 2026-07-26), and the comma join they replaced survives in
+exactly one place: a **badge** column whose state is an array. Stock never
+collapses that one — `(! $isListWithLineBreaks) && (! $isBadge)` — so it
+renders one `<li>` per value, each its own badge; villament joins them into a
+single badge reading `Alpha, Beta`.
+
+**Why it was left out.** The badge payload carries one `color`,
+`colorClasses` and `iconHtml` for the whole cell, and stock evaluates all
+three **per state item** (`$getStateItem($stateItem)`), so a two-value badge
+cell can legitimately be one green and one red. Supporting it means moving
+those three fields into the items themselves, which changes the badge payload
+shape rather than adding to it — and multiplies exactly the strings the
+intern-table work above wants to deduplicate. The two should be designed
+together.
+
+**Done means.** A badge column with an array state renders one badge per
+value, each with its own color and icon; `limitList()` applies to it as it
+does to text; the single-value badge payload is unchanged.
+
+---
+
 ## Interactive columns — Select, Toggle, TextInput, Checkbox
 
 **This one needs a decision before any code.**

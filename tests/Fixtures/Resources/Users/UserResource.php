@@ -246,6 +246,19 @@ class UserResource extends Resource
                         Sum::make(),
                         Average::make(),
                     ]),
+                // An array state under the list modifiers: three values, only
+                // two kept, the third reported as "+1 more".
+                TextColumn::make('aliases')
+                    ->getStateUsing(fn (): array => ['Alpha', 'Beta', 'Gamma'])
+                    ->listWithLineBreaks()
+                    ->limitList(2),
+                // The same list, expandable: nothing is dropped server-side,
+                // the overflow is hidden until the reader asks for it.
+                TextColumn::make('nicknames')
+                    ->getStateUsing(fn (): array => ['Alpha', 'Beta', 'Gamma'])
+                    ->listWithLineBreaks()
+                    ->limitList(2)
+                    ->expandableLimitedList(),
                 // A cell whose click is disabled: stock renders a plain div
                 // even though the record has a url.
                 TextColumn::make('team.name')
