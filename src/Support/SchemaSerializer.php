@@ -363,7 +363,14 @@ final class SchemaSerializer
 
         return [
             'key' => $column->getName(),
-            'label' => $labelHtml === null ? (string) $label : trim(strip_tags($labelHtml)),
+            // Decorated markup can carry a whole popup's worth of text (every
+            // button in it), so the stripped form is collapsed to one line
+            // rather than shipped with its indentation intact. The header
+            // drops its own `aria-label` for these columns anyway — stock has
+            // none there, and the rendered markup names itself.
+            'label' => $labelHtml === null
+                ? (string) $label
+                : trim((string) preg_replace('/\s+/u', ' ', strip_tags($labelHtml))),
             'labelHtml' => $labelHtml,
             'headerTooltip' => $headerTooltip instanceof Htmlable ? $headerTooltip->toHtml() : $headerTooltip,
             // Developer-authored `extraHeaderAttributes()`. Per column, not per

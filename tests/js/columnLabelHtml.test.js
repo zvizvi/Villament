@@ -71,7 +71,17 @@ describe('html column labels', () => {
 
         expect(button.find('.fcf-trigger').exists()).toBe(true)
         expect(button.find('[data-icon="sort"]').exists()).toBe(true)
-        // The accessible name stays the plain text, never the markup.
+        // Stock has no aria-label here; a decorated label names itself, and a
+        // flattened copy of a whole filter popup would name it badly.
+        expect(button.attributes('aria-label')).toBeUndefined()
+    })
+
+    it('keeps the aria-label for an ordinary column', () => {
+        const button = mountColumn(
+            { sortable: true },
+            { icons: { sort: '<svg data-icon="sort"></svg>' } },
+        ).get('.fi-ta-header-cell-sort-btn')
+
         expect(button.attributes('aria-label')).toBe('Status')
     })
 })

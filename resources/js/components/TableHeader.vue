@@ -258,6 +258,20 @@ function headerGroupCellClasses(group) {
 }
 
 /**
+ * Stock puts no `aria-label` on the sort control at all; villament adds one
+ * because a bare text node is a weak accessible name for a button. A decorated
+ * label (`labelHtml`) brings its own markup and its own text, so naming the
+ * button after a flattened copy of that markup — every button inside a filter
+ * popup included — would be worse than stock, not better.
+ *
+ * @param {object} column
+ * @returns {?string}
+ */
+function sortButtonLabelFor(column) {
+    return column.labelHtml ? undefined : column.label
+}
+
+/**
  * @param {object} column
  * @returns {?string} The `x-tooltip` expression for `->headerTooltip()`, or null.
  */
@@ -377,7 +391,7 @@ function onSortClick(column) {
                     role="button"
                     tabindex="0"
                     class="fi-ta-header-cell-sort-btn"
-                    :aria-label="column.label"
+                    :aria-label="sortButtonLabelFor(column)"
                     @click="onSortClick(column)"
                     @keydown.enter.prevent.stop="onSortClick(column)"
                     @keydown.space.prevent.stop="onSortClick(column)"
