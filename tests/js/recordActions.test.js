@@ -70,16 +70,27 @@ function makeConfig(overrides = {}) {
             strings: {},
             icons: {},
         },
+        // The compacted wire format: one copy of everything that came out
+        // identical across the page's records, plus a per-record delta. Note
+        // record 2's `delete` delta — `disabled`/`class` differ there, so they
+        // stayed per record while the other 16 fields did not.
         initialData: {
+            actionDefaults: {
+                edit: trigger('edit', 'Edit', {
+                    tag: 'a',
+                    class: 'fi-ac-link-action fi-link fi-size-sm fi-color fi-color-primary fi-text-color-700 dark:fi-text-color-400',
+                }),
+                delete: trigger('delete', 'Delete'),
+                restore: trigger('restore', 'Restore', { view: 'grouped', class: 'fi-ac-grouped-action fi-dropdown-list-item' }),
+            },
             records: [
                 {
                     key: '1',
                     cells: { name: { type: 'text', formatted: 'Jane' } },
-                    actions: {
-                        edit: trigger('edit', 'Edit', { class: 'fi-ac-link-action fi-link fi-size-sm fi-color fi-color-primary fi-text-color-700 dark:fi-text-color-400', url: EDIT_URL, tag: 'a' }),
-                        delete: trigger('delete', 'Delete'),
-                        restore: trigger('restore', 'Restore', { view: 'grouped', class: 'fi-ac-grouped-action fi-dropdown-list-item' }),
-                    },
+                    actionNames: ['edit', 'delete', 'restore'],
+                    // `restore` is visible here and matches the defaults in
+                    // every field — an EMPTY delta that must still render.
+                    actions: { edit: { url: EDIT_URL }, delete: {}, restore: {} },
                     can: {},
                     url: null,
                     urlNewTab: false,
@@ -88,8 +99,9 @@ function makeConfig(overrides = {}) {
                 {
                     key: '2',
                     cells: { name: { type: 'text', formatted: 'John' } },
+                    actionNames: ['delete'],
                     actions: {
-                        delete: trigger('delete', 'Delete', { disabled: true, class: 'fi-ac-link-action fi-link fi-disabled fi-size-sm' }),
+                        delete: { disabled: true, class: 'fi-ac-link-action fi-link fi-disabled fi-size-sm' },
                     },
                     can: {},
                     url: null,
@@ -225,6 +237,22 @@ describe('VueTable record actions', () => {
             ['set', ['deselectedTableRecords', [], false]],
             ['mountAction', ['delete', {}, { table: true, recordKey: '1' }]],
         ])
+    })
+
+    it('renders a visible action whose delta is empty, from the defaults alone', () => {
+        const wrapper = mountTable()
+
+        // Record 1's `restore` arrives as `{}`: visible, but identical to the
+        // response defaults in every field. Visibility comes from
+        // `actionNames`, so truthiness of the delta must not gate it.
+        const group = wrapper.findAll('tbody tr.fi-ta-row')[0].get('.villament-actions-group')
+
+        return group.get('.fi-dropdown-trigger button').trigger('click').then(() => {
+            const item = group.get('.fi-dropdown-list-item')
+
+            expect(item.text()).toBe('Restore')
+            expect(item.classes()).toContain('fi-ac-grouped-action')
+        })
     })
 
     it('does not render actions that are absent from the record map', () => {

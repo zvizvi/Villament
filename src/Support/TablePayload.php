@@ -45,10 +45,19 @@ final class TablePayload
         // selection outright.
         $isSelectionEnabled = $table->isSelectionEnabled() && (! $isGroupsOnly);
 
-        return [
-            'records' => $isGroupsOnly
+        // Every action field is evaluated per record (any of them can be a
+        // closure), but almost none of them actually vary — so the response
+        // ships one copy of what came out identical and each record only its
+        // differences. Purely a transport shape; see ActionPayloadCompactor.
+        $compacted = (new ActionPayloadCompactor)->compact(
+            $isGroupsOnly
                 ? []
                 : $this->recordSerializer->serialize($component, $resourceClass, $records),
+        );
+
+        return [
+            'records' => $compacted['records'],
+            'actionDefaults' => $compacted['actionDefaults'],
             'meta' => [
                 ...$this->recordSerializer->meta($records),
                 // Stock's `$allSelectableRecordsCount`: what "Select all N"

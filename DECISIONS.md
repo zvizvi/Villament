@@ -299,6 +299,22 @@ Fixed on the way through: `emptyStateHeading()` was being swallowed. `SchemaSeri
 
 Stock hands the raw `getRecordClasses($record)` result straight to `@class`, which accepts three forms: a string, a list, or Laravel's conditional `['class' => bool]` map. That resolution has to happen somewhere, and doing it in `RecordSerializer` means the payload is always a plain `string[]` — no second copy of `Arr::toCssClasses` in JS, and no per-form branching in the template. Follows the `cellClasses` precedent exactly: the key is omitted when the list is empty, so a table that never calls `recordClasses()` pays nothing per row.
 
+## 2026-07-26 — The per-record action payload ships as one copy plus deltas
+
+Closing the Columns-overview and Actions-docs gaps grew the endpoint response by ~50% and dropped the payload advantage over stock from 6.6x to 4.95x. Neither commit was wrong — both closed real parity gaps — but the new data is emitted **per record** while being almost entirely record-invariant. Of the 18 fields an action serializes, on a plain `EditAction`/`DeleteAction` pair **only `url` differs**; the two inlined icon SVGs alone repeated ~1.4 kB per row, ~70 kB per response.
+
+The fix does not predict which fields are static — it **measures sameness per response**. `RecordSerializer` still evaluates every field for every record (any of them can be a closure, so it must), and `ActionPayloadCompactor` then factors out whatever came out identical, shipping `actionDefaults` once per response alongside each record's differences. The client reconstructs with `{ ...actionDefaults[name], ...record.actions[name] }`.
+
+`actionDefaults` rides in the **data response, not in `schema`**: the defaults are derived from the records of *this* page and can legitimately differ page to page (a `label` closure keyed on record state), whereas `schema` is inlined at first paint only and absent from every later response. One copy per response is already the whole win.
+
+The subtle part is **visibility**. Before this, a hidden action was simply absent from `record.actions`, and `RecordActions.vue` keyed off exactly that. Once "absent" also means "identical to the defaults", absence can no longer carry that meaning — so every record now carries an explicit `actionNames` list, and the client tests membership of it rather than truthiness of the delta. A visible action whose every field matches the defaults arrives as `{}` and must still render; that case has its own test on both sides.
+
+Both channels run the pass. The endpoint is not the only consumer — first paint inlines the same payload server-side, and without compaction there the table would render its actions from deltas alone until the first refetch.
+
+Result on the benchmark workload (2k rows, page 2 @ 50): endpoint payload **131.7 kB** (was 218 kB, and below even the 145 kB pre-regression baseline), payload ratio **8.28x**, time ratio unchanged at 1.96x median.
+
+Two things this deliberately does not do. It does not touch **CPU**: `generate_icon_html()` still runs once per action per record and returns the same string every time — memoizing on icon identity + size is a separate, real win. And it does not help **cells**, whose growth was the larger jump (+37% vs +9%): a delta pass finds nothing there, because an icon column's SVG genuinely varies by value. The primitive that fits cells is a string intern table (send each distinct `iconHtml` once, reference it by key), which would compose with this rather than replace it. Both are filed in `BACKLOG.md`.
+
 ## Verified Filament v5 internal API map (§4.1, §4.8)
 
 Verified against **filament/filament v5.6.8** + **livewire/livewire v4.3.3** by reading installed vendor source on 2026-07-15. Paths relative to `vendor/filament/`.

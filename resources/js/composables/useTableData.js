@@ -31,6 +31,7 @@ import { appendFilterParams } from '../support/filterParams.js'
  * @property {import('vue').Ref<TableRecord[]>} records
  * @property {import('vue').Ref<?TableMeta>} meta
  * @property {import('vue').Ref<FilterIndicator[]>} indicators Active-filter chips, always from the latest server response.
+ * @property {import('vue').Ref<Object<string, object>>} actionDefaults Per-response action fields that came out identical across every record; each record carries only its differences.
  * @property {import('vue').Ref<boolean>} isLoading
  * @property {import('vue').Ref<?Error>} error
  * @property {() => Promise<void>} retry Re-runs the last request immediately.
@@ -62,6 +63,10 @@ export function useTableData(endpoint, state, options = {}) {
     const records = ref(options.initialData?.records ?? [])
     const meta = ref(options.initialData?.meta ?? null)
     const indicators = ref(options.initialData?.indicators ?? [])
+    // Rides WITH the records, not in `schema`: the defaults are derived from
+    // the records of THIS response and can legitimately differ page to page
+    // (a `label` closure keyed on record state).
+    const actionDefaults = ref(options.initialData?.actionDefaults ?? {})
     const summaries = ref(options.initialData?.summaries ?? null)
     const isLoading = ref(false)
     const error = ref(null)
@@ -159,6 +164,7 @@ export function useTableData(endpoint, state, options = {}) {
             }
 
             records.value = payload.records ?? []
+            actionDefaults.value = payload.actionDefaults ?? {}
             meta.value = payload.meta ?? null
             indicators.value = payload.indicators ?? []
             summaries.value = payload.summaries ?? null
@@ -280,6 +286,7 @@ export function useTableData(endpoint, state, options = {}) {
 
     return {
         records,
+        actionDefaults,
         meta,
         indicators,
         summaries,

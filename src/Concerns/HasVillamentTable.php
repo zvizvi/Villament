@@ -10,6 +10,7 @@ use Filament\Schemas\Schema;
 use Filament\View\PanelsRenderHook;
 use Illuminate\Validation\ValidationException;
 use Zvizvi\Villament\Schemas\VillamentIsland;
+use Zvizvi\Villament\Support\ActionPayloadCompactor;
 use Zvizvi\Villament\Support\FilterIndicatorSerializer;
 use Zvizvi\Villament\Support\RecordSerializer;
 use Zvizvi\Villament\Support\RequestStateValidator;
@@ -122,7 +123,13 @@ trait HasVillamentTable
             'schemaVersion' => $schemaSerializer->version($schema),
             'schema' => $schema,
             'initialData' => [
-                'records' => $recordSerializer->serialize($this, $resourceClass, $records),
+                // The endpoint is not the only consumer of the record payload:
+                // first paint inlines it server-side. Both channels must run
+                // the action compaction, or the table renders its actions from
+                // deltas alone until the first refetch.
+                ...(new ActionPayloadCompactor)->compact(
+                    $recordSerializer->serialize($this, $resourceClass, $records),
+                ),
                 'meta' => $recordSerializer->meta($records),
                 'indicators' => app(FilterIndicatorSerializer::class)->serialize($table),
                 'summaries' => app(SummarySerializer::class)->serialize($this),

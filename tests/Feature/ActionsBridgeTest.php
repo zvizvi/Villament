@@ -17,6 +17,24 @@ beforeEach(function (): void {
     actingAs(User::factory()->admin()->create(['name' => 'Acting User', 'status' => 'active']));
 });
 
+/**
+ * One action's COMPLETE trigger for the named record: the response-level
+ * defaults with the record's own differences laid over them, exactly as the
+ * client reconstructs it. A response with a single record factors every field
+ * out to the defaults, leaving the record's delta empty.
+ *
+ * @return array<string, mixed>
+ */
+function actionsBridgeTrigger(string $name, string $action): array
+{
+    $payload = getJson(ENDPOINT.'?columnSearches[name]='.urlencode($name))->assertOk()->json();
+
+    return [
+        ...($payload['actionDefaults'][$action] ?? []),
+        ...($payload['records'][0]['actions'][$action] ?? []),
+    ];
+}
+
 describe('action structure serialization', function (): void {
     it('serializes record action names and bulk action groups into the schema', function (): void {
         $config = VillamentTableConfig();
@@ -107,14 +125,15 @@ describe('per-record action evaluation', function (): void {
     it('serializes evaluated action props including the edit URL', function (): void {
         $user = User::factory()->create(['name' => 'Url Target', 'is_admin' => false]);
 
-        $record = getJson(ENDPOINT.'?columnSearches[name]=Url+Target')->assertOk()->json('records.0');
+        $edit = actionsBridgeTrigger('Url Target', 'edit');
+        $delete = actionsBridgeTrigger('Url Target', 'delete');
 
-        expect($record['actions']['edit']['url'])->toContain("/admin/users/{$user->id}/edit")
-            ->and($record['actions']['edit']['label'])->toBe('Edit')
-            ->and($record['actions']['edit']['tag'])->toBe('a')
-            ->and($record['actions']['delete']['url'])->toBeNull()
-            ->and($record['actions']['delete']['tag'])->toBe('button')
-            ->and($record['actions']['delete']['class'])->toContain('fi-color-danger');
+        expect($edit['url'])->toContain("/admin/users/{$user->id}/edit")
+            ->and($edit['label'])->toBe('Edit')
+            ->and($edit['tag'])->toBe('a')
+            ->and($delete['url'])->toBeNull()
+            ->and($delete['tag'])->toBe('button')
+            ->and($delete['class'])->toContain('fi-color-danger');
     });
 
     it('renders action icons in the table-context micro variant with Filament-computed color classes', function (): void {
@@ -125,9 +144,9 @@ describe('per-record action evaluation', function (): void {
         // Link actions are Size::Small → fi-size-sm + the 16px micro heroicon,
         // exactly what the stock blade emits; color class strings come from
         // FilamentColor::getComponentClasses itself.
-        expect($record['actions']['edit']['iconHtml'])->toContain('fi-size-sm')->toContain('viewBox="0 0 16 16"')
-            ->and($record['actions']['edit']['class'])->toBe('fi-ac-link-action fi-link fi-size-sm fi-color fi-color-primary fi-text-color-700 dark:fi-text-color-400')
-            ->and($record['actions']['delete']['class'])->toBe('fi-ac-link-action fi-link fi-size-sm fi-color fi-color-danger fi-text-color-600 dark:fi-text-color-300')
+        expect(actionsBridgeTrigger('Stock Parity', 'edit')['iconHtml'])->toContain('fi-size-sm')->toContain('viewBox="0 0 16 16"')
+            ->and(actionsBridgeTrigger('Stock Parity', 'edit')['class'])->toBe('fi-ac-link-action fi-link fi-size-sm fi-color fi-color-primary fi-text-color-700 dark:fi-text-color-400')
+            ->and(actionsBridgeTrigger('Stock Parity', 'delete')['class'])->toBe('fi-ac-link-action fi-link fi-size-sm fi-color fi-color-danger fi-text-color-600 dark:fi-text-color-300')
             ->and($record['cells']['status']['size'])->toBe('sm')
             ->and($record['cells']['status']['colorClasses'])->toBe('fi-color fi-color-warning fi-text-color-700 dark:fi-text-color-400');
     });

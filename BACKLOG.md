@@ -7,11 +7,46 @@ move out of here into `DECISIONS.md` once implemented.
 ## Order
 
 1. [Interactive columns](#interactive-columns--select-toggle-textinput-checkbox) ← next; the big one, needs a decision before code
-2. [Loading indicators](#loading-indicators-on-the-islands-buttons)
-3. [Action trigger options](#action-trigger-options-the-island-cannot-express-yet)
-4. [Docs pages never audited](#docs-pages-never-audited)
+2. [Shrink the `cells` payload](#shrink-the-cells-payload)
+3. [Loading indicators](#loading-indicators-on-the-islands-buttons)
+4. [Action trigger options](#action-trigger-options-the-island-cannot-express-yet)
+5. [Docs pages never audited](#docs-pages-never-audited)
 
-Done and moved to `DECISIONS.md`: the empty state and `recordClasses()` (both 2026-07-26).
+Done and moved to `DECISIONS.md`: the empty state, `recordClasses()`, and the
+action-payload compaction (all 2026-07-26).
+
+---
+
+## Shrink the `cells` payload
+
+The action half of the per-record payload now ships as one copy plus deltas
+(`ActionPayloadCompactor`, `DECISIONS.md` 2026-07-26), which took the endpoint
+response from 218 kB to 131.7 kB. `cells` is the remaining bulk — and the
+larger of the two regressions that prompted that work (`a85cefa` was **+37%**,
+`2bf86d1` **+9%**).
+
+**The delta trick will not help here.** It factors out fields that are
+*identical across every record*; a cell's value is exactly the thing that
+varies. What repeats in cells is a small set of *distinct* values reused many
+times — an `IconColumn` over 50 rows emits 50 SVGs drawn from a set of two,
+and every `TextColumn` badge repeats the same `colorClasses` string per color.
+
+**The primitive that fits is interning.** Send each distinct long string
+(`iconHtml`, `html`, `colorClasses`) once in a response-level table and have
+the cell carry a key. It composes with the action compaction rather than
+replacing it — actions keep the delta (98% saving vs interning's ~66% there),
+cells get the intern table.
+
+**Done means.** Endpoint payload for the benchmark workload drops materially
+below 131.7 kB with the time ratio no worse than 1.95x at 2k rows; the rendered
+DOM is unchanged (the JS cell tests are the guard — `ParityTest` compares record
+keys and order only, and would pass on a blank table); `DECISIONS.md` records
+the format.
+
+**Related, and cheap:** the server still calls `generate_icon_html()` once per
+icon per record and gets the same string back every time. Memoizing on icon
+identity + size is a CPU win that neither compaction nor interning gives, and
+it is independent of both.
 
 ---
 

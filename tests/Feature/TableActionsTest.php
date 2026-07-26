@@ -73,6 +73,26 @@ function tableActionsRecord(string $name): array
         ->json('records.0');
 }
 
+/**
+ * One action's COMPLETE trigger for the named record — the response-level
+ * defaults with the record's own differences laid over them, exactly as the
+ * client reconstructs it. A single-record response factors everything out to
+ * the defaults, so reading `records.0.actions` alone would find `[]`.
+ *
+ * @return array<string, mixed>
+ */
+function tableActionsTrigger(string $name, string $action): array
+{
+    $payload = getJson('/admin/villament/users/data?columnSearches[name]='.urlencode($name))
+        ->assertOk()
+        ->json();
+
+    return [
+        ...($payload['actionDefaults'][$action] ?? []),
+        ...($payload['records'][0]['actions'][$action] ?? []),
+    ];
+}
+
 describe('header actions', function (): void {
     it('serializes the table heading, description and header-actions position', function (): void {
         UserResource::$heading = 'All users';
@@ -322,7 +342,7 @@ describe('action trigger variants', function (): void {
     it('serializes a link trigger with the finished Filament class string', function (): void {
         User::factory()->create(['name' => 'Trigger Link', 'is_admin' => false]);
 
-        $edit = tableActionsRecord('Trigger Link')['actions']['edit'];
+        $edit = tableActionsTrigger('Trigger Link', 'edit');
 
         expect($edit['view'])->toBe('link')
             ->and($edit['tag'])->toBe('a')
@@ -336,7 +356,7 @@ describe('action trigger variants', function (): void {
 
         User::factory()->create(['name' => 'Trigger Icon', 'is_admin' => false]);
 
-        $edit = tableActionsRecord('Trigger Icon')['actions']['edit'];
+        $edit = tableActionsTrigger('Trigger Icon', 'edit');
 
         expect($edit['view'])->toBe('iconButton')
             ->and($edit['class'])->toStartWith('fi-ac-icon-btn-action fi-icon-btn fi-size-sm')
@@ -355,7 +375,7 @@ describe('action trigger variants', function (): void {
 
         User::factory()->create(['name' => 'Trigger Button', 'is_admin' => false]);
 
-        $edit = tableActionsRecord('Trigger Button')['actions']['edit'];
+        $edit = tableActionsTrigger('Trigger Button', 'edit');
 
         expect($edit['view'])->toBe('button')
             ->and($edit['class'])->toContain('fi-btn')->toContain('fi-size-lg')
@@ -370,7 +390,7 @@ describe('action trigger variants', function (): void {
 
         User::factory()->create(['name' => 'Trigger Disabled', 'is_admin' => false]);
 
-        $edit = tableActionsRecord('Trigger Disabled')['actions']['edit'];
+        $edit = tableActionsTrigger('Trigger Disabled', 'edit');
 
         expect($edit['disabled'])->toBeTrue()
             ->and($edit['tag'])->toBe('button')
@@ -384,7 +404,7 @@ describe('action trigger variants', function (): void {
 
         User::factory()->create(['name' => 'Trigger Attrs', 'is_admin' => false]);
 
-        expect(tableActionsRecord('Trigger Attrs')['actions']['edit']['extraAttributes'])
+        expect(tableActionsTrigger('Trigger Attrs', 'edit')['extraAttributes'])
             ->toBe(['data-test' => 'edit-action']);
     });
 
@@ -412,6 +432,112 @@ describe('action trigger variants', function (): void {
         // ItemComponent has a gray default (HasDefaultGrayColor) — same as stock.
         expect(tableActionsConfig()['schema']['actions']['header'][0]['actions'][0]['class'])
             ->toBe('fi-ac-grouped-action fi-dropdown-list-item');
+    });
+});
+
+describe('action payload compaction', function (): void {
+    it('factors record-invariant fields into one copy per response', function (): void {
+        // Non-admins only, and filtered: the acting user IS an admin, and the
+        // policy hides `edit` on admins.
+        User::factory()->count(4)->sequence(fn ($sequence): array => ['name' => "Compact {$sequence->index}"])
+            ->create(['is_admin' => false]);
+
+        $payload = getJson('/admin/villament/users/data?columnSearches[name]=Compact')->assertOk()->json();
+
+        // Everything but the url is the same on every row, so the defaults
+        // carry it and each record's delta is just its own url.
+        expect($payload['actionDefaults']['edit'])->toHaveKeys(['label', 'iconHtml', 'class', 'view', 'tag'])
+            ->and($payload['actionDefaults']['edit'])->not->toHaveKey('url')
+            ->and(array_keys($payload['records'][0]['actions']['edit']))->toBe(['url'])
+            ->and($payload['records'][0]['actions']['edit']['url'])
+            ->toContain('/edit');
+    });
+
+    it('names every visible action explicitly, so an empty delta still renders', function (): void {
+        User::factory()->count(3)->sequence(fn ($sequence): array => ['name' => "Named {$sequence->index}"])
+            ->create(['is_admin' => false]);
+
+        $record = getJson('/admin/villament/users/data?columnSearches[name]=Named')->assertOk()->json('records.0');
+
+        // `delete` has no per-record field at all — its delta is empty. Absence
+        // can no longer mean "hidden", which is exactly what `actionNames` is for.
+        expect($record['actionNames'])->toBe(['edit', 'delete'])
+            ->and($record['actions']['delete'])->toBe([]);
+    });
+
+    it('keeps a genuinely varying field per record', function (): void {
+        UserResource::$modifyUngroupedRecordActions = fn (Action $action) => $action
+            ->label(fn (User $record): string => "Edit {$record->name}");
+
+        User::factory()->create(['name' => 'Vary Ann', 'is_admin' => false]);
+        User::factory()->create(['name' => 'Vary Bob', 'is_admin' => false]);
+
+        $payload = getJson('/admin/villament/users/data?columnSearches[name]=Vary&sort=name:asc')
+            ->assertOk()
+            ->json();
+
+        // The label differs row to row, so it cannot be a default.
+        expect($payload['actionDefaults']['edit'])->not->toHaveKey('label')
+            ->and($payload['records'][0]['actions']['edit']['label'])->toBe('Edit Vary Ann')
+            ->and($payload['records'][1]['actions']['edit']['label'])->toBe('Edit Vary Bob');
+    });
+
+    it('takes an action\'s defaults only from the records where it is visible', function (): void {
+        // The policy denies `update` on admins, so `edit` is visible on some
+        // rows and absent on others.
+        User::factory()->create(['name' => 'Zed Plain', 'is_admin' => false]);
+        User::factory()->admin()->create(['name' => 'Zed Admin']);
+
+        $payload = getJson('/admin/villament/users/data?columnSearches[name]=Zed&sort=name:asc')
+            ->assertOk()
+            ->json();
+
+        $byKey = collect($payload['records'])->keyBy(fn (array $record): string => implode(',', $record['actionNames']));
+
+        expect($byKey->keys()->sort()->values()->all())->toBe(['delete', 'edit,delete'])
+            // Still a real default, derived from the one row that has it.
+            ->and($payload['actionDefaults']['edit']['label'])->toBe('Edit');
+    });
+
+    it('puts everything in the defaults on a single-record page', function (): void {
+        User::factory()->create(['name' => 'Only One', 'is_admin' => false]);
+
+        $payload = getJson('/admin/villament/users/data?columnSearches[name]=Only+One')
+            ->assertOk()
+            ->json();
+
+        // The degenerate case: "identical across all records" is everything.
+        expect($payload['records'])->toHaveCount(1)
+            ->and($payload['records'][0]['actions']['edit'])->toBe([])
+            ->and($payload['actionDefaults']['edit']['url'])->toContain('/edit');
+    });
+
+    it('emits an empty defaults map for an empty page and for groupsOnly', function (): void {
+        expect(getJson('/admin/villament/users/data?search=nothingmatchesthis')->assertOk()->json('actionDefaults'))
+            ->toBe([]);
+
+        UserResource::$groupsOnly = true;
+
+        try {
+            $payload = getJson('/admin/villament/users/data?grouping=status')->assertOk()->json();
+
+            expect($payload['records'])->toBe([])
+                ->and($payload['actionDefaults'])->toBe([]);
+        } finally {
+            UserResource::$groupsOnly = false;
+        }
+    });
+
+    it('compacts the FIRST-PAINT payload too, not just the endpoint', function (): void {
+        User::factory()->count(3)->create(['is_admin' => false]);
+
+        $initial = tableActionsConfig()['initialData'];
+
+        // Without this the table would render its actions from deltas alone
+        // until the first refetch.
+        expect($initial)->toHaveKey('actionDefaults')
+            ->and($initial['actionDefaults']['edit']['label'])->toBe('Edit')
+            ->and($initial['records'][0])->toHaveKey('actionNames');
     });
 });
 

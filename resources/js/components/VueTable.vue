@@ -257,7 +257,7 @@ function groupAriaLabel(group) {
     return group.label ? `${group.label}: ${group.title}` : String(group.title ?? '')
 }
 
-const { records, meta, indicators, summaries, isLoading, error, retry, fetchNow, destroy: destroyData } = useTableData(
+const { records, actionDefaults, meta, indicators, summaries, isLoading, error, retry, fetchNow, destroy: destroyData } = useTableData(
     props.config.endpoint,
     state,
     {
@@ -1440,6 +1440,8 @@ function recordCellClasses(column, cellValue = null) {
                                             <RecordActions
                                                 :structure="recordActionsStructure"
                                                 :actions="item.row.original.actions ?? {}"
+                                                :names="item.row.original.actionNames ?? []"
+                                                :defaults="actionDefaults"
                                                 :alignment-class="recordActionsConfig.alignmentClass ?? null"
                                                 @mount="bridge.mountRecordAction($event, item.row.original.key)"
                                             />
@@ -1474,6 +1476,8 @@ function recordCellClasses(column, cellValue = null) {
                                             <RecordActions
                                                 :structure="recordActionsStructure"
                                                 :actions="item.row.original.actions ?? {}"
+                                                :names="item.row.original.actionNames ?? []"
+                                                :defaults="actionDefaults"
                                                 :alignment-class="recordActionsConfig.alignmentClass ?? null"
                                                 @mount="bridge.mountRecordAction($event, item.row.original.key)"
                                             />
@@ -1510,6 +1514,8 @@ function recordCellClasses(column, cellValue = null) {
                                             <RecordActions
                                                 :structure="recordActionsStructure"
                                                 :actions="item.row.original.actions ?? {}"
+                                                :names="item.row.original.actionNames ?? []"
+                                                :defaults="actionDefaults"
                                                 :alignment-class="recordActionsConfig.alignmentClass ?? null"
                                                 @mount="bridge.mountRecordAction($event, item.row.original.key)"
                                             />

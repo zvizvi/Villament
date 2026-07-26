@@ -14,12 +14,28 @@ const props = defineProps({
         required: true,
     },
     /**
-     * This record's evaluated action triggers, keyed by action name — the
-     * `ActionTriggerSerializer` payload (view, tag, finished class/style,
-     * icon, badge, tooltip, url, …). Only VISIBLE actions are present: a
-     * structure name absent here must not render.
+     * This record's action triggers — only the fields that DIFFER from
+     * `defaults`. An action visible on this record but identical to the
+     * defaults in every field arrives as `{}`, which is why visibility is
+     * read from `names`, never from truthiness here.
      */
     actions: {
+        type: Object,
+        default: () => ({}),
+    },
+    /**
+     * The names of the actions visible on THIS record, in structure order.
+     * The authoritative visibility list (see `actions` above).
+     */
+    names: {
+        type: Array,
+        default: () => [],
+    },
+    /**
+     * Response-level action fields that came out identical across every
+     * record — the `ActionTriggerSerializer` payload minus whatever varied.
+     */
+    defaults: {
         type: Object,
         default: () => ({}),
     },
@@ -68,11 +84,34 @@ onBeforeUnmount(() => {
 })
 
 /**
+ * Whether this action renders on this record. MEMBERSHIP of `names`, never
+ * truthiness of `actions[name]` — a visible action whose every field matches
+ * the response defaults carries an empty delta.
+ *
+ * @param {string} name
+ * @returns {boolean}
+ */
+function isVisible(name) {
+    return props.names.includes(name)
+}
+
+/**
+ * The full trigger for this record: the response-level defaults with this
+ * record's differences laid over them.
+ *
+ * @param {string} name
+ * @returns {object}
+ */
+function triggerFor(name) {
+    return { ...(props.defaults[name] ?? {}), ...(props.actions[name] ?? {}) }
+}
+
+/**
  * @param {object} group Group structure entry.
  * @returns {string[]} Names of the group's actions that are visible for this record.
  */
 function visibleGroupActions(group) {
-    return (group.actions ?? []).filter((name) => Boolean(props.actions[name]))
+    return (group.actions ?? []).filter(isVisible)
 }
 
 /**
@@ -95,10 +134,10 @@ function onMount(name) {
             v-for="(item, index) in structure"
             :key="item.type === 'group' ? `group-${index}` : item.name"
         >
-            <!-- Plain action: rendered only when evaluated for this record. -->
+            <!-- Plain action: rendered only when visible for this record. -->
             <ActionTrigger
-                v-if="item.type === 'action' && actions[item.name]"
-                :action="actions[item.name]"
+                v-if="item.type === 'action' && isVisible(item.name)"
+                :action="triggerFor(item.name)"
                 @mount="onMount"
             />
 
@@ -130,7 +169,7 @@ function onMount(name) {
                         <ActionTrigger
                             v-for="name in visibleGroupActions(item)"
                             :key="name"
-                            :action="actions[name]"
+                            :action="triggerFor(name)"
                             @mount="onMount"
                         />
                     </div>
