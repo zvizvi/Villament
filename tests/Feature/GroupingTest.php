@@ -8,6 +8,7 @@ use Zvizvi\Villament\Support\SchemaSerializer;
 use Zvizvi\Villament\Tests\Fixtures\Models\Team;
 use Zvizvi\Villament\Tests\Fixtures\Models\User;
 use Zvizvi\Villament\Tests\Fixtures\Resources\Users\Pages\ListUsers;
+use Zvizvi\Villament\Tests\Fixtures\Resources\Users\Pages\VueListUsers;
 use Zvizvi\Villament\Tests\Fixtures\Resources\Users\UserResource;
 
 use function Pest\Laravel\actingAs;
@@ -76,6 +77,58 @@ it('marks the grouping settings hidden when the table hides them', function (): 
             ->and($grouping['groups'])->not->toBeEmpty();
     } finally {
         UserResource::$groupingSettingsHidden = false;
+    }
+});
+
+it('inlines a selectable defaultGroup as island state so the settings control preselects it', function (): void {
+    UserResource::$defaultGroup = 'status';
+
+    try {
+        $config = livewire(VueListUsers::class)->instance()->getVillamentTableConfig();
+
+        // Stock's `mountInteractsWithTable()` seeds `tableGrouping` with
+        // `"{$id}:asc"` when the default group is one of `groups()`. The island
+        // must be told, or the control renders blank over grouped rows.
+        expect($config['state']['grouping'])->toBe('status:asc')
+            ->and($config['initialData']['records'][0]['group']['key'])->not->toBeNull();
+    } finally {
+        UserResource::$defaultGroup = null;
+    }
+});
+
+it('leaves the island state ungrouped for a forced defaultGroup, which still groups the records', function (): void {
+    // 'name' is NOT in `groups()`, so it is not selectable: stock leaves
+    // `tableGrouping` null and `getTableGrouping()` falls through to the
+    // default. There is nothing for the control to preselect (the group is not
+    // one of its options), and the endpoint reaches the same fallthrough.
+    UserResource::$defaultGroup = 'name';
+
+    try {
+        $config = livewire(VueListUsers::class)->instance()->getVillamentTableConfig();
+
+        expect($config['state']['grouping'])->toBeNull()
+            ->and($config['initialData']['records'][0]['group']['label'])->toBe('Name');
+
+        $records = getJson('/admin/villament/users/data')->assertOk()->json('records');
+
+        expect($records[0]['group']['label'])->toBe('Name');
+    } finally {
+        UserResource::$defaultGroup = null;
+    }
+});
+
+it('keeps the endpoint grouped when the island echoes back the inlined default grouping', function (): void {
+    UserResource::$defaultGroup = 'status';
+
+    try {
+        $grouping = livewire(VueListUsers::class)->instance()->getVillamentTableConfig()['state']['grouping'];
+
+        // The endpoint is stateless — no mount hook seeds the default there, so
+        // parity depends entirely on the island sending this value back.
+        expect(groupedEndpointKeys('grouping='.$grouping))
+            ->toBe(groupedStockKeys(livewire(ListUsers::class)));
+    } finally {
+        UserResource::$defaultGroup = null;
     }
 });
 

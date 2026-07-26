@@ -110,6 +110,18 @@ Owner decision: the ENTIRE filter panel is Filament's original Livewire UI, not 
 - The schema ships only `hasFilters: bool` (show the trigger or not) — filter definitions never leave the server.
 - Trade-off accepted: applying a filter is one Livewire commit (small form) + one Vue refetch. High-frequency interactions (search/sort/pagination) stay Vue/AJAX. Panel positioning uses the existing CSS anchor (no floating-ui); the trigger button is the one filter element Vue-rendered (pixel-identical) to avoid teleporting a native dropdown into the wire:ignore toolbar.
 
+## 2026-07-26 — `defaultGroup()` is request state, not schema
+
+The grouping settings control rendered blank while the rows were grouped: `schema.grouping.default` was serialized but nothing consumed it, and the island's inlined `state` had no `grouping` key at all.
+
+The right place for it is the state, because that is where stock keeps it. `mountInteractsWithTable()` does `$this->tableGrouping = "{$id}:asc"` whenever `isDefaultGroupSelectable()` (the default group id is also in `groups()`) — so by render time the live page already holds the exact value. Inlining `$this->tableGrouping` therefore fixes three things at once: the control preselects, the island echoes the value back on every request, and the STATELESS data endpoint stays grouped (it has no mount hook, so without the echo the first AJAX interaction would have silently dropped the grouping). `schema.grouping.default` was deleted as dead payload.
+
+A forced (non-selectable) `defaultGroup()` inlines `null`, which is also correct: stock leaves `tableGrouping` alone there and `getTableGrouping()` falls through to the default on both the page and the endpoint, while the control has nothing to preselect — the group is not one of its options.
+
+Consequence: **grouping is the one state key where the server wins over the URL** (`useTableState`). Stock's mount hook overrides `tableGrouping` AFTER Livewire hydrates `#[Url]`, so with a selectable default the inlined value is what the page actually rendered; deferring to the URL would show one group in the control while the rows are grouped by another. Where stock does not override, the server hydrated the value from that same query string, so the rule is a no-op. Back/forward still reads the URL, mirroring stock's no-remount popstate path.
+
+Known stock quirk inherited by this: with a selectable default, a cold load of `?grouping=other` is ignored — stock's mount line has no `blank()` guard, unlike the search/filter session hydration directly above it.
+
 ## 2026-07-26 — Adopted filter slots are `display: contents`
 
 The filters UI reaches its position through two structural boxes stock does not have: the Vue-rendered outlet (`[data-villament-filters-outlet]`) and the Blade-rendered teleport slot (`[data-villament-filters-slot]`, moved into the outlet on mount). Both are pure plumbing, but a box is a box — and Filament's layout depends on the containers being DIRECT children.

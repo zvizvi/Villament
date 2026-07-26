@@ -228,7 +228,12 @@ final class SchemaSerializer
      * table exposes no `groups()` — a forced-only `defaultGroup()` still groups
      * the records (headers render) but offers no UI to change it.
      *
-     * @return array{groups: list<array{id: string, label: string}>, default: ?string, directionSettingHidden: bool, settingsInDropdownOnDesktop: bool, collapsedByDefault: bool, settingsHidden: bool, triggerHtml: string}|null
+     * The CURRENT selection is not here — it lives in the island's `state`
+     * (inlined from `tableGrouping`, which stock's mount hook has already
+     * seeded with a selectable `defaultGroup()`), because it is request state,
+     * not schema, and the endpoint must be told it on every request.
+     *
+     * @return array{groups: list<array{id: string, label: string}>, directionSettingHidden: bool, settingsInDropdownOnDesktop: bool, collapsedByDefault: bool, settingsHidden: bool, triggerHtml: string}|null
      */
     private function grouping(Table $table): ?array
     {
@@ -237,8 +242,6 @@ final class SchemaSerializer
         if ($groups === []) {
             return null;
         }
-
-        $default = $table->getDefaultGroup();
 
         $serializedGroups = [];
 
@@ -251,9 +254,6 @@ final class SchemaSerializer
 
         return [
             'groups' => $serializedGroups,
-            // Preselects the control; only when the default is one of the
-            // selectable groups (a non-selectable forced default has no UI).
-            'default' => $table->isDefaultGroupSelectable() ? $default?->getId() : null,
             'directionSettingHidden' => $table->isGroupingDirectionSettingHidden(),
             // Stock default (false): a mobile dropdown (`sm:fi-hidden`) PLUS
             // inline fields on desktop. True: the dropdown at every breakpoint.

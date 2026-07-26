@@ -5,7 +5,8 @@ import TrustedIcon from './TrustedIcon.js'
 const props = defineProps({
     /**
      * Grouping config from the schema (`schema.grouping`): `{ groups: [{ id,
-     * label }], default, directionSettingHidden, settingsInDropdownOnDesktop }`.
+     * label }], directionSettingHidden, settingsInDropdownOnDesktop }`. The
+     * current selection is NOT here — it arrives as `modelValue`.
      */
     grouping: {
         type: Object,

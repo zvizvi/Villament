@@ -111,7 +111,17 @@ export function useTableState(initialState = {}, options = {}) {
     const urlState = urlSync ? readStateFromUrl() : {}
 
     const sort = ref(urlState.sort !== undefined ? urlState.sort : (initialState.sort ?? null))
-    const grouping = ref(urlState.grouping !== undefined ? urlState.grouping : (initialState.grouping ?? null))
+    // Grouping is the ONE key where the SERVER wins over the URL, because it is
+    // the one key stock itself overrides: `mountInteractsWithTable()` forces
+    // `tableGrouping` to the selectable `defaultGroup()` AFTER Livewire has
+    // hydrated `#[Url]`. The inlined value is therefore what the server actually
+    // rendered — deferring to the URL here would show one group in the settings
+    // control while the rows are grouped by another. Everywhere stock does NOT
+    // override (a forced default, or no default), the server hydrated this from
+    // the very same query string, so the two agree and the rule is a no-op.
+    // Back/forward navigation still reads the URL — see `applyUrlState()`, which
+    // mirrors stock's own no-remount popstate handling.
+    const grouping = ref(initialState.grouping !== undefined ? initialState.grouping : (urlState.grouping ?? null))
     const search = ref(urlState.search !== undefined ? urlState.search : (initialState.search ?? ''))
     const columnSearches = ref(
         urlState.columnSearches !== undefined

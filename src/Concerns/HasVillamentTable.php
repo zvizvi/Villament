@@ -124,6 +124,14 @@ trait HasVillamentTable
             ],
             'state' => [
                 'sort' => $this->tableSort,
+                // Post-`mountInteractsWithTable()`, so it already carries the
+                // selectable `defaultGroup()` that stock forces here (that hook
+                // sets `"{$id}:asc"` unconditionally, overriding even the
+                // `#[Url]`-hydrated value). Inlining it is what preselects the
+                // settings control AND what keeps the data endpoint grouped —
+                // the island echoes this value back on every request, and a
+                // stateless endpoint has no mount hook of its own.
+                'grouping' => $this->tableGrouping,
                 'search' => (string) $this->tableSearch,
                 'columnSearches' => $this->tableColumnSearches,
                 'filters' => $this->tableFilters ?? [],

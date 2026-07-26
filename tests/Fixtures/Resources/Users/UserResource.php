@@ -44,6 +44,13 @@ class UserResource extends Resource
     public static bool $groupingSettingsHidden = false;
 
     /**
+     * Test seam: the table's `defaultGroup()`. Set to an id that is also in
+     * `groups()` for a SELECTABLE default (stock's mount hook seeds
+     * `tableGrouping` with it); set to an id that is not, for a forced one.
+     */
+    public static ?string $defaultGroup = null;
+
+    /**
      * Test seam: customizes the grouping dropdown trigger
      * (`groupRecordsTriggerAction()`), e.g. `fn (Action $action) => $action->button()`.
      *
@@ -137,6 +144,7 @@ class UserResource extends Resource
                     ->groupQueryUsing(fn (QueryBuilder $query): QueryBuilder => $query->groupByRaw('upper(substr(name, 1, 1))'))
                     ->scopeQueryByKeyUsing(fn (Builder $query, ?string $key): Builder => $query->whereRaw('upper(substr(name, 1, 1)) = ?', [$key])),
             ])
+            ->defaultGroup(fn (): ?string => static::$defaultGroup)
             ->groupsOnly(fn (): bool => static::$groupsOnly)
             ->groupingSettingsHidden(fn (): bool => static::$groupingSettingsHidden)
             ->groupRecordsTriggerAction(static::$groupRecordsTriggerAction)

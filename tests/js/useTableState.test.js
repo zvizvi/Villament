@@ -194,7 +194,7 @@ describe('useTableState', () => {
         expect(state.columnSearches.value).toEqual({})
     })
 
-    it('round-trips grouping through the URL and hydrates over the config', () => {
+    it('round-trips grouping through the URL, but the server state wins on load', () => {
         const first = makeState({ grouping: null })
         first.grouping.value = 'status:desc'
 
@@ -202,12 +202,23 @@ describe('useTableState', () => {
 
         first.destroy()
 
-        // URL wins over the server-provided default group.
+        // Grouping is the one key the SERVER wins on: stock's mount hook
+        // overrides `tableGrouping` with a selectable `defaultGroup()` AFTER
+        // `#[Url]` hydration, so the inlined value is what the page actually
+        // rendered — deferring to the URL would desync the settings control
+        // from the rows.
         const second = makeState({ grouping: 'created_at' })
-        expect(second.grouping.value).toBe('status:desc')
+        expect(second.grouping.value).toBe('created_at')
+
+        second.destroy()
+
+        // Absent from the server state, the URL still hydrates it (no default
+        // group configured — stock leaves the `#[Url]` value alone there).
+        const third = makeState({})
+        expect(third.grouping.value).toBe('status:desc')
 
         // Clearing the grouping drops it from the URL.
-        second.grouping.value = null
+        third.grouping.value = null
         expect(new URL(window.location.href).searchParams.has('grouping')).toBe(false)
     })
 
