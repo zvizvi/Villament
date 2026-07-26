@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Filament\Actions\Action;
 use Livewire\Features\SupportTesting\Testable;
 use Zvizvi\Villament\Support\SchemaSerializer;
 use Zvizvi\Villament\Tests\Fixtures\Models\User;
@@ -163,4 +164,29 @@ it('matches the stock table record order when grouping a date column', function 
 
     expect($stock)->not->toBeEmpty()
         ->and(groupedEndpointKeys('grouping=created_at'))->toBe($stock);
+});
+
+it('renders the grouping trigger through Filament, honoring groupRecordsTriggerAction', function (): void {
+    $default = (new SchemaSerializer)->serialize(livewire(ListUsers::class)->instance()->getTable())['grouping'];
+
+    // Stock default: an icon button.
+    expect($default['triggerHtml'])->toContain('fi-icon-btn')
+        ->and($default['triggerHtml'])->not->toContain('Group by records');
+
+    UserResource::$groupRecordsTriggerAction = fn (Action $action): Action => $action
+        ->button()
+        ->label('Group by records')
+        ->color('danger');
+
+    try {
+        $customized = (new SchemaSerializer)->serialize(livewire(ListUsers::class)->instance()->getTable())['grouping'];
+
+        // `->button()` switches the view, and the label/color come through —
+        // proof the action is rendered by Filament rather than hand-built.
+        expect($customized['triggerHtml'])->toContain('Group by records')
+            ->and($customized['triggerHtml'])->toContain('fi-btn')
+            ->and($customized['triggerHtml'])->toContain('fi-color-danger');
+    } finally {
+        UserResource::$groupRecordsTriggerAction = null;
+    }
 });

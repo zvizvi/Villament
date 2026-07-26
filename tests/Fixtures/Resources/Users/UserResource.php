@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Zvizvi\Villament\Tests\Fixtures\Resources\Users;
 
+use Closure;
 use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
@@ -40,6 +41,14 @@ class UserResource extends Resource
 
     /** Test seam: hides the grouping settings selector (`groupingSettingsHidden()`). */
     public static bool $groupingSettingsHidden = false;
+
+    /**
+     * Test seam: customizes the grouping dropdown trigger
+     * (`groupRecordsTriggerAction()`), e.g. `fn (Action $action) => $action->button()`.
+     *
+     * @var ?Closure(Action): Action
+     */
+    public static ?Closure $groupRecordsTriggerAction = null;
 
     public static function getEloquentQuery(): Builder
     {
@@ -96,6 +105,7 @@ class UserResource extends Resource
             ])
             ->groupsOnly(fn (): bool => static::$groupsOnly)
             ->groupingSettingsHidden(fn (): bool => static::$groupingSettingsHidden)
+            ->groupRecordsTriggerAction(static::$groupRecordsTriggerAction)
             ->striped()
             ->reorderableColumns()
             ->filtersFormColumns(['sm' => 2, 'md' => 3, 'lg' => 4])

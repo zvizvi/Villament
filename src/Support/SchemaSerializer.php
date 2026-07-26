@@ -228,7 +228,7 @@ final class SchemaSerializer
      * table exposes no `groups()` — a forced-only `defaultGroup()` still groups
      * the records (headers render) but offers no UI to change it.
      *
-     * @return array{groups: list<array{id: string, label: string}>, default: ?string, directionSettingHidden: bool, settingsInDropdownOnDesktop: bool, collapsedByDefault: bool, settingsHidden: bool}|null
+     * @return array{groups: list<array{id: string, label: string}>, default: ?string, directionSettingHidden: bool, settingsInDropdownOnDesktop: bool, collapsedByDefault: bool, settingsHidden: bool, triggerHtml: string}|null
      */
     private function grouping(Table $table): ?array
     {
@@ -265,6 +265,14 @@ final class SchemaSerializer
             // control is hidden). Grouping via `defaultGroup()` still applies —
             // records group and headers render, users just can't change it.
             'settingsHidden' => $table->areGroupingSettingsHidden(),
+            // The dropdown trigger, rendered by Filament ITSELF so every
+            // `groupRecordsTriggerAction()` customization survives (label,
+            // icon, color, size, button-vs-iconButton, extraAttributes,
+            // tooltip). Stock disables the action's own click handler
+            // (`livewireClickHandlerEnabled(false)`) and toggles from the
+            // wrapping `.fi-dropdown-trigger` — which is exactly where the
+            // island binds its click, so the button needs no rewiring.
+            'triggerHtml' => $table->getGroupRecordsTriggerAction()->toHtml(),
         ];
     }
 }

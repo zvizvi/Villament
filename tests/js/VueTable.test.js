@@ -332,6 +332,38 @@ describe('VueTable filters (native Livewire panel) + indicators', () => {
         expect(recordRows[2].classes()).not.toContain('fi-collapsed')
     })
 
+    it('renders the server-rendered grouping trigger and toggles the panel from its wrapper', async () => {
+        const config = makeConfig()
+        config.schema.grouping = {
+            groups: [{ id: 'status', label: 'Status' }],
+            default: null,
+            directionSettingHidden: false,
+            // A customized `groupRecordsTriggerAction()`: Filament rendered it
+            // as a labeled button, so the island must use it verbatim rather
+            // than substituting its own icon button.
+            triggerHtml: '<button type="button" class="fi-btn fi-size-sm fi-color-danger" data-custom-trigger>Group by records</button>',
+        }
+        config.state.grouping = 'status'
+
+        wrapper = mount(VueTable, { props: { config }, attachTo: document.body })
+
+        const trigger = wrapper.get('.villament-grouping .fi-dropdown-trigger')
+        const button = trigger.get('[data-custom-trigger]')
+
+        expect(button.text()).toBe('Group by records')
+        expect(button.classes()).toContain('fi-color-danger')
+        // The island's own fallback icon button is NOT rendered alongside it.
+        expect(trigger.find('.fi-icon-btn').exists()).toBe(false)
+
+        // Stock binds the toggle to the wrapper (the action's own click handler
+        // is disabled server-side), so clicking the button bubbles and opens it.
+        expect(wrapper.find('.fi-ta-grouping-settings .fi-dropdown-panel').exists()).toBe(false)
+
+        await button.trigger('click')
+
+        expect(wrapper.find('.fi-dropdown-panel').exists()).toBe(true)
+    })
+
     it('hides the settings selector when groupingSettingsHidden, but still renders group headers', () => {
         const config = makeConfig()
         config.schema.grouping = { groups: [{ id: 'status', label: 'Status' }], default: 'status', directionSettingHidden: false, settingsHidden: true }

@@ -150,16 +150,28 @@ onBeforeUnmount(() => {
             class="fi-dropdown villament-dropdown villament-dropdown-start"
             :class="{ 'sm:fi-hidden': ! settingsInDropdownOnDesktop }"
         >
+            <!--
+                Stock binds the toggle to the WRAPPER, not the button (the
+                trigger action's own click handler is disabled server-side) —
+                so the Filament-rendered trigger drops straight in, with every
+                `groupRecordsTriggerAction()` customization intact.
+            -->
             <div
                 class="fi-dropdown-trigger"
                 :aria-expanded="isOpen ? 'true' : 'false'"
+                @click="isOpen = ! isOpen"
             >
+                <TrustedIcon
+                    v-if="grouping.triggerHtml"
+                    :html="grouping.triggerHtml"
+                />
+
                 <button
+                    v-else
                     type="button"
                     class="fi-icon-btn fi-size-md fi-ac-icon-btn-action fi-force-enabled"
                     :title="strings.groupTrigger"
                     :aria-label="strings.groupTrigger"
-                    @click="isOpen = ! isOpen"
                 >
                     <TrustedIcon :html="icons.group" />
                 </button>

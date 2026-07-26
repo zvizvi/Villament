@@ -66,6 +66,7 @@ $methodContract = [
     [Table::class, 'areGroupingSettingsInDropdownOnDesktop'],
     [Table::class, 'areGroupsCollapsedByDefault'],
     [Table::class, 'isGroupsOnly'],
+    [Table::class, 'getGroupRecordsTriggerAction'],
     [Group::class, 'getId'],
     [Group::class, 'getColumn'],
     [Group::class, 'groupQuery'],
