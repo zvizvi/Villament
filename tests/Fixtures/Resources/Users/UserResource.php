@@ -51,6 +51,13 @@ class UserResource extends Resource
      */
     public static ?Closure $groupRecordsTriggerAction = null;
 
+    /**
+     * Test probe: counts every `formatStateUsing` evaluation, so tests can
+     * assert that per-record column closures run (or, in groupsOnly mode,
+     * never run — stock renders no cells there).
+     */
+    public static int $formatStateCalls = 0;
+
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()->where('is_banned', false);
@@ -77,7 +84,11 @@ class UserResource extends Resource
                 TextColumn::make('name')
                     ->sortable()
                     ->searchable(isIndividual: true)
-                    ->formatStateUsing(fn (string $state): string => mb_strtoupper($state))
+                    ->formatStateUsing(function (string $state): string {
+                        static::$formatStateCalls++;
+
+                        return mb_strtoupper($state);
+                    })
                     ->url(fn (User $record): string => static::getUrl('edit', ['record' => $record])),
                 TextColumn::make('status')
                     ->badge()

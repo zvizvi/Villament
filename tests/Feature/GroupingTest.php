@@ -342,3 +342,33 @@ it('reports records as unpaginated in groupsOnly mode, so the island hides pagin
         UserResource::$groupsOnly = false;
     }
 });
+
+it('never serializes record cells in groupsOnly mode, like the stock table', function (): void {
+    // Baseline: the normal path DOES evaluate per-record column closures.
+    UserResource::$formatStateCalls = 0;
+
+    $normal = getJson('/admin/villament/users/data'.'?perPage=10')->assertOk()->json();
+
+    expect($normal['records'])->toHaveCount(10)
+        ->and(UserResource::$formatStateCalls)->toBe(10);
+
+    UserResource::$groupsOnly = true;
+    UserResource::$formatStateCalls = 0;
+
+    try {
+        $payload = getJson('/admin/villament/users/data'.'?grouping=status')->assertOk()->json();
+
+        // Stock gates the whole record row on `! $isGroupsOnly` and skips
+        // eager loading accordingly, so no column closure ever runs. Shipping
+        // cells here would run user code stock never runs — and, with eager
+        // loading already skipped upstream, N+1 every relationship column.
+        expect(UserResource::$formatStateCalls)->toBe(0)
+            ->and($payload['records'])->toBe([])
+            // The group rows still arrive: they are derived from the records,
+            // which are fetched exactly as stock fetches them.
+            ->and($payload['summaries']['groups'])->not->toBeEmpty();
+    } finally {
+        UserResource::$groupsOnly = false;
+        UserResource::$formatStateCalls = 0;
+    }
+});

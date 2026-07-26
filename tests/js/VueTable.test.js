@@ -429,6 +429,46 @@ describe('VueTable filters (native Livewire panel) + indicators', () => {
         expect(groupRows[0].findAll('td')).toHaveLength(2)
     })
 
+    it('shows group rows (not the empty state) in groupsOnly, where no records are sent', () => {
+        const config = makeConfig()
+        config.schema.columns = [
+            { key: 'status', label: 'Status', type: 'text', sortable: false, individuallySearchable: false, toggleable: false, hiddenByDefault: false, alignment: null },
+            { key: 'logins', label: 'Logins', type: 'text', sortable: false, individuallySearchable: false, toggleable: false, hiddenByDefault: false, alignment: null },
+        ]
+        config.schema.grouping = { groups: [{ id: 'status', label: 'Status' }], default: null, directionSettingHidden: false }
+        config.state.grouping = 'status'
+        config.initialData = {
+            // The server sends NO records in groupsOnly — their cells are never
+            // rendered, so it never serializes them.
+            records: [],
+            meta: { paginated: false, currentPage: 1, perPage: 3, total: 3, lastPage: 1, from: 1, to: 3 },
+            indicators: [],
+            summaries: {
+                page: null,
+                all: null,
+                groupsOnly: true,
+                groupColumn: 'status',
+                groups: [{ key: 'active', heading: 'active', cells: { logins: '<span>Sum 40</span>' } }],
+            },
+        }
+
+        wrapper = mount(VueTable, { props: { config }, attachTo: document.body })
+
+        // The empty state must NOT appear just because `records` is empty.
+        expect(wrapper.find('.fi-ta-empty-state').exists()).toBe(false)
+        expect(wrapper.findAll('tbody .fi-ta-group-summary-row')).toHaveLength(1)
+
+        wrapper.unmount()
+
+        // With no groups either, the empty state is correct.
+        const empty = JSON.parse(JSON.stringify(config))
+        empty.initialData.summaries.groups = []
+
+        wrapper = mount(VueTable, { props: { config: empty }, attachTo: document.body })
+
+        expect(wrapper.find('.fi-ta-empty-state').exists()).toBe(true)
+    })
+
     it('renders the pagination bar only when the records are actually paginated', () => {
         const paginated = makeConfig()
         paginated.initialData.meta = { paginated: true, currentPage: 1, perPage: 10, total: 40, lastPage: 4, from: 1, to: 10 }

@@ -425,7 +425,15 @@ const table = useVueTable({
     manualFiltering: true,
 })
 
-const hasRecords = computed(() => records.value.length > 0)
+/**
+ * Whether the table has anything to show. In groupsOnly mode the server sends
+ * NO records (their cells are never rendered — stock doesn't render them
+ * either), so the group summary rows are the signal instead; otherwise it's
+ * the records themselves.
+ */
+const hasRecords = computed(
+    () => (isGroupsOnly.value ? groupSummaryRows.value.length > 0 : records.value.length > 0),
+)
 
 const hasColumnSearches = computed(
     () => visibleColumns.value.some((column) => column.individuallySearchable),

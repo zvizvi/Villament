@@ -32,8 +32,19 @@ final class TablePayload
         $records = $component->getTableRecords();
         $schema = $this->schemaSerializer->serialize($table);
 
+        // groupsOnly renders ONLY per-group summary rows — stock gates the
+        // whole record row on `! $isGroupsOnly` and, tellingly, skips
+        // `applyEagerLoading` for that reason. Serializing cells here would
+        // therefore run column closures stock never runs, and (with eager
+        // loading already skipped upstream) turn every relationship column
+        // into an N+1. The records are still FETCHED — the group rows are
+        // derived from them — just never turned into cells.
+        $isGroupsOnly = $table->isGroupsOnly() && $table->getGrouping() !== null;
+
         return [
-            'records' => $this->recordSerializer->serialize($component, $resourceClass, $records),
+            'records' => $isGroupsOnly
+                ? []
+                : $this->recordSerializer->serialize($component, $resourceClass, $records),
             'meta' => $this->recordSerializer->meta($records),
             'indicators' => $this->indicatorSerializer->serialize($table),
             'summaries' => $this->summarySerializer->serialize($component),
