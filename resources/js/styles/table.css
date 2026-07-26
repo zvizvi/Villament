@@ -38,7 +38,25 @@
     inset-inline-end: auto;
 }
 
-
+/*
+ * The adopted filter slots must be layout-transparent.
+ *
+ * Stock renders every filters container as a DIRECT child of its layout
+ * parent; here two structural boxes sit in between — the Vue-rendered outlet
+ * and the Blade-rendered teleport slot (see partials/filters.blade.php). Both
+ * are pure plumbing, so `display: contents` removes their boxes and restores
+ * stock's parent/child relationship for layout purposes.
+ *
+ * This is not cosmetic for the Before/AfterContent layouts: `.fi-ta-ctn` is a
+ * flex container and `.fi-ta-filters-{before,after}-content-ctn` is `lg:static`
+ * — a flex item that stretches to the table's full height. Wrapped, the outlet
+ * became the flex item and the container fell back to content height, leaving
+ * the filter sidebar short of the table's bottom edge.
+ */
+.villament-table [data-villament-filters-outlet],
+.villament-table [data-villament-filters-slot] {
+    display: contents;
+}
 
 /*
  * FLIP move animation for column-manager drag reordering. Stock uses

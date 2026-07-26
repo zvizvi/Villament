@@ -110,6 +110,14 @@ Owner decision: the ENTIRE filter panel is Filament's original Livewire UI, not 
 - The schema ships only `hasFilters: bool` (show the trigger or not) — filter definitions never leave the server.
 - Trade-off accepted: applying a filter is one Livewire commit (small form) + one Vue refetch. High-frequency interactions (search/sort/pagination) stay Vue/AJAX. Panel positioning uses the existing CSS anchor (no floating-ui); the trigger button is the one filter element Vue-rendered (pixel-identical) to avoid teleporting a native dropdown into the wire:ignore toolbar.
 
+## 2026-07-26 — Adopted filter slots are `display: contents`
+
+The filters UI reaches its position through two structural boxes stock does not have: the Vue-rendered outlet (`[data-villament-filters-outlet]`) and the Blade-rendered teleport slot (`[data-villament-filters-slot]`, moved into the outlet on mount). Both are pure plumbing, but a box is a box — and Filament's layout depends on the containers being DIRECT children.
+
+Concretely, `.fi-ta-ctn` is `display: flex`, and `.fi-ta-filters-{before,after}-content-ctn` is `lg:static` — i.e. at `lg` it is a flex item stretched to the table's full height (below `lg` it is `absolute`, which resolves against `.fi-ta-ctn` either way, so only the `lg` path broke). Wrapped, the OUTLET became the flex item and the filters container fell back to content height, ending short of the table's bottom edge.
+
+Fix: `display: contents` on both wrappers, in `resources/js/styles/table.css`. Applied to every slot, not just before/after — it makes the toolbar trigger a direct child of the toolbar's end group (picking up its `gap-x-4` exactly like stock) and the above/below containers direct children of their regions. The wrappers keep their identity for `querySelector`-based adoption; they simply stop generating boxes.
+
 ## 2026-07-17 — Data-channel evaluation: `#[Json]` vs the GET endpoint (Stage 1 of the Livewire-4 pivot exploration)
 
 Implemented `#[Json] villamentData(string $query)` on `HasVillamentTable` — the island's query string parsed with `parse_str()` into the SAME `RequestStateValidator`, state applied to the LIVE page component (no harness), response assembled by the shared `Support\TablePayload` (also used by the controller — the channels cannot drift, parity-tested). The JS side gained a `transport` option in `useTableData` (with a structural-payload guard + fetch fallback) and `bridge.callTableData()`.
