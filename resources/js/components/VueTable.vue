@@ -176,11 +176,19 @@ const visibleHeaderActions = computed(
 const headerConfig = computed(() => schema.header ?? {})
 
 /**
- * Stock's own condition for the `fi-ta-header` block: a heading, a
- * description, or at least one visible header action.
+ * `Table::header(view(...))` — a fully custom block, rendered by Filament and
+ * teleported in from the Blade partial (the same treatment as the filters and
+ * the column manager). Vue renders only the slot.
+ */
+const hasCustomHeader = computed(() => Boolean(headerConfig.value.hasCustomView))
+
+/**
+ * Stock's own condition for the header region: a custom header view, a
+ * heading, a description, or at least one header action.
  */
 const hasHeaderBlock = computed(
-    () => Boolean(headerConfig.value.heading)
+    () => hasCustomHeader.value
+        || Boolean(headerConfig.value.heading)
         || Boolean(headerConfig.value.description)
         || headerActionsStructure.value.length > 0,
 )
@@ -317,8 +325,9 @@ function adoptNativeSlots() {
         return
     }
 
-    // Two families now: the filters UI and the column manager, both native.
-    for (const family of ['filters', 'columns']) {
+    // Three families now: the filters UI, the column manager and a custom
+    // `header()` view — all Filament-rendered, all one-shot.
+    for (const family of ['filters', 'columns', 'header']) {
         for (const slot of wrapper.querySelectorAll(`[data-villament-slots] > [data-villament-${family}-slot]`)) {
             const outlet = props.rootElement.querySelector(
                 `[data-villament-${family}-outlet="${slot.getAttribute(`data-villament-${family}-slot`)}"]`,
@@ -1016,12 +1025,22 @@ function recordCellClasses(column, cellValue = null) {
                     class="fi-ta-header-ctn"
                 >
                     <!--
+                        `Table::header(view(...))` REPLACES the whole block in
+                        stock (`@if ($header) … @elseif ($heading || …)`), so
+                        the island renders only the teleport slot here.
+                    -->
+                    <div
+                        v-if="hasCustomHeader"
+                        data-villament-header-outlet="header"
+                    />
+
+                    <!--
                         The table's own header block: `heading()`,
                         `description()` and `headerActions()`. Separate from
                         the toolbar below, exactly as in stock.
                     -->
                     <div
-                        v-if="hasHeaderBlock"
+                        v-else-if="hasHeaderBlock"
                         class="fi-ta-header"
                         :class="{
                             'fi-ta-header-adaptive-actions-position':

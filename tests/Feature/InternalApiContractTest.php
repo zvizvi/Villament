@@ -176,6 +176,8 @@ $methodContract = [
     [Table::class, 'getToolbarActions'],
     [Table::class, 'getHeaderActions'],
     [Table::class, 'getHeaderActionsPosition'],
+    // `header()` — the custom view, rendered by Filament and teleported in.
+    [Table::class, 'getHeader'],
     [Table::class, 'getHeading'],
     [Table::class, 'getDescription'],
     // Record-actions placement (`recordActions(position:)` + its options).

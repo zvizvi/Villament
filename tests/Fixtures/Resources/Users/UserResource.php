@@ -29,6 +29,8 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
+use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Zvizvi\Villament\Tests\Fixtures\Models\User;
@@ -65,6 +67,14 @@ class UserResource extends Resource
     public static ?string $heading = null;
 
     public static ?string $description = null;
+
+    /**
+     * Test seam: `header()` — the custom view that REPLACES the whole header
+     * block. Filament evaluates the closure itself.
+     *
+     * @var ?Closure(): (View|Htmlable|null)
+     */
+    public static ?Closure $header = null;
 
     /**
      * Test seam: `headerActions()`. A closure so a test can mix plain and bulk
@@ -292,6 +302,7 @@ class UserResource extends Resource
                         ? 'Created from '.$data['created_from']
                         : null),
             ])
+            ->header(static::$header)
             ->heading(static::$heading)
             ->description(static::$description)
             ->headerActions(static::$headerActions === null ? [] : (static::$headerActions)())

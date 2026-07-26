@@ -98,20 +98,3 @@ deliberately left out:
 pure CSS (see `table.css`), which is a separate decision from the trigger
 markup.
 
----
-
-## `Table::header()` — the custom-view escape hatch
-
-`heading()`, `description()` and `headerActions()` all render in the island now,
-but `->header(view(...))` — which replaces that whole block with a developer's
-own Blade view — does not. It is arbitrary markup that may carry its own
-Livewire or Alpine bindings, so serializing its HTML into Vue would render it
-inert.
-
-**Done means** it goes NATIVE, the way the filters and the column manager did:
-Blade renders it into an `x-teleport` template with a hidden `wire:ignore`
-slot holder, and Vue adopts the slot into a `data-villament-header-outlet` at
-the top of `.fi-ta-header-ctn`. The plumbing is already proven twice over —
-`resources/views/partials/filters.blade.php` is the template to copy, and
-`adoptNativeSlots()` in `VueTable.vue` only needs a third family name. This is
-a one-shot region, so it costs nothing per row.

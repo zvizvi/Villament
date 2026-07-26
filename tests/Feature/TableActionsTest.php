@@ -27,6 +27,7 @@ beforeEach(function (): void {
 });
 
 afterEach(function (): void {
+    UserResource::$header = null;
     UserResource::$heading = null;
     UserResource::$description = null;
     UserResource::$headerActions = null;
@@ -115,6 +116,35 @@ describe('header actions', function (): void {
             // One non-bulk child is enough to keep the group always visible.
             ->and($header[1]['bulk'])->toBeFalse()
             ->and(array_column($header[1]['actions'], 'name'))->toBe(['plainOne', 'bulkTwo']);
+    });
+
+    it('teleports a custom header() view instead of serializing it', function (): void {
+        UserResource::$header = fn () => view('fixtures.table-header');
+        UserResource::$heading = 'Ignored while a custom header exists';
+
+        $html = livewire(VueListUsers::class)->html();
+
+        // The view is rendered by FILAMENT, into an Alpine teleport template
+        // aimed at a physical slot — its Alpine/Livewire bindings survive.
+        expect($html)->toContain('data-villament-header-slot="header"')
+            ->toContain('x-teleport="[data-villament-header-slot=\'header\']')
+            ->toContain('fi-fixture-table-header')
+            ->toContain('x-data="{ open: false }"')
+            ->toContain('wire:click="$refresh"');
+
+        // The island is told to open the slot; the heading still travels, but
+        // the client renders only the slot (stock's own `@if ($header)` branch).
+        preg_match('/<script type="application\/json" data-villament-config>(.*?)<\/script>/s', $html, $matches);
+        $schema = json_decode($matches[1], true, flags: JSON_THROW_ON_ERROR)['schema'];
+
+        expect($schema['header']['hasCustomView'])->toBeTrue();
+    });
+
+    it('reports no custom header view by default', function (): void {
+        $html = livewire(VueListUsers::class)->html();
+
+        expect(tableActionsConfig()['schema']['header']['hasCustomView'])->toBeFalse()
+            ->and($html)->not->toContain('data-villament-header-slot');
     });
 
     it('drops invisible header actions before they reach the client', function (): void {

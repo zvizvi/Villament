@@ -45,4 +45,8 @@
     @if ($withNativeColumnManager)
         @include('villament::partials.column-manager')
     @endif
+
+    @if ($withNativeHeader)
+        @include('villament::partials.header')
+    @endif
 </div>

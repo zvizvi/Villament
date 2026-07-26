@@ -56,6 +56,8 @@
 .villament-table [data-villament-filters-outlet],
 .villament-table [data-villament-filters-slot],
 .villament-table [data-villament-columns-outlet],
-.villament-table [data-villament-columns-slot] {
+.villament-table [data-villament-columns-slot],
+.villament-table [data-villament-header-outlet],
+.villament-table [data-villament-header-slot] {
     display: contents;
 }

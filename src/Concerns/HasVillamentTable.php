@@ -36,6 +36,7 @@ trait HasVillamentTable
                     $config,
                     withNativeFilters: (bool) ($config['schema']['hasFilters'] ?? false),
                     withNativeColumnManager: (bool) ($config['schema']['hasColumnManager'] ?? false),
+                    withNativeHeader: (bool) ($config['schema']['header']['hasCustomView'] ?? false),
                 ),
                 RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_AFTER),
             ]);

@@ -236,6 +236,48 @@ describe('VueTable actions & selection', () => {
             expect(labels()).toEqual(['New user', 'Archive'])
         })
 
+        it('renders only the teleport slot for a custom header() view', () => {
+            const wrapper = mountTable({
+                header: { heading: 'Ignored', description: 'Ignored', actionsPosition: 'Adaptive', hasCustomView: true },
+            })
+
+            // Stock's own `@if ($header) … @elseif ($heading || …)`: the custom
+            // view REPLACES the block, heading and all.
+            expect(wrapper.find('[data-villament-header-outlet="header"]').exists()).toBe(true)
+            expect(wrapper.find('.fi-ta-header').exists()).toBe(false)
+            expect(wrapper.get('.fi-ta-header-ctn').element.firstElementChild
+                .getAttribute('data-villament-header-outlet')).toBe('header')
+        })
+
+        it('adopts the server-rendered header slot into the outlet', () => {
+            const config = makeConfig({
+                header: { heading: null, description: null, actionsPosition: 'Adaptive', hasCustomView: true },
+            })
+
+            // The Blade partial's hidden holder, as it exists on a real page.
+            const host = document.createElement('div')
+            host.className = 'villament'
+            host.innerHTML = `
+                <div data-villament></div>
+                <div data-villament-slots style="display: none">
+                    <div data-villament-header-slot="header" data-villament-owner="${LIVEWIRE_ID}">
+                        <p class="fi-fixture-table-header">Custom</p>
+                    </div>
+                </div>
+            `
+            document.body.appendChild(host)
+
+            wrapper = mount(VueTable, {
+                props: { config, rootElement: host.querySelector('[data-villament]') },
+                attachTo: host.querySelector('[data-villament]'),
+            })
+
+            const outlet = wrapper.get('[data-villament-header-outlet="header"]')
+            expect(outlet.element.querySelector('.fi-fixture-table-header').textContent.trim()).toBe('Custom')
+
+            host.remove()
+        })
+
         it('mounts a header action through the table context', async () => {
             const config = makeConfig()
             config.schema.actions.header = [{ type: 'action', bulk: false, ...trigger('create', 'New user') }]

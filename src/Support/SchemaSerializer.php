@@ -141,11 +141,14 @@ final class SchemaSerializer
      * `headerActions()` position. The actions themselves live in
      * `actions.header`; this is the chrome around them.
      *
-     * `header()` (a fully custom Blade view replacing the whole block) is NOT
-     * carried: it is arbitrary developer markup, potentially with its own
-     * Livewire/Alpine bindings, which the island cannot render faithfully.
+     * `header()` — a fully custom Blade view REPLACING the whole block — is
+     * arbitrary developer markup that may carry its own Livewire/Alpine
+     * bindings, so it is not serialized: Filament renders it and it is
+     * teleported into the island, exactly as the filters and the column
+     * manager are. The island only needs to know whether to open that slot,
+     * and (like stock) to render nothing else in the block when it does.
      *
-     * @return array{heading: ?string, description: ?string, actionsPosition: string}
+     * @return array{heading: ?string, description: ?string, actionsPosition: string, hasCustomView: bool}
      */
     private function header(Table $table): array
     {
@@ -155,6 +158,7 @@ final class SchemaSerializer
             // Adaptive (the default) puts the actions beside the heading on
             // desktop and below it on mobile; Bottom always puts them below.
             'actionsPosition' => $table->getHeaderActionsPosition()->name,
+            'hasCustomView' => $table->getHeader() !== null,
         ];
     }
 
