@@ -295,6 +295,10 @@ Two things differ from the other three native regions. The partial renders **unc
 
 Fixed on the way through: `emptyStateHeading()` was being swallowed. `SchemaSerializer::strings()` called `__('filament-tables::table.empty.heading', …)` directly instead of the getter, which falls back to that same translation itself — the identical bug `searchPlaceholder()` had. Going native removes the serialization entirely, so it cannot recur. `schema.icons.empty` and `strings.emptyHeading` are gone with it.
 
+## 2026-07-26 — `recordClasses()` resolves server-side
+
+Stock hands the raw `getRecordClasses($record)` result straight to `@class`, which accepts three forms: a string, a list, or Laravel's conditional `['class' => bool]` map. That resolution has to happen somewhere, and doing it in `RecordSerializer` means the payload is always a plain `string[]` — no second copy of `Arr::toCssClasses` in JS, and no per-form branching in the template. Follows the `cellClasses` precedent exactly: the key is omitted when the list is empty, so a table that never calls `recordClasses()` pays nothing per row.
+
 ## Verified Filament v5 internal API map (§4.1, §4.8)
 
 Verified against **filament/filament v5.6.8** + **livewire/livewire v4.3.3** by reading installed vendor source on 2026-07-15. Paths relative to `vendor/filament/`.

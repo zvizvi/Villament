@@ -6,36 +6,12 @@ move out of here into `DECISIONS.md` once implemented.
 
 ## Order
 
-1. [`recordClasses()`](#recordclasses--per-record-row-classes) ← in progress
-2. [Interactive columns](#interactive-columns--select-toggle-textinput-checkbox) — the big one; needs a decision before code
-3. [Loading indicators](#loading-indicators-on-the-islands-buttons)
-4. [Action trigger options](#action-trigger-options-the-island-cannot-express-yet)
-5. [Docs pages never audited](#docs-pages-never-audited)
+1. [Interactive columns](#interactive-columns--select-toggle-textinput-checkbox) ← next; the big one, needs a decision before code
+2. [Loading indicators](#loading-indicators-on-the-islands-buttons)
+3. [Action trigger options](#action-trigger-options-the-island-cannot-express-yet)
+4. [Docs pages never audited](#docs-pages-never-audited)
 
-Done and moved to `DECISIONS.md`: the empty state (2026-07-26 — now fully native).
-
----
-
-## `recordClasses()` — per-record row classes
-
-**Stock behavior.** `@class(['fi-ta-row', 'fi-clickable' => …, 'fi-striped' => …,
-...$getRecordClasses($record)])` (index.blade.php:1232 and :2224). The closure is
-evaluated per record with `record` injected, and the result is `Arr::wrap`ped —
-so it accepts a string, a list, or Laravel's conditional
-`['class' => bool]` map (`HasRecordClasses.php:26-42`).
-
-**Where we stand.** Nothing. `recordRowClasses()` in `VueTable.vue` builds the
-three stock classes and stops.
-
-**Scope.** `RecordSerializer` emits the resolved list per record — resolve the
-conditional map server-side, so the client receives a plain `string[]` and never
-re-implements `Arr::toCssClasses`. Follow the `cellClasses` precedent: emit the
-key only when non-empty, keeping the common row lean. `recordRowClasses()`
-appends it.
-
-**Done means.** String, list and conditional-map forms all work; a PHP test
-asserts the resolved list per record; a JS test asserts the classes land on the
-`<tr>` alongside `fi-striped`/`fi-selected`.
+Done and moved to `DECISIONS.md`: the empty state and `recordClasses()` (both 2026-07-26).
 
 ---
 

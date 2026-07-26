@@ -76,6 +76,15 @@ class UserResource extends Resource
      */
     public static ?Closure $header = null;
 
+    /**
+     * Test seam: `recordClasses()`. Accepts a string, a list, or Laravel's
+     * conditional `['class' => bool]` map — the fixture passes whatever the
+     * test sets straight through.
+     *
+     * @var array<string|int, bool|string>|string|Closure|null
+     */
+    public static array|string|Closure|null $recordClasses = null;
+
     /** Test seams: the empty state's own options. */
     public static ?string $emptyStateHeading = null;
 
@@ -322,6 +331,7 @@ class UserResource extends Resource
                         ? 'Created from '.$data['created_from']
                         : null),
             ])
+            ->recordClasses(static::$recordClasses)
             ->emptyState(static::$emptyState)
             ->emptyStateHeading(static::$emptyStateHeading)
             ->emptyStateDescription(static::$emptyStateDescription)

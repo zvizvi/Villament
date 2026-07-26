@@ -177,6 +177,15 @@ $methodContract = [
     [Table::class, 'getHeaderActions'],
     [Table::class, 'getHeaderActionsPosition'],
     // `header()` — the custom view, rendered by Filament and teleported in.
+    // The empty state is Filament-native (teleported); the partial calls all
+    // of these itself.
+    [Table::class, 'getEmptyState'],
+    [Table::class, 'getEmptyStateHeading'],
+    [Table::class, 'getEmptyStateDescription'],
+    [Table::class, 'getEmptyStateActions'],
+    [Table::class, 'getHeadingTag'],
+    // `recordClasses()`, resolved per record in RecordSerializer.
+    [Table::class, 'getRecordClasses'],
     [Table::class, 'getHeader'],
     [Table::class, 'getHeading'],
     [Table::class, 'getDescription'],

@@ -803,6 +803,9 @@ function recordRowClasses(record, rowIndex) {
             'fi-selected': isSelectionEnabled.value && selection.isRecordSelected(record.key),
             'fi-striped': Boolean(schema.striped) && rowIndex % 2 === 1,
         },
+        // `recordClasses()`, already resolved to a plain list server-side —
+        // string, list and conditional-map forms all arrive the same way.
+        ...(record.classes ?? []),
     ]
 }
 

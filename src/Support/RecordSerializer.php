@@ -20,6 +20,7 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Contracts\Pagination\Paginator;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Arr;
 
 /**
  * Turns the current page of records into pre-formatted cell payloads.
@@ -86,6 +87,7 @@ final class RecordSerializer
             $recordUrl = $table->getRecordUrl($record);
             $recordUrlNewTab = filled($recordUrl) && $table->shouldOpenRecordUrlInNewTab($record);
             $recordAction = $table->getRecordAction($record);
+            $recordClasses = $this->recordClasses($table, $record);
             $rowLoop = $this->rowLoop($index, $recordCount);
 
             $cells = [];
@@ -113,6 +115,9 @@ final class RecordSerializer
                 'urlWireNavigate' => filled($recordUrl) && ! $recordUrlNewTab && FilamentView::hasSpaMode($recordUrl),
                 'action' => $recordAction,
                 'actions' => $this->serializeRecordActions($table, $record),
+                // `recordClasses()`, resolved to a plain list. Omitted when
+                // empty, like `cellClasses`, so the common row stays lean.
+                ...($recordClasses === [] ? [] : ['classes' => $recordClasses]),
                 // Stock renders NO checkbox at all for an unselectable record
                 // (an empty selection cell), so the flag has to be per record.
                 ...($checksSelectable ? ['selectable' => $table->isRecordSelectable($record)] : []),
@@ -125,6 +130,29 @@ final class RecordSerializer
         }
 
         return $payload;
+    }
+
+    /**
+     * `recordClasses()` for this record, resolved to a plain list.
+     *
+     * Stock hands the raw result to `@class`, which also accepts Laravel's
+     * conditional `['class' => bool]` map — so the resolution has to happen
+     * somewhere. Doing it here keeps `Arr::toCssClasses` out of the client and
+     * means the payload is always a `string[]`, whatever form the developer
+     * used (string, list, or conditional map).
+     *
+     * @param  Model|array<string, mixed>  $record
+     * @return list<string>
+     */
+    private function recordClasses(Table $table, Model|array $record): array
+    {
+        $classes = $table->getRecordClasses($record);
+
+        if ($classes === []) {
+            return [];
+        }
+
+        return array_values(array_filter(explode(' ', Arr::toCssClasses($classes))));
     }
 
     /**

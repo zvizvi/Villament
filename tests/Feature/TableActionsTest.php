@@ -29,6 +29,7 @@ beforeEach(function (): void {
 });
 
 afterEach(function (): void {
+    UserResource::$recordClasses = null;
     UserResource::$emptyState = null;
     UserResource::$emptyStateHeading = null;
     UserResource::$emptyStateDescription = null;
@@ -181,6 +182,41 @@ describe('header actions', function (): void {
 
         expect(array_column(tableActionsConfig()['schema']['actions']['header'], 'name'))
             ->toBe(['visibleOne']);
+    });
+});
+
+describe('record classes', function (): void {
+    it('omits the key entirely when the table sets none', function (): void {
+        User::factory()->create(['name' => 'Plain Row']);
+
+        expect(tableActionsRecord('Plain Row'))->not->toHaveKey('classes');
+    });
+
+    it('resolves a string, a list and a conditional map to the same shape', function (): void {
+        User::factory()->create(['name' => 'Classy Row', 'status' => 'active']);
+
+        UserResource::$recordClasses = 'ring-1 ring-primary';
+        expect(tableActionsRecord('Classy Row')['classes'])->toBe(['ring-1', 'ring-primary']);
+
+        UserResource::$recordClasses = ['ring-1', 'ring-primary'];
+        expect(tableActionsRecord('Classy Row')['classes'])->toBe(['ring-1', 'ring-primary']);
+
+        // Laravel's conditional form — resolved here, so the client never has
+        // to re-implement `Arr::toCssClasses`.
+        UserResource::$recordClasses = ['ring-1' => true, 'opacity-50' => false];
+        expect(tableActionsRecord('Classy Row')['classes'])->toBe(['ring-1']);
+    });
+
+    it('evaluates the closure per record with the record injected', function (): void {
+        UserResource::$recordClasses = fn (User $record): array => [
+            'fi-highlight' => $record->status === 'active',
+        ];
+
+        User::factory()->create(['name' => 'Active Row', 'status' => 'active']);
+        User::factory()->create(['name' => 'Pending Row', 'status' => 'pending']);
+
+        expect(tableActionsRecord('Active Row')['classes'])->toBe(['fi-highlight'])
+            ->and(tableActionsRecord('Pending Row'))->not->toHaveKey('classes');
     });
 });
 

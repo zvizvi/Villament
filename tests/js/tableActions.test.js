@@ -372,6 +372,24 @@ describe('VueTable actions & selection', () => {
         })
     })
 
+    describe('record classes', () => {
+        it('appends recordClasses() to the row, keeping the stock ones', () => {
+            const wrapper = mountTable({ striped: true }, {
+                records: [
+                    record('1', { classes: ['fi-highlight', 'ring-1'] }),
+                    record('2'),
+                ],
+            })
+
+            const rows = wrapper.findAll('tbody tr.fi-ta-row')
+
+            expect(rows[0].classes()).toEqual(expect.arrayContaining(['fi-ta-row', 'fi-highlight', 'ring-1']))
+            // The second row keeps only the stock set — and its stripe.
+            expect(rows[1].classes()).toContain('fi-striped')
+            expect(rows[1].classes()).not.toContain('fi-highlight')
+        })
+    })
+
     describe('selection options', () => {
         it('follows the table\'s own selection flag, not the bulk-action count', () => {
             const config = makeConfig()
