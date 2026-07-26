@@ -315,6 +315,16 @@ Result on the benchmark workload (2k rows, page 2 @ 50): endpoint payload **131.
 
 Two things this deliberately does not do. It does not touch **CPU**: `generate_icon_html()` still runs once per action per record and returns the same string every time — memoizing on icon identity + size is a separate, real win. And it does not help **cells**, whose growth was the larger jump (+37% vs +9%): a delta pass finds nothing there, because an icon column's SVG genuinely varies by value. The primitive that fits cells is a string intern table (send each distinct `iconHtml` once, reference it by key), which would compose with this rather than replace it. Both are filed in `BACKLOG.md`.
 
+## 2026-07-26 — The harness replays Livewire's whole boot lifecycle, not just Filament's table hook
+
+`HeadlessTableHarness::boot()` called `bootedInteractsWithTable()` directly. That builds `$this->table`, so it looked complete — every villament test passed, and the rendered page and the endpoint agreed on every table villament itself declares. It only breaks for a table that is not fully declared by `table()`.
+
+`leek/filament-header-filters` is the case that surfaced it: a `headerFilter()` on a column stores the filter in a registry and the package's `bootedHasHeaderFilters()` hook `pushFilters()`es it onto the table. The rendered page fires that hook (Livewire calls every `booted<Trait>()`), the endpoint did not — so `RequestStateValidator` rejected filter state the very same page had just produced, with `The filter [x] does not exist.` 422. Any package that touches the table from a lifecycle hook has the same shape, and the failure is always this remote from its cause.
+
+So the harness now mirrors `SupportLifecycleHooks` exactly: `boot` → `initialize` → `booted`, component method first then every trait hook in `class_uses_recursive()` order, through `Livewire\wrap()` for the same dependency injection. That order is the contract a trait author writes against — `HasHeaderFilters` can only call `getTable()` because `InteractsWithTable` (from a parent class, hence earlier in the list) already ran.
+
+`mount` stays deliberately unreplayed. That is not an oversight to fix later: skipping it is precisely what keeps the session and query-string hydration inside `mountInteractsWithTable()` off, which is what makes the endpoint stateless. Livewire itself runs boot/initialize/booted on every hydrate with no mount, so nothing in a `booted` hook may assume mount ran.
+
 ## Verified Filament v5 internal API map (§4.1, §4.8)
 
 Verified against **filament/filament v5.6.8** + **livewire/livewire v4.3.3** by reading installed vendor source on 2026-07-15. Paths relative to `vendor/filament/`.

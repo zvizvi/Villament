@@ -15,6 +15,8 @@ use Illuminate\Support\Collection;
 use InvalidArgumentException;
 use Livewire\LivewireManager;
 
+use function Livewire\wrap;
+
 /**
  * Drives the resource's real List page component headlessly (never rendered):
  * instantiates it, injects table state, fires Filament's own boot hook, and
@@ -49,16 +51,54 @@ final class HeadlessTableHarness
     }
 
     /**
-     * Fires `bootedInteractsWithTable()` — the same Livewire `booted` hook the
-     * real page relies on to build `$this->table`. The session/query-string
-     * hydration inside it is skipped because `mountInteractsWithTable()` never
-     * ran, which is exactly what a stateless endpoint needs.
+     * Replays Livewire's own boot lifecycle — `boot` / `initialize` / `booted`,
+     * component method first then every trait hook, in `class_uses_recursive`
+     * order, exactly as `SupportLifecycleHooks` does on mount and hydrate. That
+     * is what builds `$this->table` (`bootedInteractsWithTable()`), and it is
+     * also the only point at which third-party traits mixed into the page get
+     * to touch the table — a package that pushes extra filters from its own
+     * `booted<Trait>()` hook would otherwise be invisible here, and the request
+     * validator would reject filter state the rendered page happily produced.
+     *
+     * `mount` is deliberately NOT replayed: skipping it is what keeps the
+     * session/query-string hydration inside `mountInteractsWithTable()` off,
+     * which is exactly what a stateless endpoint needs.
      */
     public function boot(): self
     {
-        $this->component->bootedInteractsWithTable();
+        $this->callHook('boot');
+        $this->callTraitHooks('boot');
+
+        $this->callTraitHooks('initialize');
+
+        $this->callHook('booted');
+        $this->callTraitHooks('booted');
 
         return $this;
+    }
+
+    private function callHook(string $name): void
+    {
+        if (method_exists($this->component, $name)) {
+            wrap($this->component)->{$name}();
+        }
+    }
+
+    /**
+     * Livewire resolves trait hooks by suffixing the method name with the
+     * trait's basename, so the iteration order of `class_uses_recursive()` is
+     * the contract a trait author writes against (a trait applied after
+     * `InteractsWithTable` may rely on `$this->table` already existing).
+     */
+    private function callTraitHooks(string $name): void
+    {
+        foreach (class_uses_recursive($this->component) as $trait) {
+            $method = $name.class_basename($trait);
+
+            if (method_exists($this->component, $method)) {
+                wrap($this->component)->{$method}();
+            }
+        }
     }
 
     public function applyState(TableState $state): self

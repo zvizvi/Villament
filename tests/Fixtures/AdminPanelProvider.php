@@ -12,6 +12,7 @@ use Filament\PanelProvider;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 use Zvizvi\Villament\Tests\Fixtures\Resources\CursorUsers\CursorUserResource;
+use Zvizvi\Villament\Tests\Fixtures\Resources\HookedUsers\HookedUserResource;
 use Zvizvi\Villament\Tests\Fixtures\Resources\Users\UserResource;
 use Zvizvi\Villament\VillamentPlugin;
 
@@ -27,6 +28,7 @@ class AdminPanelProvider extends PanelProvider
             ->resources([
                 UserResource::class,
                 CursorUserResource::class,
+                HookedUserResource::class,
             ])
             ->middleware([
                 StartSession::class,
