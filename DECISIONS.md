@@ -281,6 +281,20 @@ The teleported content is wrapped in one `display: contents` div, which is not c
 
 The count behind "Select all N" was `meta.total`, which is wrong twice over: `checkIfRecordIsSelectableUsing()` narrows it, and under simple/cursor pagination it is `null`, so the button disappeared entirely. `meta.allSelectableCount` now carries stock's own `getAllSelectableTableRecordsCount()`. Two smaller fidelity items came along: the page/group checkboxes get their `indeterminate` state, and shift-click selects a range (stock's `handleCheckboxClick`, including its refusal to complete a range that would break the cap). The record checkbox moved from `@change` to `@click` — stock's own event, and the only one that carries `shiftKey`.
 
+## 2026-07-26 — The empty state goes native, all of it
+
+I started by serializing it — heading, description, and the actions through `ActionTriggerSerializer` — with a native teleport only for the `emptyState()` custom view. The user's question mid-implementation ("does it make sense for the empty state to be a portal to the original Livewire, since performance doesn't matter there?") was the better answer, for three reasons that only became clear once weighed against each other:
+
+1. **The per-row cost argument does not apply.** It is one region, rendered once per page. That is the same test the column manager passed.
+2. **`emptyStateActions()` are real actions.** Native gives them the complete surface — modals, loading indicators, `keyBindings()`, `labeledFrom()`, `postToUrl()` — instead of the subset the trigger serializer can express. Those last three are open BACKLOG items precisely because they are unreachable from serialized markup.
+3. **I was already guessing at markup.** Stock picks the heading tag from the table's own heading level (`$heading ? getHeadingTag(1) : getHeadingTag()`); my Vue version hard-coded `<h2>`.
+
+The argument I expected to weigh against it — freshness — turned out to be a wash. The island's schema is inlined once at first paint and never refetched (the data endpoint returns records/meta/indicators/summaries, not the schema), so serialized empty-state text would have been exactly as frozen as the teleported markup is. Both update on Livewire commits (filters, actions) and neither on island-only fetches.
+
+Two things differ from the other three native regions. The partial renders **unconditionally**, unlike stock's `@if ($hasEmptyState)`: emptiness is decided by the island's fetches long after Blade ran, so the markup has to exist for the island to reveal. And the outlet uses **`v-show`, not `v-if`** — slots are adopted once on mount, so an outlet that only appears when the table empties would never receive its slot.
+
+Fixed on the way through: `emptyStateHeading()` was being swallowed. `SchemaSerializer::strings()` called `__('filament-tables::table.empty.heading', …)` directly instead of the getter, which falls back to that same translation itself — the identical bug `searchPlaceholder()` had. Going native removes the serialization entirely, so it cannot recur. `schema.icons.empty` and `strings.emptyHeading` are gone with it.
+
 ## Verified Filament v5 internal API map (§4.1, §4.8)
 
 Verified against **filament/filament v5.6.8** + **livewire/livewire v4.3.3** by reading installed vendor source on 2026-07-15. Paths relative to `vendor/filament/`.

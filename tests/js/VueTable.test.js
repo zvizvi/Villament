@@ -500,8 +500,10 @@ describe('VueTable filters (native Livewire panel) + indicators', () => {
 
         wrapper = mount(VueTable, { props: { config }, attachTo: document.body })
 
-        // The empty state must NOT appear just because `records` is empty.
-        expect(wrapper.find('.fi-ta-empty-state').exists()).toBe(false)
+        // The empty state must NOT show just because `records` is empty. It is
+        // Filament-native now, so the island governs only its VISIBILITY —
+        // the outlet is always in the DOM (the slot is adopted once, on mount).
+        expect(wrapper.get('[data-villament-empty-state-outlet]').isVisible()).toBe(false)
         expect(wrapper.findAll('tbody tr.fi-ta-summary-row')).toHaveLength(1)
 
         wrapper.unmount()
@@ -512,7 +514,7 @@ describe('VueTable filters (native Livewire panel) + indicators', () => {
 
         wrapper = mount(VueTable, { props: { config: empty }, attachTo: document.body })
 
-        expect(wrapper.find('.fi-ta-empty-state').exists()).toBe(true)
+        expect(wrapper.get('[data-villament-empty-state-outlet]').isVisible()).toBe(true)
     })
 
     it('renders the pagination bar only when the records are actually paginated', () => {
@@ -662,7 +664,15 @@ describe('VueTable filters (native Livewire panel) + indicators', () => {
         expect(wrapper.find('.fi-ta-table-head-groups-row').exists()).toBe(false)
     })
 
-    it('uses the localized empty state heading', async () => {
+    it('reveals the native empty-state slot only when there are no records', async () => {
+        // The whole empty state (icon, heading, description, actions) is
+        // Filament-rendered and teleported in; the island owns visibility only.
+        const withRecords = mount(VueTable, { props: { config: makeConfig() }, attachTo: document.body })
+
+        expect(withRecords.get('[data-villament-empty-state-outlet="empty-state"]').isVisible()).toBe(false)
+
+        withRecords.unmount()
+
         const config = makeConfig({
             initialData: {
                 records: [],
@@ -673,7 +683,7 @@ describe('VueTable filters (native Livewire panel) + indicators', () => {
 
         const localWrapper = mount(VueTable, { props: { config }, attachTo: document.body })
 
-        expect(localWrapper.get('.fi-ta-empty-state-heading').text()).toBe('No users')
+        expect(localWrapper.get('[data-villament-empty-state-outlet="empty-state"]').isVisible()).toBe(true)
 
         localWrapper.unmount()
     })

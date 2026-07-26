@@ -325,9 +325,9 @@ function adoptNativeSlots() {
         return
     }
 
-    // Three families now: the filters UI, the column manager and a custom
-    // `header()` view — all Filament-rendered, all one-shot.
-    for (const family of ['filters', 'columns', 'header']) {
+    // Four families: the filters UI, the column manager, a custom `header()`
+    // view and the empty state — all Filament-rendered, all one-shot.
+    for (const family of ['filters', 'columns', 'header', 'empty-state']) {
         for (const slot of wrapper.querySelectorAll(`[data-villament-slots] > [data-villament-${family}-slot]`)) {
             const outlet = props.rootElement.querySelector(
                 `[data-villament-${family}-outlet="${slot.getAttribute(`data-villament-${family}-slot`)}"]`,
@@ -1589,23 +1589,18 @@ function recordCellClasses(column, cellValue = null) {
                         </table>
                     </div>
 
+                    <!--
+                        The empty state is Filament-native: icon, heading,
+                        description and `emptyStateActions()` (with their full
+                        action surface) are teleported in from the Blade
+                        partial. `v-show`, NOT `v-if` — the slot is adopted once
+                        on mount, so the outlet has to exist even while the
+                        table has records.
+                    -->
                     <div
-                        v-if="! hasRecords"
-                        class="fi-ta-empty-state"
-                    >
-                        <div class="fi-ta-empty-state-content">
-                            <div
-                                v-if="icons.empty"
-                                class="fi-ta-empty-state-icon-bg"
-                            >
-                                <TrustedIcon :html="icons.empty" />
-                            </div>
-
-                            <h4 class="fi-ta-empty-state-heading">
-                                {{ strings.emptyHeading }}
-                            </h4>
-                        </div>
-                    </div>
+                        v-show="! hasRecords"
+                        data-villament-empty-state-outlet="empty-state"
+                    />
 
                     <!--
                         `meta.paginated` mirrors stock's own `$hasPagination`:

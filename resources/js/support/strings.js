@@ -14,7 +14,6 @@ export const defaultStrings = Object.freeze({
     filtersIndicator: 'Active filters',
     filtersRemove: 'Remove filter',
     filtersRemoveAll: 'Remove all filters',
-    emptyHeading: 'No records found',
     paginationLabel: 'Pagination navigation',
     paginationOverview: '{1} Showing 1 result|[2,*] Showing :first to :last of :total results',
     perPageLabel: 'Per page',

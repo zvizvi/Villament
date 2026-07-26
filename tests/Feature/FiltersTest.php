@@ -56,7 +56,9 @@ describe('filter schema serialization', function (): void {
             ->and($icons['search'])->toContain('<svg')
             ->and($icons['previous'])->toContain('<svg')
             ->and($icons['next'])->toContain('<svg')
-            ->and($icons['empty'])->toContain('<svg')
+            // No `empty` icon: the whole empty state is Filament-native now,
+            // teleported in with its own icon.
+            ->and($icons)->not->toHaveKey('empty')
             // The indicator-chip delete icon is the xs micro variant, like
             // the stock badge delete button.
             ->and($icons['badgeDelete'])->toContain('fi-size-xs')->toContain('viewBox="0 0 16 16"');

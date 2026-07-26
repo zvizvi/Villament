@@ -29,6 +29,10 @@ beforeEach(function (): void {
 });
 
 afterEach(function (): void {
+    UserResource::$emptyState = null;
+    UserResource::$emptyStateHeading = null;
+    UserResource::$emptyStateDescription = null;
+    UserResource::$emptyStateActions = null;
     UserResource::$header = null;
     UserResource::$heading = null;
     UserResource::$description = null;
@@ -177,6 +181,61 @@ describe('header actions', function (): void {
 
         expect(array_column(tableActionsConfig()['schema']['actions']['header'], 'name'))
             ->toBe(['visibleOne']);
+    });
+});
+
+describe('empty state', function (): void {
+    it('renders the whole empty state natively, into a teleport slot', function (): void {
+        UserResource::$emptyStateHeading = 'Nobody yet';
+        UserResource::$emptyStateDescription = 'Invite someone to get started.';
+        UserResource::$emptyStateActions = fn (): array => [
+            CreateAction::make()->label('Invite a user'),
+        ];
+
+        $html = livewire(VueListUsers::class)->html();
+
+        expect($html)->toContain('data-villament-empty-state-slot="empty-state"')
+            // Stock's own markup, rendered by Filament — heading override
+            // included (it used to be read straight from the translation).
+            ->toContain('class="fi-ta-empty-state"')
+            ->toContain('Nobody yet')
+            ->toContain('<p class="fi-ta-empty-state-description">')
+            ->toContain('Invite someone to get started.')
+            ->toContain('fi-ta-actions fi-align-center fi-wrapped')
+            ->toContain('Invite a user');
+    });
+
+    it('renders the empty state even while the table HAS records', function (): void {
+        // Unlike stock's `@if ($hasEmptyState)`: emptiness is decided by the
+        // island's own fetches, long after Blade ran, so the markup has to
+        // already be there for the island to reveal.
+        User::factory()->count(3)->create();
+
+        expect(livewire(VueListUsers::class)->html())
+            ->toContain('data-villament-empty-state-slot="empty-state"')
+            ->toContain('class="fi-ta-empty-state"');
+    });
+
+    it('lets a custom emptyState() view replace the block, bindings intact', function (): void {
+        UserResource::$emptyState = fn () => view('fixtures.table-empty-state');
+        UserResource::$emptyStateHeading = 'Ignored while a custom view exists';
+
+        $html = livewire(VueListUsers::class)->html();
+
+        expect($html)->toContain('fi-fixture-empty-state')
+            ->toContain('x-data="{ shown: true }"')
+            ->toContain('wire:click="$refresh"')
+            // Stock's `@if ($emptyState = $getEmptyState())` branch — the
+            // default block is not rendered at all.
+            ->not->toContain('fi-ta-empty-state-heading');
+    });
+
+    it('ships no empty-state text or icon in the schema any more', function (): void {
+        $schema = tableActionsConfig()['schema'];
+
+        expect($schema)->not->toHaveKey('emptyState')
+            ->and($schema['icons'])->not->toHaveKey('empty')
+            ->and($schema['strings'])->not->toHaveKey('emptyHeading');
     });
 });
 

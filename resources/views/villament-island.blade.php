@@ -49,4 +49,11 @@
     @if ($withNativeHeader)
         @include('villament::partials.header')
     @endif
+
+    {{--
+        The empty state is ALWAYS rendered, unconditionally: whether the table
+        is empty is decided by the island's own fetches, long after Blade ran.
+        The island keeps the slot hidden until it has no records.
+    --}}
+    @include('villament::partials.empty-state')
 </div>

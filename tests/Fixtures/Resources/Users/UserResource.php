@@ -76,6 +76,26 @@ class UserResource extends Resource
      */
     public static ?Closure $header = null;
 
+    /** Test seams: the empty state's own options. */
+    public static ?string $emptyStateHeading = null;
+
+    public static ?string $emptyStateDescription = null;
+
+    /**
+     * Test seam: `emptyState()` — the custom view that REPLACES the whole
+     * empty-state block.
+     *
+     * @var ?Closure(): (View|Htmlable|null)
+     */
+    public static ?Closure $emptyState = null;
+
+    /**
+     * Test seam: `emptyStateActions()`.
+     *
+     * @var ?Closure(): array<mixed>
+     */
+    public static ?Closure $emptyStateActions = null;
+
     /**
      * Test seam: `headerActions()`. A closure so a test can mix plain and bulk
      * actions (both are legal there) without the fixture importing them.
@@ -302,6 +322,10 @@ class UserResource extends Resource
                         ? 'Created from '.$data['created_from']
                         : null),
             ])
+            ->emptyState(static::$emptyState)
+            ->emptyStateHeading(static::$emptyStateHeading)
+            ->emptyStateDescription(static::$emptyStateDescription)
+            ->emptyStateActions(static::$emptyStateActions === null ? [] : (static::$emptyStateActions)())
             ->header(static::$header)
             ->heading(static::$heading)
             ->description(static::$description)

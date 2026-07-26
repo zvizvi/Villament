@@ -1,8 +1,90 @@
 # Backlog
 
-Work that is understood and wanted but deliberately not scheduled yet. Each entry
-states what stock Filament does, what the island does today, and what "done" means.
-Entries move out of here into `DECISIONS.md` once implemented.
+Work that is understood and wanted but not finished yet. Each entry states what
+stock Filament does, what the island does today, and what "done" means. Entries
+move out of here into `DECISIONS.md` once implemented.
+
+## Order
+
+1. [`recordClasses()`](#recordclasses--per-record-row-classes) ← in progress
+2. [Interactive columns](#interactive-columns--select-toggle-textinput-checkbox) — the big one; needs a decision before code
+3. [Loading indicators](#loading-indicators-on-the-islands-buttons)
+4. [Action trigger options](#action-trigger-options-the-island-cannot-express-yet)
+5. [Docs pages never audited](#docs-pages-never-audited)
+
+Done and moved to `DECISIONS.md`: the empty state (2026-07-26 — now fully native).
+
+---
+
+## `recordClasses()` — per-record row classes
+
+**Stock behavior.** `@class(['fi-ta-row', 'fi-clickable' => …, 'fi-striped' => …,
+...$getRecordClasses($record)])` (index.blade.php:1232 and :2224). The closure is
+evaluated per record with `record` injected, and the result is `Arr::wrap`ped —
+so it accepts a string, a list, or Laravel's conditional
+`['class' => bool]` map (`HasRecordClasses.php:26-42`).
+
+**Where we stand.** Nothing. `recordRowClasses()` in `VueTable.vue` builds the
+three stock classes and stops.
+
+**Scope.** `RecordSerializer` emits the resolved list per record — resolve the
+conditional map server-side, so the client receives a plain `string[]` and never
+re-implements `Arr::toCssClasses`. Follow the `cellClasses` precedent: emit the
+key only when non-empty, keeping the common row lean. `recordRowClasses()`
+appends it.
+
+**Done means.** String, list and conditional-map forms all work; a PHP test
+asserts the resolved list per record; a JS test asserts the classes land on the
+`<tr>` alongside `fi-striped`/`fi-selected`.
+
+---
+
+## Interactive columns — Select, Toggle, TextInput, Checkbox
+
+**This one needs a decision before any code.**
+
+**Stock behavior.** `SelectColumn::toEmbeddedHtml()` (and its three siblings)
+emit an **`x-load`-gated Alpine component** —
+`x-load-src="…getAlpineComponentSrc('columns/select', 'filament/tables')"` plus
+`x-data="selectTableColumn({ … })"` — whose callbacks reach the server through
+`$wire.callTableColumnMethod(name, recordKey, method, args)` and write back with
+`$wire.updateTableColumnState(column, record, input)`
+(`tables/src/Concerns/HasColumns.php:43`).
+
+**Where we stand.** These columns have no dedicated serializer, so they fall to
+`HtmlColumnSerializer` → `$column->toHtml()`. The markup arrives looking correct
+and is **completely inert**: it sits inside the island's `wire:ignore` region,
+which Alpine never walks, so `x-load` never fires and `$wire` is never bound.
+No error, no warning — the cell just does nothing. This is the most dangerous
+gap left.
+
+**The options, and why this is a decision.**
+
+- **Per-row native teleport.** Rejected already for record actions and for the
+  same reason here: it is N teleports per page, re-created on every data fetch,
+  against a control the island re-renders constantly. This is the one the user
+  explicitly ruled out on performance grounds.
+- **Serialize the state, keep the control in Vue.** The island renders a plain
+  `<select>` / `<input>` / toggle with the stock `fi-*` classes, and on change
+  calls `updateTableColumnState()` through the bridge — which is already the
+  exact method stock's Alpine component calls. Cost is one payload field per
+  cell. The loss is the rich behaviors: searchable/async options
+  (`getOptionsSearchResultsForJs`), option-label loading, and the debounce +
+  optimistic-update dance in stock's `columns/text-input`.
+- **Hybrid.** Serialize the simple forms (native `<select>`, toggle, checkbox,
+  plain text input) and fall back to a per-row teleport only for the searchable
+  select. Most complexity, best fidelity.
+
+**Also note.** `updateTableColumnState()` runs validation and returns the new
+state; failures surface as Filament notifications. Whatever we pick has to keep
+that round trip, and refetch the row afterwards (the bridge's
+`onActionCompleted` path is the model).
+
+**Done means.** A decision recorded in `DECISIONS.md` first, then: the chosen
+columns are editable in the island, the write goes through Filament's own
+Livewire method, validation errors surface, and parity tests cover the state
+round trip. Until then, the README should say plainly that these four column
+types are read-only inside the island.
 
 ---
 
@@ -28,11 +110,11 @@ The delay comes from `config('filament.livewire_loading_delay')` — Livewire's
 `.delay` modifier, so a fast response never flashes a spinner.
 
 **Where we stand.** The island has exactly one loading affordance: `isLoading` from
-`useTableData`, which paints `fi-loading` on the table container
-(`resources/js/components/VueTable.vue:851`) and disables the bulk-action buttons
-(`resources/js/components/BulkActions.vue:127`). No spinner ever replaces an icon,
-and nothing else is disabled mid-flight. Our buttons are not Livewire-driven, so
-`wire:loading` cannot reach them at all — the state has to be threaded explicitly.
+`useTableData`, which paints `fi-loading` on the table container and disables the
+bulk-action buttons (`BulkActions.vue`, via the `disabled` override it puts on each
+trigger). No spinner ever replaces an icon, and nothing else is disabled mid-flight.
+Our buttons are not Livewire-driven, so `wire:loading` cannot reach them at all —
+the state has to be threaded explicitly.
 
 **Scope of the task.**
 
@@ -98,3 +180,25 @@ deliberately left out:
 pure CSS (see `table.css`), which is a separate decision from the trigger
 markup.
 
+---
+
+## Docs pages never audited
+
+Five of the nine Tables docs pages have been walked option by option (Columns
+overview, Filters, Actions, Summaries, Grouping). These have not:
+
+- **`01-overview.md`** — `recordClasses()` and the empty state have their own
+  entries above. Still unchecked: `poll()`, `deferLoading()`, Scout-backed
+  search, and `Table::configureUsing()` global settings.
+- **`05-layout.md`** — `stackedOnMobile()`, the `Split`/`Stack`/`Panel` layout
+  components, and `contentGrid()`. The island renders a `<table>` and nothing
+  else, deliberately; this is the reason `defaultSortOptionLabel()` was left
+  alone too. Not planned — but it is currently undocumented as a limitation,
+  and the README should say so.
+- **`09-custom-data.md`** — array-backed tables. The serializers accept
+  `Model|array` and the `can` map is empty for arrays, but nothing has been
+  tested end to end.
+- **`02-columns/02-*`…`09-*`** — the per-type column pages. Text, Icon and Image
+  have dedicated serializers; Color falls through to the html fallback (which
+  works); Select/Toggle/TextInput/Checkbox are the entry above; the custom-column
+  page (`10-custom-columns.md`) is untested.
