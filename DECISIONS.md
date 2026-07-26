@@ -114,7 +114,7 @@ Owner decision: the ENTIRE filter panel is Filament's original Livewire UI, not 
 
 Implemented `#[Json] villamentData(string $query)` on `HasVillamentTable` — the island's query string parsed with `parse_str()` into the SAME `RequestStateValidator`, state applied to the LIVE page component (no harness), response assembled by the shared `Support\TablePayload` (also used by the controller — the channels cannot drift, parity-tested). The JS side gained a `transport` option in `useTableData` (with a structural-payload guard + fetch fallback) and `bridge.callTableData()`.
 
-Benchmark (2k rows, page 2 @ 50/page, sorted, in-process medians over 9 runs — treat as relative):
+Benchmark on **filament/tables v5.6.8** (2k rows, page 2 @ 50/page, sorted, in-process medians over 9 runs — treat as relative; superseded by the 2026-07-26 re-measurement below, which also replaced this serial method with an interleaved one):
 
 | Channel | server time | payload |
 |---|---|---|
@@ -123,6 +123,45 @@ Benchmark (2k rows, page 2 @ 50/page, sorted, in-process medians over 9 runs —
 | `#[Json]` through the Livewire pipe | 70.8ms | 145KB |
 
 Verdict: `#[Json]` matches the endpoint's payload win (×6.6 vs stock) but its server time is ~stock-level — full Filament-page hydration through the Livewire pipe (snapshot decode/verify, boot, dehydrate) costs about what the skipped Blade render saves. The headless harness avoids all of it. **The GET endpoint stays the only channel.** Owner decision (same day): since a potential Stage-2 Alpine prototype would ALSO feed from the lean endpoint (the `$wire` channel's ~1.8x hot-path cost rules it out for any renderer), the `#[Json]` channel was REMOVED — `villamentData()`, `bridge.callTableData()`, the `transport` option and their tests. What remains from Stage 1: the shared `Support\TablePayload` (the controller uses it), the two-way benchmark test, and this measured conclusion — Villament's server speed comes from the headless harness bypassing the Livewire component lifecycle, NOT from Vue; any future renderer must keep feeding from the endpoint.
+
+## 2026-07-26 — Re-benchmarked on Filament 5.7: the gap narrows to ~2x, the payload win is untouched
+
+Filament 5.7 shipped table performance work, so the 5.6.8-era ratio above needed re-testing. Both versions were measured against the SAME working tree, on one machine, in **A-B-B-A block order** (5.7.3 → 5.6.8 ×4 → 5.7.3) so thermal drift or accumulating load would cancel rather than favour whichever version ran last. The opening and closing 5.7.3 blocks landed 3% apart (40.2ms vs 41.7ms), confirming no meaningful drift across the session.
+
+**Method changed too.** The original serial "median of 9, all of A then all of B" produced between-run swings of 42-95ms for the same channel — enough noise to make a version comparison meaningless. `DataChannelBenchmarkTest` now warms both paths up, measures A and B **alternately inside one loop** (25 iterations, leading channel swapped each iteration so neither inherits the other's warm caches), and reports p25/median/p75 plus the per-iteration ratio. The per-run ratio now reproduces within ~±0.05x. Row count is `VILLAMENT_BENCH_ROWS` (default 2000).
+
+2k rows, page 2 @ 50/page, sorted — medians across 4 runs per version:
+
+| | filament/tables **v5.6.8** | filament/tables **v5.7.3** |
+|---|---|---|
+| A stock (commit + Blade render) | ~65.8ms | **~41.0ms** |
+| B Villament GET endpoint | ~27.9ms | **~20.5ms** |
+| **time ratio A/B** | **2.38x** | **2.00x** |
+| payload | ~965KB vs 145KB | ~955KB vs 145KB |
+| **payload ratio** | **6.67x** | **6.60x** |
+
+Verdict: 5.7 made the stock table **1.60x** faster (65.8 → 41.0ms) — a real, substantial win. But the endpoint got **1.36x** faster too (27.9 → 20.5ms), because it runs through the same Filament internals (query pipeline, columns, formatting) and only bypasses the Livewire lifecycle and the Blade render — so part of 5.7's improvement flows into Villament as well. Net: **the server-time lead narrowed from 2.38x to 2.00x.**
+
+The **payload lead did not move: ~6.6x on both versions.** It is structural (lean JSON vs full component HTML), immune to server-side optimisation, and it is the half of the win that actually converts to wire time for the user — which this in-process benchmark does not measure at all.
+
+The 2026-07-17 conclusion stands, just less dramatically: Villament's server speed comes from the headless harness bypassing the Livewire component lifecycle, not from Vue. **Re-run this benchmark on every Filament minor** — the ratio tracks Filament's own table performance, so the landing-page claims have to be re-checked, not assumed.
+
+### The time ratio depends on table size — always quote the row count with it
+
+Swept on v5.7.3 (page 2 @ 50/page, sorted, same interleaved method):
+
+| rows | A stock | B endpoint | absolute gap | time ratio |
+|---|---|---|---|---|
+| 500 | 42.3ms | 20.7ms | 21.6ms | **2.06x** |
+| 2,000 | 41.0ms | 20.0ms | 21.0ms | **2.03x** |
+| 10,000 | 44.4ms | 24.6ms | 19.8ms | **1.82x** |
+| 25,000 | 47.0ms | 29.6ms | 17.4ms | **1.59x** |
+
+Both channels slow down together as the table grows (stock 41→47ms, endpoint 20→30ms) — they run the same query pipeline, so neither escapes the count/sort cost. The ratio compression is therefore mostly **arithmetic**: adding a similar absolute cost to numerator and denominator pushes any ratio toward 1, and the same +10ms is +24% on stock but +48% on the endpoint's smaller base. A "same cost added to both" model predicts 1.71x at 25k against 2.03x at 2k, which accounts for most of the observed fall to 1.59x. (The endpoint does grow somewhat faster in absolute terms — +9.6ms vs stock's +6.0ms between 2k and 25k — which the model does not explain; not investigated.)
+
+The stable quantity is the **absolute gap, ~17-22ms**, and that is the honest description of what Villament saves: the Livewire lifecycle plus the Blade render of one 50-row page. It is a function of PAGE size, not table size — which is why it stays flat while the ratio slides.
+
+Consequences: (1) never state a "Nx faster" claim without the row count — the landing page quotes the 10k figure (1.8x), the conservative end of the range; (2) the **payload** ratio is immune to all of this, holding 6.5-6.6x across every size, because it too depends on page size rather than table size.
 
 ## Verified Filament v5 internal API map (§4.1, §4.8)
 
