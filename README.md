@@ -53,44 +53,6 @@ Or apply the trait to a customized List page: `use Zvizvi\Villament\Concerns\Has
 
 After the initial paint (schema + first page inlined, no extra requests), sorting, searching and pagination hit a JSON endpoint that runs behind your panel's full middleware stack, checks `canViewAny()`, and whitelists every request parameter against the table schema.
 
-### Header filters (and anything else in the header filter row)
-
-The row directly under the header — the one stock fills with the individual column search fields — is also where header-filter packages put their inputs. The island rebuilds that row, so those inputs have nowhere to land. Name the columns that need a slot and villament renders a teleport target for each:
-
-```php
-class ListClaims extends VillamentListRecords
-{
-    /** Column name => extra classes for that column's cell in the row. */
-    public function getVillamentColumnFilterSlots(): array
-    {
-        return collect($this->getTable()->getHeaderFilters())
-            ->mapWithKeys(fn ($filter) => [$filter->getColumnName() => [
-                'fi-ta-header-filter-cell',
-                'fi-ta-header-filter-cell-' . str($filter->getColumnName())->camel()->kebab(),
-            ]])
-            ->all();
-    }
-}
-```
-
-Then teleport whatever you want into each, from anywhere server-rendered and Livewire-morphable — the `RESOURCE_PAGES_LIST_RECORDS_TABLE_BEFORE` render hook is the natural spot:
-
-```blade
-<template x-teleport="[data-villament-column-filter-slot='flight_date'][data-villament-owner='{{ $this->getId() }}']">
-    <div class="fi-ta-header-filter">
-        {{ $this->getTableHeaderFiltersForm()->getComponent('scheduled_departure')?->getChildSchema() }}
-    </div>
-</template>
-```
-
-The classes are yours to choose because the styling a header-filter package ships keys off its own cell class, and only you know which one it is. The row appears on its own as soon as one column is slotted, even with no individual search anywhere. A column that *is* individually searchable keeps its search field and is skipped, exactly as stock does.
-
-Slots exist for named columns whether or not the column is currently visible: the cell adopts its slot when it renders and hands it back when it stops, so toggling a column never destroys what you teleported (or its Alpine state).
-
-### Plugins that decorate the header itself
-
-A plugin that works by replacing the column's label with an `HtmlString` — a filter trigger, a badge, an Alpine popup — needs nothing from you. Villament renders an `Htmlable` label as markup exactly as stock does, keeps the plain text for the accessible name, and passes `extraHeaderAttributes()` through to the `<th>`. Alpine initializes what it finds there on its own.
-
 ## Development
 
 ```bash
