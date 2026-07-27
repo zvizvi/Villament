@@ -4,6 +4,7 @@ import TextCell from '../../resources/js/components/cells/TextCell.vue'
 import BadgeCell from '../../resources/js/components/cells/BadgeCell.vue'
 import IconCell from '../../resources/js/components/cells/IconCell.vue'
 import ImageCell from '../../resources/js/components/cells/ImageCell.vue'
+import HtmlCell from '../../resources/js/components/cells/HtmlCell.vue'
 import TableHeader from '../../resources/js/components/TableHeader.vue'
 import TableSearch from '../../resources/js/components/TableSearch.vue'
 
@@ -129,6 +130,20 @@ describe('cell extra attributes', () => {
 
         expect(mountCell(ImageCell, { type: 'image', src: 'x.png', extraAttributes: { 'data-d': '4' } })
             .get('.fi-ta-image').attributes('data-d')).toBe('4')
+
+        expect(mountCell(HtmlCell, { type: 'html', html: '<b>x</b>', extraAttributes: { 'data-e': '5' } })
+            .get('.fi-ta-text').attributes('data-e')).toBe('5')
+    })
+
+    it('merges an extraAttributes class into an html cell without losing its own', () => {
+        const cell = mountCell(HtmlCell, {
+            type: 'html',
+            html: '<b>x</b>',
+            inline: true,
+            extraAttributes: { class: 'px-4' },
+        })
+
+        expect(cell.get('div').classes()).toEqual(expect.arrayContaining(['fi-ta-text', 'fi-inline', 'px-4']))
     })
 
     it('merges an extraAttributes class with the cell\'s own classes', () => {

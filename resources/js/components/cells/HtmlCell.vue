@@ -1,7 +1,7 @@
 <script setup>
 defineProps({
     /**
-     * HTML cell payload: `{ type, html }`.
+     * HTML cell payload: `{ type, html, inline, extraAttributes }`.
      * `html` is fully server-rendered, sanitized upstream — this is the only
      * cell type whose entire body renders via `v-html` (documented contract).
      */
@@ -22,6 +22,7 @@ defineProps({
     <div
         class="fi-ta-text"
         :class="cell.inline ? 'fi-inline' : null"
+        v-bind="cell.extraAttributes ?? {}"
         v-html="cell.html"
     />
 </template>
