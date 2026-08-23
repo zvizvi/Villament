@@ -1,6 +1,6 @@
 # Villament
 
-Replace the built-in Livewire-rendered table on a Filament v5 Resource List page with a **Vue 3 island**, while keeping **100% of the data pipeline in Filament's PHP layer**.
+Replace the built-in Livewire-rendered table on a Filament v5 Resource List page with a **Vue 3 island**, while keeping **100% of the data pipeline in Filament's PHP layer**. Plus [`VillamentRepeater`](#forms-villamentrepeater), which takes a form repeater's item operations off Livewire without rendering a single field on the client.
 
 After the initial page load, all table interactions — sorting, pagination, global & per-column search, filtering — are performed via lightweight AJAX (JSON) requests instead of Livewire roundtrips. The Vue table is fed from the Resource's existing `table()` schema: no redefining columns, filters, scoping, or authorization.
 
@@ -52,6 +52,43 @@ class ListUsers extends VillamentListRecords // ← was ListRecords
 Or apply the trait to a customized List page: `use Zvizvi\Villament\Concerns\HasVillamentTable;`.
 
 After the initial paint (schema + first page inlined, no extra requests), sorting, searching and pagination hit a JSON endpoint that runs behind your panel's full middleware stack, checks `canViewAny()`, and whitelists every request parameter against the table schema.
+
+### Forms: `VillamentRepeater`
+
+A repeater whose **add / clone / delete / move / drag-reorder run in the browser** instead of through Livewire. Drop-in — it takes every `Repeater` method:
+
+```php
+use Zvizvi\Villament\Forms\VillamentRepeater;
+
+VillamentRepeater::make('members')   // ← was Repeater::make('members')
+    ->schema([
+        TextInput::make('name'),
+        Select::make('role')->options([...]),
+    ])
+    ->cloneable()
+    ->reorderable()
+```
+
+**This is not a Vue island.** There is no `wire:ignore` region and no field is rendered on the client: the rows are Filament's own server-rendered markup, so `wire:model`, validation errors, action modals and every Alpine field component keep working untouched. The forms bundle is plain Alpine glue — 3.9 kB, against 178 kB for the table island.
+
+Stock runs each of those five operations as a Livewire action that rewrites the state array server-side and then re-renders **every** item to move one row; drag reorder pays for it even though the browser has already moved the DOM. All five are pure mutations of an id-keyed object, so villament performs them in place and writes the result back with `$wire.$set(path, …, false)` — deferred, no request. A new row is stamped from a **blueprint**: one extra item the server renders with a token where a UUID belongs, parked inert in a `<template>`. Because a component's key defaults to its state path, replacing that token reproduces exactly what the server would have rendered for the new id, so Livewire's next morph agrees with the DOM.
+
+Nothing changes on the server. Filament rebuilds the item schemas from the raw state, so validation, dehydration and `relationship()` saving never learn that a row was born in the browser.
+
+**It degrades to stock on its own** — costing the round trip, nothing else — when it meets something it cannot reproduce client-side: `live()`, an `afterStateUpdated()` hook on the repeater, `itemNumbers()`, an `itemLabel(fn (int $index) => …)`, a visible `addBetweenAction()`, `labelBetweenItems()`, or the `table()` layout. Individual actions degrade on their own too: one that opens a modal (`requiresConfirmation()`) keeps its server round trip, because mounting that modal *is* the round trip. Force the decision either way with `->clientSideItems(false)` / `->clientSideItems(true)`.
+
+Applying it to a repeater you already subclass:
+
+```php
+use Zvizvi\Villament\Forms\Concerns\HasClientSideItems;
+
+class MyRepeater extends Repeater
+{
+    use HasClientSideItems;
+}
+```
+
+One caveat worth knowing, and it is stock's too: `itemLabel()` is evaluated at render time, so it does not update as you type unless the field it reads is `live()` — [Filament's own docs say so](https://filamentphp.com/docs/5.x/forms/repeater#adding-a-label-to-repeater-items-based-on-their-content). A client-added row shows the label its defaults produce, which is what stock shows for a freshly added row.
 
 ## Development
 

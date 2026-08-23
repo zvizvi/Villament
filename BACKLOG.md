@@ -12,8 +12,16 @@ move out of here into `DECISIONS.md` once implemented.
 4. [Action trigger options](#action-trigger-options-the-island-cannot-express-yet)
 5. [Docs pages never audited](#docs-pages-never-audited)
 
-Done and moved to `DECISIONS.md`: the empty state, `recordClasses()`, and the
-action-payload compaction (all 2026-07-26).
+Forms, opened 2026-08-23 and tracked separately from the island's order above:
+
+1. [Benchmark the repeater](#benchmark-the-repeater-before-widening-it) ← do this first; it decides the next two
+2. [The `table()` layout](#the-table-layout-of-the-repeater)
+3. [Position-dependent labels](#itemnumbers-and-index-dependent-item-labels)
+4. [Visibility truth tables](#visibility-without-a-round-trip-truth-tables-not-a-transpiler)
+
+Done and moved to `DECISIONS.md`: the empty state, `recordClasses()`, the
+action-payload compaction (all 2026-07-26), and the repeater's client-side item
+operations (2026-08-23).
 
 ---
 
@@ -237,3 +245,96 @@ overview, Filters, Actions, Summaries, Grouping). These have not:
   have dedicated serializers; Color falls through to the html fallback (which
   works); Select/Toggle/TextInput/Checkbox are the entry above; the custom-column
   page (`10-custom-columns.md`) is untested.
+
+---
+
+# Forms
+
+## Benchmark the repeater before widening it
+
+`VillamentRepeater` ships, but no number justifies it yet — the argument for it
+is structural (stock re-renders every item to move one row) and the package's
+own culture says a ratio should be quoted with the workload
+(`DECISIONS.md` 2026-07-26, "the time ratio depends on table size").
+
+**Done means.** A repeater with 10 / 30 / 100 rows, measuring SERVER time and
+browser MORPH time separately for (a) first paint, (b) add, (c) drag reorder,
+stock against villament, recorded in `DECISIONS.md` with the row counts. That
+measurement decides the two entries below: if first paint dominates, neither
+matters as much as windowing the initial render, which is a different design
+(a per-item render endpoint) and should be scoped from the numbers, not from
+taste.
+
+## The `table()` layout of the repeater
+
+The gate degrades for `table()` because that layout derives its COLUMN COUNT
+from the item count — `$hasReorderColumn = ($itemCount > 1) && …`
+(`Repeater::toTableEmbeddedHtml()`) — so a blueprint rendered with one item
+carries the wrong number of cells the moment the real list holds two or more,
+and a stamped `<tr>` would not line up with the header.
+
+**The shape of the fix.** Render the blueprint clone with TWO items in its raw
+state so the count-dependent branches resolve as they do for a real list, then
+take the first `<tr>`. The second item costs one extra item render at page load,
+which is the same order as the blueprint already costs. `$isFirst`/`$isLast`
+land right for a row appended at the end; the existing `data-villament-move`
+maintenance covers the rest.
+
+**Done means.** `table()` repeaters keep client-side operations; a JS test
+asserts a stamped row's cell count matches the header's for a list of one, two
+and three items; the `isTable()` clause leaves the gate.
+
+## `itemNumbers()` and index-dependent item labels
+
+Both are in the gate because stock renders the position as TEXT inside the item
+label heading (`<?= e($itemIndex) ?>`, immediately after the label), and there
+is no way to renumber it from the client without knowing which text node it is.
+
+**Two ways out, and they are not equally good.** A CSS counter on the items
+container is free at runtime but needs the number to be its own element, which
+means owning that fragment of stock's markup — the one thing the current design
+never does. An `itemLabelJs()` escape hatch is the shape Filament itself keeps
+choosing (`hiddenJs`, `visibleJs`, `afterStateUpdatedJs`), costs ~30 lines, and
+is strictly BETTER than stock, which needs `live()` for a label to update at
+all. It needs the label element to carry its own
+`filamentSchemaComponent({ path: <item state path>, … })` scope, since that is
+what provides `$get` (`schemas/resources/js/index.js`); the item `<li>` holds
+only `{ isCollapsed }` today.
+
+**Done means.** A decision recorded first. Then: `itemNumbers()` leaves the
+gate, positions survive a client-side delete and reorder, and a JS test drags a
+row and asserts the rendered numbers.
+
+## Visibility without a round trip: truth tables, not a transpiler
+
+The other half of the slowness that opened this work is `visible(fn (Get $get))`,
+which forces the field it depends on to be `live()` — a request per change.
+Filament ships `visibleJs()`/`hiddenJs()` for this, but a PACKAGE cannot ask an
+app to rewrite its closures, and a PHP→JS transpiler is the wrong instrument:
+`blank('0')` is false while `blank(' ')` is true, `==` is not `==`, and a silent
+divergence is undebuggable.
+
+**The instrument that fits is the one the table already uses.** villament does
+not ship `formatStateUsing` to the client; it runs it server-side and ships the
+RESULT. Same here: most visibility conditions depend on a field with a CLOSED
+set of values (Select, Radio, Toggle, Checkbox, ToggleButtons), so the server can
+evaluate the closure once per possible value at render time and ship a lookup
+table. No translation, no closure leaving the server, exact PHP semantics, and
+zero field work on the client.
+
+Dependencies are discovered by RUNNING the closure with a recording `Get` — it
+is a plain class built through the container (`HasState::makeGetUtility()`) and
+every read funnels through `__invoke()`, so one subclass captures them. No
+parsing.
+
+**Where it must refuse.** A dependency that is not form state (`auth()`,
+`$record`, a feature flag) means the component must not be rendered at all when
+hidden — evaluating it and inlining the result would put a permission decision
+in the page source. A free-text dependency has no closed set. Too many
+combinations needs a cap. All three fall back to today's behaviour.
+
+**Done means.** A decision recorded first, then: a component whose visibility
+depends only on enumerable form state toggles with no request; the PHP
+`visible()` closure is never removed, so dehydration and validation stay
+server-decided; a parity test asserts the shipped table matches the closure's
+own result for every combination it covers.

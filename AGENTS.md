@@ -20,6 +20,19 @@ The Vue table must be fed from the Resource's **existing `table()` schema**. A d
 4. **Panel-native security**: the data endpoint runs behind the exact middleware stack of the Filament panel + `canViewAny()` + per-record policy checks.
 5. **Actions stay Livewire** (Phase 3): row/bulk actions are *bridged* to the existing Livewire page component, not rebuilt in Vue.
 
+### The island is the table's answer, not the package's answer
+
+Sections 1-onwards describe the TABLE. The package also ships form work, and
+there the island is deliberately absent: `Forms\VillamentRepeater` takes a
+repeater's item operations off Livewire with plain Alpine, no `wire:ignore`
+region, and no field rendered on the client. Do not extend the island to forms
+by reflex — inside `wire:ignore`, Alpine never sees what Vue renders, which
+already costs the table four column types (see `BACKLOG.md`, "Interactive
+columns") and would cost a form every field in every row. The reasoning is
+recorded in `DECISIONS.md` 2026-08-23, and invariant 2 above holds there
+unchanged: the client gets pre-rendered markup and pre-computed results, never a
+closure.
+
 ---
 
 ## 2. Target environment & versions

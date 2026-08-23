@@ -59,6 +59,11 @@ final class VillamentServiceProvider extends PackageServiceProvider
             // cache automatically (the default `?v=` is the composer package
             // version, stable for dev-main installs — see ContentHashedJs).
             Support\Assets\ContentHashedJs::make('villament', __DIR__.'/../dist/villament.js'),
+            // Alpine glue for Filament's own server-rendered form markup
+            // (`VillamentRepeater`). Separate from the bundle above because
+            // that one carries Vue for the table island, and a form page has
+            // no island to mount.
+            Support\Assets\ContentHashedJs::make('villament-forms', __DIR__.'/../dist/villament-forms.js'),
         ], package: 'zvizvi/villament');
     }
 }

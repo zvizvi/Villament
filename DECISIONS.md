@@ -4,6 +4,122 @@ Log of deviations from `AGENTS.md` and every non-public Filament API the package
 
 ---
 
+## 2026-08-23 — The repeater's item operations go client-side, and there is no island
+
+Owner call, and it reverses the reflex the table trained: forms get NO Vue and
+NO `wire:ignore` region. The reasoning is the same one that made the filters
+native (2026-07-17) — when something does not benefit from the island, the
+island is pure cost — but the evidence here is sharper, and it is already
+written down in `BACKLOG.md`: inside the island's `wire:ignore` region a
+Filament field arrives "looking correct and **completely inert**", because
+Alpine walks the DOM once at boot and never sees what Vue renders afterwards.
+In the table that gap touches four column types. In a form it would touch
+EVERY field in EVERY row.
+
+And Vue would buy nothing, because the plan deliberately does not render from
+data. Existing rows already have server-rendered DOM; a new row is a stamped
+copy; a drag has already moved the nodes. Rendering from a payload is the one
+job Vue is better at, and this design has none of it.
+
+**What ships.** `Forms\VillamentRepeater` (a `Repeater` subclass) and
+`Forms\Concerns\HasClientSideItems` (so an app that already subclasses
+`Repeater` can adopt it). Add, clone, delete, move up/down and drag reorder all
+run in the browser and write back with `$wire.$set(path, …, false)` — deferred,
+no request. Stock runs each as an `Action` that mutates the raw state and calls
+`partiallyRender()`: a request plus a re-render of every item to move one row.
+Drag reorder pays it even though Sortable has already moved the DOM.
+
+**No stock markup is copied.** That was the constraint that shaped the whole
+implementation, because `Repeater::toEmbeddedHtml()` is ~200 lines of inline
+PHP-in-HTML across three layouts and a copy would drift on every Filament
+release. Three seams carry it instead:
+
+- **The buttons.** `Action::alpineClickHandler()` already calls
+  `livewireClickHandlerEnabled(blank($handler))` — setting an Alpine handler
+  disables the Livewire one. So `getAddAction()` and friends return
+  `parent::…()->alpineClickHandler('addItem()')` and the button is stock in
+  every other respect: classes, icon, tooltip, disabled state.
+- **The Alpine scope.** Merged through `getExtraAttributes()`, which stock's own
+  renderer places on the `fi-fo-repeater` div.
+- **The drag.** Stock hardcodes `x-on:end.stop="$wire.mountAction('reorder', …)"`
+  on the items list and there is no seam for it, so the scope adds
+  `x-on:end.capture` on the ancestor: a CAPTURE listener runs before the
+  target's bubble listener, and stopping propagation there means the event never
+  reaches stock's. The handler stops the event itself rather than declaring
+  `.stop`, so a NESTED repeater's drag — which passes through this listener on
+  its way down — still reaches its own.
+
+**The blueprint is the load-bearing idea.** A new row has no server-rendered
+DOM to move, so the server renders ONE extra item under the state path
+`BLUEPRINT_ITEM_KEY` and parks it inert in a `<template wire:ignore>`. Because
+`Schemas\Concerns\HasKey::getKey()` defaults to the state path and
+`Repeater::getDefaultChildSchemas()` builds each item as
+`getChildSchema()->statePath($itemKey)`, that token lands in every descendant's
+`id`, `wire:key`, `wire:model`, `x-data` and `$persist` key. One string
+replacement therefore reproduces byte-for-byte what the server would have sent
+for that UUID — which is what makes Livewire's next morph agree with the DOM
+instead of fighting it. Livewire 4 hooks `Alpine.interceptInit`, so
+`Alpine.initTree()` on the stamped subtree is all it takes to bind its
+`wire:model`s and boot every Filament field component inside it.
+
+The blueprint is rendered by Filament's own renderer on a CLONE of the
+repeater, so nothing here knows what an item looks like. The clone keeps the
+REAL state path — only `getRawState()` is overridden — so it renders real keys
+with the token standing in for a UUID, rather than a scratch prefix the browser
+would have to unpick. A scratch path was the first design and was wrong for
+exactly that reason. `fill()` still writes the item's defaults through to the
+Livewire component, because that is how Filament applies defaults; the sentinel
+key it lands under is `data_forget`-ed before anything else reads the state, and
+a test pins that it never reaches the snapshot.
+
+**Nothing changes on the server.** `getDefaultChildSchemas()` rebuilds items
+from the raw state, so validation, dehydration and `relationship()` saving never
+learn that a row was born in the browser. That is also why a wrong client-side
+decision can only ever be a UX bug: the server still decides what is saved.
+
+**The gate degrades rather than guesses.** Client-side is off for `live()`, an
+`afterStateUpdated()` hook (mirrored through an override, since the parent keeps
+the list in a protected property), `itemNumbers()`, an `itemLabel()` whose
+closure declares an `$index` parameter (Filament injects by parameter NAME, so
+the name is the honest signal), a visible `addBetweenAction()`,
+`labelBetweenItems()`, and the `table()` layout — whose column count is derived
+from the item count (`$hasReorderColumn = ($itemCount > 1) && …`), so a
+blueprint rendered alone would carry the wrong number of cells. Degrading costs
+the round trip and nothing else, so every uncertain case takes it. Actions
+degrade individually too: one that `shouldOpenModal()` keeps its round trip,
+because mounting that modal IS the round trip, and a TOOLTIPPED move button
+stays on stock because `<x-filament::icon-button>` strips every `x-on:`
+attribute from a button that is both disabled and tooltipped — the first and
+last rows would render with no handler at all and could never be re-enabled.
+
+**`itemLabel()` needed no work, and the first analysis overstated it.**
+`getItemLabel()` is evaluated at render time only, and Filament's own docs say
+the field it reads must be `live()` for the label to update — so a stale label
+is stock behaviour, not a regression. A client-added row shows what the
+blueprint's defaults produce, which is what stock shows for a freshly added row.
+Only `itemNumbers()` and an `$index`-dependent label are genuinely
+position-dependent, and both are in the gate.
+
+**A portal was considered and does not apply.** `NativeSlot.vue` is an
+`appendChild` — it relocates markup the server has already rendered, at zero
+cost. A new repeater row has no such markup. The blueprint is the same family
+of trick (server-rendered markup held inert, activated by the client) with
+different mechanics, because it needs N instances rather than one relocation.
+
+**Two bundles, not one.** `dist/villament-forms.js` (3.9 kB) is registered
+alongside `dist/villament.js` (178 kB): that one carries Vue for the island, and
+a form page has no island to mount. Vite's library mode takes one entry per IIFE
+build, so they are two configs.
+
+**What the client re-computes.** Only the chrome stock recomputes during the
+re-render being removed: move-up disabled on the first row and move-down on the
+last (found through a `data-villament-move` marker on the action rather than by
+matching a click handler's text), the collapse-all bar stock hides below two
+items, the items container stock omits when empty, and the add button at
+`maxItems`. Everything else about a row is position-independent — which is the
+whole reason this works: item ids key the state, so moving a row never changes
+any field's state path.
+
 ## 2026-07-15 — Environment & scaffolding (Phase 0)
 
 **Filament version verified against:** v5.6.8 (installed in the local host app `~/code/filament5`).
