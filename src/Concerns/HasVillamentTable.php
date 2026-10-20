@@ -27,19 +27,14 @@ trait HasVillamentTable
 {
     public function content(Schema $schema): Schema
     {
-        $config = $this->getVillamentTableConfig();
-
+        // The config is resolved at render time, not here: since Filament 5.10
+        // the page's schemas are cached during Livewire hydration, before
+        // `bootedInteractsWithTable()` has built the table.
         return $schema
             ->components([
                 $this->getTabsContentComponent(),
                 RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_BEFORE),
-                VillamentIsland::make(
-                    $config,
-                    withNativeFilters: (bool) ($config['schema']['hasFilters'] ?? false),
-                    withNativeColumnManager: (bool) ($config['schema']['hasColumnManager'] ?? false),
-                    withNativeHeader: (bool) ($config['schema']['header']['hasCustomView'] ?? false),
-                    withColumnFilterSlots: $this->getVillamentColumnFilterSlots() !== [],
-                ),
+                VillamentIsland::make(fn (): array => $this->getVillamentTableConfig()),
                 RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_AFTER),
             ]);
     }

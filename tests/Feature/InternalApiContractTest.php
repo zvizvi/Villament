@@ -69,6 +69,7 @@ $methodContract = [
     [Table::class, 'getColumnManagerResetActionPosition'],
     [Table::class, 'getReorderAnimationDuration'],
     [Table::class, 'getFiltersApplyAction'],
+    [Table::class, 'getFiltersResetAction'],
     [Table::class, 'getFiltersResetActionPosition'],
     [Table::class, 'getFiltersFormWidth'],
     [Table::class, 'getFiltersFormColumns'],

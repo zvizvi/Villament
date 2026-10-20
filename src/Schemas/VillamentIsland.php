@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Zvizvi\Villament\Schemas;
 
+use Closure;
 use Filament\Schemas\Components\Component;
 
 /**
@@ -17,23 +18,22 @@ final class VillamentIsland extends Component
     protected string $view = 'villament::villament-island';
 
     /**
-     * @param  array<string, mixed>  $config
+     * @param  Closure(): array<string, mixed>  $config  evaluated when the island renders
      */
-    public static function make(
-        array $config,
-        bool $withNativeFilters = false,
-        bool $withNativeColumnManager = false,
-        bool $withNativeHeader = false,
-        bool $withColumnFilterSlots = false,
-    ): static {
+    public static function make(Closure $config): static
+    {
         $static = app(self::class);
-        $static->viewData([
-            'config' => $config,
-            'withNativeFilters' => $withNativeFilters,
-            'withNativeColumnManager' => $withNativeColumnManager,
-            'withNativeHeader' => $withNativeHeader,
-            'withColumnFilterSlots' => $withColumnFilterSlots,
-        ]);
+        $static->viewData(function () use ($config): array {
+            $config = $config();
+
+            return [
+                'config' => $config,
+                'withNativeFilters' => (bool) ($config['schema']['hasFilters'] ?? false),
+                'withNativeColumnManager' => (bool) ($config['schema']['hasColumnManager'] ?? false),
+                'withNativeHeader' => (bool) ($config['schema']['header']['hasCustomView'] ?? false),
+                'withColumnFilterSlots' => ($config['columnFilterSlots'] ?? []) !== [],
+            ];
+        });
         $static->configure();
 
         return $static;

@@ -12,7 +12,7 @@ After the initial page load, all table interactions — sorting, pagination, glo
 |---|---|
 | PHP | `^8.3` |
 | Laravel | `^12.0` |
-| Filament | `~5.6.0` (pinned per tested minor; widens as the CI matrix grows) |
+| Filament | `^5.10` (no upper bound; `InternalApiContractTest` guards the internal APIs) |
 | Vue | `^3.5` (bundled, no host-app requirement) |
 
 ## Roadmap

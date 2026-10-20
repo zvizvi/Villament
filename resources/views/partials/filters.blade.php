@@ -27,6 +27,7 @@
     $vfTrigger = $vfTable->getFiltersTriggerAction();
     $vfForm = $vfLivewire->getTableFiltersForm();
     $vfApply = $vfTable->getFiltersApplyAction();
+    $vfReset = $vfTable->getFiltersResetAction();
     $vfResetPosition = $vfTable->getFiltersResetActionPosition();
     $vfMaxHeight = $vfTable->getFiltersFormMaxHeight();
 
@@ -116,6 +117,7 @@
                     :apply-action="$vfApply"
                     :form="$vfForm"
                     class="fi-ta-filters-below-content"
+                    :reset-action="$vfReset"
                     :reset-action-position="$vfResetPosition"
                 />
             @elseif ($vfIsAbove)
@@ -135,6 +137,7 @@
                         :form="$vfForm"
                         x-cloak
                         :x-show="$vfIsCollapsible ? 'areFiltersOpen' : null"
+                        :reset-action="$vfReset"
                         :reset-action-position="$vfResetPosition"
                     />
 
@@ -163,6 +166,7 @@
                         :apply-action="$vfApply"
                         :form="$vfForm"
                         class="fi-ta-filters-{{ $vfInlineSlot }}-content"
+                        :reset-action="$vfReset"
                         :reset-action-position="$vfResetPosition"
                     />
                 </div>
@@ -221,6 +225,7 @@
                 <x-filament-tables::filters
                     :apply-action="$vfApply"
                     :form="$vfForm"
+                    :reset-action="$vfReset"
                     :reset-action-position="$vfResetPosition"
                 />
             </x-filament::dropdown>

@@ -73,7 +73,7 @@ describe('filter schema serialization', function (): void {
         // filters content (heading + fields + apply + reset). No Vue filter UI.
         expect($html)->toContain("x-teleport=\"[data-villament-filters-slot='toolbar'][data-villament-owner='")
             ->toContain('fi-ta-filters-dropdown')
-            ->toContain('x-data="filamentDropdown"')
+            ->toContain('x-data="filamentDropdown')
             ->toContain('fi-ta-filters-heading')
             ->toContain('resetTableFiltersForm')
             ->toContain('applyTableFilters');

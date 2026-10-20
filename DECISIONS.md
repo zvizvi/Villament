@@ -375,6 +375,13 @@ That is also why this family is not in `adoptNativeSlots()` with the other four.
 
 Kept off by default (`getVillamentColumnFilterSlots()` → `[]`) and out of `schema`: it is a page-level rendering opt-in, not something `table()` says, and folding it into the schema would move the version hash for every table that never uses it.
 
+## 2026-10-20 — Filament `^5.10`: the per-minor pin is dropped (supersedes Phase 0 #2)
+
+Owner decision: the constraint is `^5.10`, with no upper bound. The tilde pin blocked installing villament in apps already on a newer minor. Breakage in later minors is caught by `InternalApiContractTest` and the parity suite, not prevented by composer. Moving from 5.7 to 5.10 surfaced two such breaks:
+
+- **`content()` ran before the table existed.** In 5.10, `ScopedModelPropertiesComponentHook` reads `$this->record` during Livewire hydration, which caches every discovered schema, `content` included, before `bootedInteractsWithTable()`. `content()` built the island config eagerly through `getTable()`, so every subsequent Livewire request (actions, filters, column manager) threw "must not be accessed before initialization". `VillamentIsland::make()` now takes a closure, evaluated through `viewData()` at render time.
+- **The filters Reset button vanished.** `<x-filament-tables::filters>` now takes the reset action as a `resetAction` prop (from `Table::getFiltersResetAction()`) instead of hard-coding it. The partial passes it in all four layouts. The lower bound is 5.10 because that method does not exist before it.
+
 ## Verified Filament v5 internal API map (§4.1, §4.8)
 
 Verified against **filament/filament v5.6.8** + **livewire/livewire v4.3.3** by reading installed vendor source on 2026-07-15. Paths relative to `vendor/filament/`.
