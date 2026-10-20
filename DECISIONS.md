@@ -382,6 +382,31 @@ Owner decision: the constraint is `^5.10`, with no upper bound. The tilde pin bl
 - **`content()` ran before the table existed.** In 5.10, `ScopedModelPropertiesComponentHook` reads `$this->record` during Livewire hydration, which caches every discovered schema, `content` included, before `bootedInteractsWithTable()`. `content()` built the island config eagerly through `getTable()`, so every subsequent Livewire request (actions, filters, column manager) threw "must not be accessed before initialization". `VillamentIsland::make()` now takes a closure, evaluated through `viewData()` at render time.
 - **The filters Reset button vanished.** `<x-filament-tables::filters>` now takes the reset action as a `resetAction` prop (from `Table::getFiltersResetAction()`) instead of hard-coding it. The partial passes it in all four layouts. The lower bound is 5.10 because that method does not exist before it.
 
+## 2026-10-20 — Re-benchmarked on Filament 5.10: both paths ~10% slower, the ratio barely moves
+
+Re-run per the 2026-07-26 rule. The setup isolates the Filament version. Two clones of the same tree (0.0.3) shared one `composer.lock`, and only `filament/*` differed: v5.7.8 vs v5.10.2. 5.7.3, the version from July, is now blocked by security advisories, and 5.7.8 needed `PKSA-cnr1-6g7k-bp3d` ignored in its throwaway clone. The method was the same interleaved `DataChannelBenchmarkTest` (25 iterations, page 2 @ 50/page, sorted), with blocks in A-B-B-A order (5.7.8 → 5.10.2 ×2 → 5.7.8).
+
+2k rows, 6 runs per version (means of the per-run medians):
+
+| | filament **v5.7.8** | filament **v5.10.2** | change |
+|---|---|---|---|
+| A stock (commit + Blade render) | 59.8ms | 66.1ms | +10.5% |
+| B Villament GET endpoint | 30.7ms | 33.5ms | +9.0% |
+| **time ratio A/B** | **1.95x** | **1.98x** | +0.03 |
+| payload | ~1,440KB vs ~178KB (~8.1x) | ~1,415KB vs ~178KB (~7.95x) | stock HTML ~2% smaller |
+
+Size sweep, 2 runs per version:
+
+| rows | ratio v5.7.8 | ratio v5.10.2 |
+|---|---|---|
+| 500 | 1.95x | 2.00x |
+| 2,000 | 1.95x | 1.98x |
+| 10,000 | 1.88x | 1.93x |
+
+Verdict: **5.10 is a ~10% server-time regression for both paths**, the mirror image of 5.7's gain. The endpoint runs through the same Filament query and column pipeline, so it inherits Filament's speed changes in either direction. Drift between the two 5.7.8 blocks was ~6%, below the gap. The **time ratio edges up by ~0.03–0.05**, consistently across all three sizes, against a per-run spread of about ±0.02. That is real but small: the lead is ~2x on both versions. The **payload lead stays ~8x**, structural as before.
+
+The July absolute figures (41.0 / 20.5ms, 955 / 145KB) do not compare with these. The fixture has grown since then, and stock's payload is ~1.4MB now. Always compare versions on one tree, as done here.
+
 ## Verified Filament v5 internal API map (§4.1, §4.8)
 
 Verified against **filament/filament v5.6.8** + **livewire/livewire v4.3.3** by reading installed vendor source on 2026-07-15. Paths relative to `vendor/filament/`.
