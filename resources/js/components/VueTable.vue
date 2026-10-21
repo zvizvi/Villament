@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, provide, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
 import { getCoreRowModel, useVueTable } from '@tanstack/vue-table'
 import { useTableState } from '../composables/useTableState.js'
 import { useTableData } from '../composables/useTableData.js'
@@ -303,6 +303,40 @@ const { records, actionDefaults, meta, indicators, summaries, isLoading, error, 
     },
 )
 
+/**
+ * `loadingSkeleton()`: stock puts `fi-ta-content-loading` on the content
+ * container and `inert` on the records through `wire:loading.delay.*`, so a
+ * fast refresh never flashes the skeleton. Same delay here; the skeleton
+ * itself is entirely Filament's CSS.
+ */
+const isLoadingSkeletonVisible = ref(false)
+
+/** @type {?ReturnType<typeof setTimeout>} */
+let loadingSkeletonTimer = null
+
+watch(isLoading, (loading) => {
+    clearTimeout(loadingSkeletonTimer)
+    loadingSkeletonTimer = null
+
+    if (! loading || ! schema.loadingSkeleton) {
+        isLoadingSkeletonVisible.value = false
+
+        return
+    }
+
+    const delayMs = schema.loadingDelayMs ?? 200
+
+    if (delayMs <= 0) {
+        isLoadingSkeletonVisible.value = true
+
+        return
+    }
+
+    loadingSkeletonTimer = setTimeout(() => {
+        isLoadingSkeletonVisible.value = true
+    }, delayMs)
+})
+
 const bridge = useLivewireBridge({
     livewireId: props.config.livewireId,
     initialFilters: props.config.state?.filters ?? {},
@@ -379,6 +413,7 @@ function adoptNativeSlots() {
 onMounted(adoptNativeSlots)
 
 onBeforeUnmount(() => {
+    clearTimeout(loadingSkeletonTimer)
     bridge.destroy()
     destroyData()
     state.destroy()
@@ -1054,7 +1089,8 @@ function recordCellClasses(column, cellValue = null) {
             class="fi-ta-ctn fi-ta-ctn-with-footer"
             :class="{
                 'fi-ta-ctn-with-header': hasHeaderContainer,
-                'fi-loading': isLoading,
+                // The skeleton replaces the whole-table pulse, as in stock.
+                'fi-loading': isLoading && ! schema.loadingSkeleton,
             }"
         >
             <!-- BeforeContent filters teleport here (stock: sibling before .fi-ta-main). -->
@@ -1245,7 +1281,11 @@ function recordCellClasses(column, cellValue = null) {
                         records ARRAY exists — even empty, e.g. a search with
                         no hits — with the empty state below as a sibling.
                     -->
-                    <div class="fi-ta-content-ctn fi-fixed-positioning-context">
+                    <div
+                        :aria-busy="isLoading ? 'true' : undefined"
+                        class="fi-ta-content-ctn fi-fixed-positioning-context"
+                        :class="{ 'fi-ta-content-loading': isLoadingSkeletonVisible }"
+                    >
                         <table class="fi-ta-table">
                             <TableHeader
                                 :columns="visibleColumns"
@@ -1266,18 +1306,17 @@ function recordCellClasses(column, cellValue = null) {
                                 @toggle-select-page="selection.toggleSelectPage(pageRecordKeys)"
                             />
 
-                            <tbody>
-                                <!--
-                                    The header filter row: stock renders it for
-                                    the individual column search fields, and a
-                                    header-filter package puts its inputs in the
-                                    very same row — so slotted columns bring it
-                                    out on their own.
-                                -->
-                                <tr
-                                    v-if="(hasColumnSearches || hasColumnFilterSlots) && ! isGroupsOnly"
-                                    class="fi-ta-row fi-ta-row-not-reorderable"
-                                >
+                            <!--
+                                The header filter row: stock renders it for
+                                the individual column search fields, and a
+                                header-filter package puts its inputs in the
+                                very same row — so slotted columns bring it
+                                out on their own. Its own TBODY, as in stock:
+                                the loading skeleton targets only the records
+                                one below.
+                            -->
+                            <tbody v-if="(hasColumnSearches || hasColumnFilterSlots) && ! isGroupsOnly">
+                                <tr class="fi-ta-row fi-ta-row-not-reorderable">
                                     <td
                                         v-if="actionsBeforeSelection"
                                         class="fi-ta-cell"
@@ -1325,7 +1364,20 @@ function recordCellClasses(column, cellValue = null) {
                                         class="fi-ta-cell"
                                     />
                                 </tr>
+                            </tbody>
 
+                            <!--
+                                The records TBODY, rendered only when there are
+                                records (stock: `@if (count($records))`). Its
+                                `fi-ta-records` class is what Filament's loading
+                                skeleton CSS hangs off (`.fi-ta-content-loading >
+                                .fi-ta-table > .fi-ta-records > .fi-ta-row`).
+                            -->
+                            <tbody
+                                v-if="hasRecords"
+                                class="fi-ta-records"
+                                :inert.attr="isLoadingSkeletonVisible ? 'true' : undefined"
+                            >
                                 <!--
                                     Groups-only mode: one server-computed
                                     summary row per group (heading = group

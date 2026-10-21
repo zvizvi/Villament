@@ -25,6 +25,7 @@ afterEach(function (): void {
     UserResource::$searchOnBlur = false;
     UserResource::$searchPlaceholder = null;
     UserResource::$persistsInSession = false;
+    UserResource::$hasLoadingSkeleton = false;
 });
 
 /**
@@ -313,5 +314,30 @@ describe('inline', function (): void {
         User::factory()->create(['name' => 'Blocky']);
 
         expect(columnOptionsCellsFor('Blocky')['name'])->not->toHaveKey('inline');
+    });
+});
+
+describe('loading skeleton', function (): void {
+    it('carries loadingSkeleton() and the Livewire loading delay to the island', function (): void {
+        UserResource::$hasLoadingSkeleton = true;
+        config()->set('filament.livewire_loading_delay', 'long');
+
+        $schema = columnOptionsConfig()['schema'];
+
+        expect($schema['loadingSkeleton'])->toBeTrue()
+            ->and($schema['loadingDelayMs'])->toBe(300);
+    });
+
+    it('is off by default, with Livewire\'s 200ms default delay', function (): void {
+        $schema = columnOptionsConfig()['schema'];
+
+        expect($schema['loadingSkeleton'])->toBeFalse()
+            ->and($schema['loadingDelayMs'])->toBe(200);
+    });
+
+    it('maps the `none` delay to an immediate skeleton', function (): void {
+        config()->set('filament.livewire_loading_delay', 'none');
+
+        expect(columnOptionsConfig()['schema']['loadingDelayMs'])->toBe(0);
     });
 });

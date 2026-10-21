@@ -407,6 +407,15 @@ Verdict: **5.10 is a ~10% server-time regression for both paths**, the mirror im
 
 The July absolute figures (41.0 / 20.5ms, 955 / 145KB) do not compare with these. The fixture has grown since then, and stock's payload is ~1.4MB now. Always compare versions on one tree, as done here.
 
+## 2026-10-20 — `loadingSkeleton()`: the records get their own TBODY
+
+Filament 5.10's `loadingSkeleton()` is all CSS. During a refresh, after `wire:loading.delay.{filament.livewire_loading_delay}`, stock adds `fi-ta-content-loading` to `.fi-ta-content-ctn` and `inert` to the records body. Every rule is keyed `.fi-ta-content-loading > .fi-ta-table > .fi-ta-records > .fi-ta-row …`, so the island has to reproduce that exact chain. Nothing else is needed: the cells already carry stock's `fi-ta-text` / `fi-ta-icon` / `fi-ta-image` classes.
+
+- **The TBODY is split as in stock.** The header filter row (column searches and column filter slots) gets a plain `<tbody>` of its own. The records, group rows and summaries go in `<tbody class="fi-ta-records">`, rendered only when there are records (stock: `@if (count($records))`). One shared TBODY would have put the search inputs under the skeleton too.
+- **The delay is Livewire's.** The schema carries `loadingSkeleton` plus `loadingDelayMs`, mapped from the config's modifier name with Livewire's own table (`none` 0, `shortest` 50, … `default` 200, … `longest` 1000). A fetch that finishes within the delay never flashes the skeleton, just like stock.
+- **`aria-busy="true"` sits on the content container for the whole fetch,** with no delay, matching stock's unconditional `wire:loading.attr="aria-busy"`. `inert` is rendered as `inert="true"` (`:inert.attr`) to match what Livewire writes.
+- **With the skeleton on, the island drops its own `fi-loading` pulse on `.fi-ta-ctn`.** Stock only ever pulses for deferred loading. Tables that do not opt in keep the old pulse.
+
 ## Verified Filament v5 internal API map (§4.1, §4.8)
 
 Verified against **filament/filament v5.6.8** + **livewire/livewire v4.3.3** by reading installed vendor source on 2026-07-15. Paths relative to `vendor/filament/`.

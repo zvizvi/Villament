@@ -105,6 +105,12 @@ final class SchemaSerializer
             'header' => $this->header($table),
             'recordActions' => $this->recordActions($table),
             'debounceMs' => $this->debounceMs ?? $this->searchDebounceMs($table),
+            // `loadingSkeleton()` is pure Filament CSS keyed on the
+            // `fi-ta-content-loading` class; the island only has to toggle it
+            // (plus `inert` on the records) after the same delay stock's
+            // `wire:loading.delay.*` would wait.
+            'loadingSkeleton' => $table->hasLoadingSkeleton(),
+            'loadingDelayMs' => $this->livewireLoadingDelayMs(),
             'strings' => $this->strings($table),
             'icons' => $this->icons($table),
         ];
@@ -247,6 +253,25 @@ final class SchemaSerializer
         $value = (float) $matches[1];
 
         return (int) round(strtolower($matches[2] ?? 'ms') === 's' ? $value * 1000 : $value);
+    }
+
+    /**
+     * `filament.livewire_loading_delay` names a Livewire `wire:loading.delay`
+     * modifier; these are Livewire's own durations for each (`none` = no
+     * delay, an unknown name falls back to Livewire's 200ms default).
+     */
+    private function livewireLoadingDelayMs(): int
+    {
+        return match (config('filament.livewire_loading_delay', 'default')) {
+            'none' => 0,
+            'shortest' => 50,
+            'shorter' => 100,
+            'short' => 150,
+            'long' => 300,
+            'longer' => 500,
+            'longest' => 1000,
+            default => 200,
+        };
     }
 
     private function iconHtml(string|\BackedEnum $icon, ?string $alias = null, ?IconSize $size = null): ?string

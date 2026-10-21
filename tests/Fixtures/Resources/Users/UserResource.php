@@ -61,6 +61,9 @@ class UserResource extends Resource
 
     public static ?string $searchPlaceholder = null;
 
+    /** Test seam: `loadingSkeleton()`. */
+    public static bool $hasLoadingSkeleton = false;
+
     /** Test seam: the three `persist*InSession()` toggles, flipped together. */
     public static bool $persistsInSession = false;
 
@@ -290,6 +293,7 @@ class UserResource extends Resource
             ->searchDebounce(static::$searchDebounce ?? '500ms')
             ->searchOnBlur(static::$searchOnBlur)
             ->searchPlaceholder(static::$searchPlaceholder)
+            ->loadingSkeleton(static::$hasLoadingSkeleton)
             ->persistSortInSession(static::$persistsInSession)
             ->persistSearchInSession(static::$persistsInSession)
             ->persistColumnSearchesInSession(static::$persistsInSession)
