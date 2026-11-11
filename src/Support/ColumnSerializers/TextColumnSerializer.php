@@ -134,8 +134,9 @@ final class TextColumnSerializer implements ColumnSerializer
         ];
 
         if ($column->isBadge()) {
+            // Stock never draws a colourless badge: `getColor() ?? 'primary'`.
             $color = $column->getColor($state);
-            $color = is_string($color) ? $color : null;
+            $color = is_string($color) && filled($color) ? $color : 'primary';
             $cell['color'] = $color;
             $cell['colorClasses'] = implode(' ', get_component_color_classes(BadgeComponent::class, $color));
             $cell['iconHtml'] = $this->iconHtml($column->getIcon($state), IconSize::Small);

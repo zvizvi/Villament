@@ -7,6 +7,7 @@ namespace Zvizvi\Villament\Support\ColumnSerializers;
 use Filament\Tables\Columns\Column;
 use Filament\Tables\Columns\ImageColumn;
 use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Support\Collection;
 
 final class ImageColumnSerializer implements ColumnSerializer
 {
@@ -38,6 +39,16 @@ final class ImageColumnSerializer implements ColumnSerializer
     private function buildCell(ImageColumn $column): array
     {
         $state = $column->getState();
+
+        // The payload below is ONE image from a string path. Anything else —
+        // `stacked()` avatars (ring, overlap, limit and the "+N" remainder), a
+        // list of several images, or a state that is not a path at all (a
+        // user-avatar column whose state is a model) — is drawn by the
+        // column's own stock markup, as a bare cell: that markup already IS
+        // the `.fi-ta-image` wrapper.
+        if ($this->needsStockMarkup($column, $state)) {
+            return ['type' => 'html', 'html' => $column->toHtml(), 'bare' => true];
+        }
 
         if (is_array($state)) {
             $state = array_values($state)[0] ?? null;
@@ -72,6 +83,27 @@ final class ImageColumnSerializer implements ColumnSerializer
             'height' => $column->getImageHeight(),
             'tooltip' => $this->stringable($column->getTooltip($state)),
         ];
+    }
+
+    private function needsStockMarkup(ImageColumn $column, mixed $state): bool
+    {
+        if ($column->isStacked()) {
+            return true;
+        }
+
+        if ($state instanceof Collection) {
+            $state = $state->all();
+        }
+
+        if (is_array($state)) {
+            if (count($state) > 1) {
+                return true;
+            }
+
+            $state = array_values($state)[0] ?? null;
+        }
+
+        return filled($state) && ! is_string($state);
     }
 
     private function stringable(mixed $value): ?string

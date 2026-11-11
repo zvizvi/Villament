@@ -24,8 +24,19 @@ defineProps({
         own `.fi-ta-text-item` carrying `--line-clamp`, which Filament's CSS
         clamps; without the item there is nothing for the clamp to land on.
     -->
+    <!--
+        A BARE cell is a column's own stock markup (stacked images, say), which
+        already carries its wrapper: adding `fi-ta-text` around it would pad
+        it twice. `display: contents` keeps the extra element out of layout.
+    -->
     <div
-        v-if="cell.itemStyle"
+        v-if="cell.bare"
+        style="display: contents"
+        v-bind="cell.extraAttributes ?? {}"
+        v-html="cell.html"
+    />
+    <div
+        v-else-if="cell.itemStyle"
         class="fi-ta-text"
         :class="cell.inline ? 'fi-inline' : null"
         v-bind="cell.extraAttributes ?? {}"

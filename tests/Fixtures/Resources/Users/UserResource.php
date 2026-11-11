@@ -186,6 +186,12 @@ class UserResource extends Resource
      */
     public static bool $recordTypedClosures = false;
 
+    /**
+     * Test seam: a `stacked()` image column whose state is a list of paths,
+     * the shape a user-avatars column has.
+     */
+    public static bool $stackedImages = false;
+
     /** Test seam: `lineClamp()` on the name column. */
     public static ?int $nameLineClamp = null;
 
@@ -219,6 +225,13 @@ class UserResource extends Resource
 
         return $table
             ->columns([
+                ...(static::$stackedImages ? [
+                    ImageColumn::make('team_avatars')
+                        ->state(fn (User $record): array => ["https://example.test/{$record->getKey()}-a.png", "https://example.test/{$record->getKey()}-b.png"])
+                        ->circular()
+                        ->stacked()
+                        ->ring(1),
+                ] : []),
                 ...(static::$recordTypedClosures ? [
                     TextColumn::make('record_typed_badge')
                         ->state(fn (User $record): string => $record->status)

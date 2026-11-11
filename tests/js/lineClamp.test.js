@@ -44,3 +44,15 @@ describe('lineClamp()', () => {
         expect(wrapper.get('.fi-ta-text').html()).toContain('<p>Body</p>')
     })
 })
+
+describe('bare HTML cells', () => {
+    it("renders a column's own markup without the text wrapper", () => {
+        const wrapper = mount(HtmlCell, { props: { cell: { type: 'html', bare: true, html: '<div class="fi-ta-image">x</div>' } } })
+
+        expect(wrapper.find('.fi-ta-text').exists()).toBe(false)
+        expect(wrapper.get('.fi-ta-image').text()).toBe('x')
+        expect(wrapper.get('.fi-ta-image').element.parentElement.style.display).toBe('contents')
+
+        wrapper.unmount()
+    })
+})

@@ -44,3 +44,11 @@ it('answers each of those closures with its own record', function (): void {
             ->and(array_key_exists('activate', $row['actions']))->toBe(! $isActive);
     }
 });
+
+it('paints a badge given no colour in primary, as stock does', function (): void {
+    $active = getJson('/admin/villament/users/data')->assertOk()->collect('records')
+        ->first(fn (array $row): bool => $row['cells']['record_typed_badge']['type'] === 'badge');
+
+    expect($active['cells']['record_typed_badge']['color'])->toBe('primary')
+        ->and($active['cells']['record_typed_badge']['colorClasses'])->toContain('fi-color-primary');
+});
