@@ -41,9 +41,25 @@ final class TableDataController
         $pageClass = $this->registry->resolveListPage($resourceClass);
         abort_if($pageClass === null, 404);
 
-        $this->harness
-            ->forPage($pageClass)
-            ->boot();
+        $this->harness->forPage($pageClass);
+
+        // A nested resource's list belongs to one parent record, named by the
+        // `parent` query parameter. It is resolved through the PARENT
+        // resource's own route binding (its query, so its tenancy and scopes),
+        // and Filament's `mountParentRecord()` then re-resolves it and checks
+        // `canAccess()` up the whole parent chain during boot, exactly as a
+        // page load does.
+        if ($parentRegistration = $resourceClass::getParentResourceRegistration()) {
+            $parentKey = $request->query('parent');
+            abort_unless(is_string($parentKey) && $parentKey !== '', 404);
+
+            $parentRecord = $parentRegistration->getParentResource()::resolveRecordRouteBinding($parentKey);
+            abort_if($parentRecord === null, 404);
+
+            $this->harness->withParentRecord($parentRecord);
+        }
+
+        $this->harness->boot();
 
         $table = $this->harness->getTable();
         $state = $this->validator->validate($request, $table);

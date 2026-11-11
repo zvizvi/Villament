@@ -13,6 +13,8 @@ use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 use Zvizvi\Villament\Tests\Fixtures\Resources\CursorUsers\CursorUserResource;
 use Zvizvi\Villament\Tests\Fixtures\Resources\HookedUsers\HookedUserResource;
+use Zvizvi\Villament\Tests\Fixtures\Resources\Teams\TeamResource;
+use Zvizvi\Villament\Tests\Fixtures\Resources\TeamUsers\TeamUserResource;
 use Zvizvi\Villament\Tests\Fixtures\Resources\Users\UserResource;
 use Zvizvi\Villament\VillamentPlugin;
 
@@ -26,6 +28,9 @@ class AdminPanelProvider extends PanelProvider
             ->path('admin')
             ->login()
             ->resources([
+                TeamResource::class,
+                // Before UserResource on purpose: same slug, nested.
+                TeamUserResource::class,
                 UserResource::class,
                 CursorUserResource::class,
                 HookedUserResource::class,

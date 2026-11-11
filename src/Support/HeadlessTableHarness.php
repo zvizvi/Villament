@@ -8,6 +8,7 @@ use Filament\Resources\Pages\ListRecords;
 use Filament\Tables\Table;
 use Illuminate\Contracts\Pagination\CursorPaginator;
 use Illuminate\Contracts\Pagination\Paginator;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Pagination\AbstractCursorPaginator;
 use Illuminate\Pagination\AbstractPaginator;
 use Illuminate\Pagination\Cursor;
@@ -46,6 +47,18 @@ final class HeadlessTableHarness
         }
 
         $this->component = $component;
+
+        return $this;
+    }
+
+    /**
+     * Hands a nested resource's page its parent record before boot, where
+     * Filament's `mountParentRecord()` takes it from: with no route
+     * parameters to read, it re-resolves this record and authorizes it.
+     */
+    public function withParentRecord(Model $parentRecord): self
+    {
+        $this->component->parentRecord = $parentRecord;
 
         return $this;
     }

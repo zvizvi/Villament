@@ -33,7 +33,7 @@ it('inlines schema and initial records so first paint needs zero extra requests'
 
     $config = json_decode($matches[1], true, flags: JSON_THROW_ON_ERROR);
 
-    expect($config['endpoint'])->toContain('/admin/villament/users/data')
+    expect($config['endpoint'])->toContain('/admin/villament/resources.users/data')
         ->and($config['livewireId'])->toBeString()->not->toBeEmpty()
         ->and($config['schemaVersion'])->toBeString()
         ->and(array_column($config['schema']['columns'], 'key'))->toBe(['name', 'status', 'is_admin', 'avatar_url', 'email', 'logins_count', 'aliases', 'nicknames', 'team.name', 'created_at'])

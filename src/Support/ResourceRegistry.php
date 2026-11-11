@@ -17,12 +17,44 @@ use Zvizvi\Villament\Concerns\HasVillamentTable;
 final class ResourceRegistry
 {
     /**
+     * The endpoint's name for a resource. NOT its slug: a slug is unique only
+     * among siblings, so a nested resource (`CampaignResource` > donations)
+     * and a top-level one can both be `donations`. The route base name
+     * carries the parent chain and the cluster (`resources.donations` vs
+     * `resources.campaigns.donations`) and is unique in the panel by
+     * construction — Filament's own routes are named from it.
+     *
+     * @param  class-string<\Filament\Resources\Resource>  $resourceClass
+     */
+    public function keyFor(Panel $panel, string $resourceClass): string
+    {
+        // The `filament.{panel}.` prefix says nothing the URL does not already
+        // say (the endpoint is routed per panel), so it is left out.
+        return (string) str($resourceClass::getRouteBaseName($panel))
+            ->after("filament.{$panel->getId()}.");
+    }
+
+    /**
      * @return class-string<\Filament\Resources\Resource>|null
      */
-    public function resolve(Panel $panel, string $slug): ?string
+    public function resolve(Panel $panel, string $key): ?string
     {
-        foreach ($panel->getResources() as $resourceClass) {
-            if ($resourceClass::getSlug($panel) === $slug) {
+        $resources = $panel->getResources();
+
+        foreach ($resources as $resourceClass) {
+            if ($this->keyFor($panel, $resourceClass) === $key) {
+                return $resourceClass;
+            }
+        }
+
+        // A bare slug is what an island rendered before keys existed still
+        // sends (a page left open across a deploy). It can only mean a
+        // top-level resource — a nested one never worked through it.
+        foreach ($resources as $resourceClass) {
+            if (
+                $resourceClass::getParentResourceRegistration() === null
+                && $resourceClass::getSlug($panel) === $key
+            ) {
                 return $resourceClass;
             }
         }

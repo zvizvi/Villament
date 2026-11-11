@@ -26,7 +26,7 @@ beforeEach(function (): void {
 
 function tenantEndpoint(Team $team): string
 {
-    return "/tenant-app/{$team->slug}/villament/projects/data";
+    return "/tenant-app/{$team->slug}/villament/resources.projects/data";
 }
 
 it('scopes endpoint records to the current tenant (no cross-tenant leak)', function (): void {
@@ -53,5 +53,5 @@ it('inlines a tenant-scoped endpoint URL into the island config', function (): v
     preg_match('/<script type="application\/json" data-villament-config>(.*?)<\/script>/s', $html, $matches);
     $config = json_decode($matches[1], true, flags: JSON_THROW_ON_ERROR);
 
-    expect($config['endpoint'])->toContain("/tenant-app/{$this->teamA->slug}/villament/projects/data");
+    expect($config['endpoint'])->toContain("/tenant-app/{$this->teamA->slug}/villament/resources.projects/data");
 });

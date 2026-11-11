@@ -14,6 +14,7 @@ use Zvizvi\Villament\Support\ActionPayloadCompactor;
 use Zvizvi\Villament\Support\FilterIndicatorSerializer;
 use Zvizvi\Villament\Support\RecordSerializer;
 use Zvizvi\Villament\Support\RequestStateValidator;
+use Zvizvi\Villament\Support\ResourceRegistry;
 use Zvizvi\Villament\Support\SchemaSerializer;
 use Zvizvi\Villament\Support\SummarySerializer;
 
@@ -136,7 +137,18 @@ trait HasVillamentTable
         $resourceClass = static::getResource();
         $panel = Filament::getCurrentOrDefaultPanel();
 
-        $endpointParameters = ['resource' => $resourceClass::getSlug($panel)];
+        $endpointParameters = ['resource' => app(ResourceRegistry::class)->keyFor($panel, $resourceClass)];
+
+        // A nested resource's list is ONE parent's records: the endpoint has
+        // to be told which parent, in the form Filament's own route binding
+        // takes (the parent resource's route key).
+        if (($parentRegistration = $resourceClass::getParentResourceRegistration()) && $this->parentRecord) {
+            $parentResource = $parentRegistration->getParentResource();
+
+            $endpointParameters['parent'] = filled($routeKeyName = $parentResource::getRecordRouteKeyName())
+                ? $this->parentRecord->getAttribute($routeKeyName)
+                : $this->parentRecord->getRouteKey();
+        }
 
         // Tenant panels route the endpoint under `{tenant}` — include the
         // current tenant so the generated URL resolves (and `IdentifyTenant`
