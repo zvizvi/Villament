@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Zvizvi\Villament;
 
 use Filament\Support\Facades\FilamentAsset;
+use Livewire\Features\SupportTesting\Testable;
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
 use Zvizvi\Villament\Support\RecordSerializer;
@@ -54,6 +55,14 @@ final class VillamentServiceProvider extends PackageServiceProvider
 
     public function packageBooted(): void
     {
+        // After every provider has booted, so these replace the record
+        // assertions Filament's TablesServiceProvider mixes in (last wins).
+        if (class_exists(Testable::class)) {
+            $this->app->booted(function (): void {
+                Testable::mixin(new Testing\TestsVillamentRecords);
+            });
+        }
+
         FilamentAsset::register([
             // Content-hashed version so a rebuilt bundle busts the browser
             // cache automatically (the default `?v=` is the composer package
