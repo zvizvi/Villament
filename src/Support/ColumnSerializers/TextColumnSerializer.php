@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Zvizvi\Villament\Support\ColumnSerializers;
 
+use Closure;
 use Filament\Support\Enums\IconSize;
 use Filament\Support\View\Components\BadgeComponent;
 use Filament\Tables\Columns\Column;
@@ -20,9 +21,26 @@ final class TextColumnSerializer implements ColumnSerializer
         return $column instanceof TextColumn;
     }
 
+    /**
+     * The schema-level type, asked once per table with NO record. A
+     * record-dependent `badge(fn (Model $record) => …)` cannot be answered
+     * here — evaluating it would hand the closure `null`, which a typed
+     * parameter refuses with a TypeError — so it reads as `text`; every
+     * cell still carries its own per-record type (`buildCell()`).
+     */
     public function type(Column $column): string
     {
-        return $column instanceof TextColumn && $column->isBadge() ? 'badge' : 'text';
+        if (! $column instanceof TextColumn) {
+            return 'text';
+        }
+
+        $isBadge = (fn (): bool|Closure => $this->isBadge)->call($column);
+
+        if ($isBadge instanceof Closure) {
+            return 'text';
+        }
+
+        return $isBadge ? 'badge' : 'text';
     }
 
     /**

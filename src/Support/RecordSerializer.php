@@ -408,6 +408,8 @@ final class RecordSerializer
 
         foreach ($table->getRecordActions() as $item) {
             if ($item instanceof ActionGroup) {
+                $item->record($record);
+
                 foreach ($this->triggerSerializer->groupChildren($item) as $child) {
                     $flat[] = $child;
                 }
@@ -418,9 +420,16 @@ final class RecordSerializer
             $flat[] = $item;
         }
 
+        // Every action gets this record BEFORE any visibility is asked: a
+        // grouped action's `isHidden()` consults its group, which asks every
+        // sibling (`resolveIsHiddenInGroup()`). Stamped one at a time, the
+        // later siblings would still carry the previous row — or none at all
+        // on the first, where a `fn (Model $record)` closure throws.
         foreach ($flat as $action) {
             $action->record($record);
+        }
 
+        foreach ($flat as $action) {
             if (! $action->isVisible()) {
                 continue;
             }

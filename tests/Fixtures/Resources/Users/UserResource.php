@@ -214,7 +214,8 @@ class UserResource extends Resource
         return $table
             ->columns([
                 ...(static::$recordTypedClosures ? [
-                    TextColumn::make('email')
+                    TextColumn::make('record_typed_badge')
+                        ->state(fn (User $record): string => $record->status)
                         ->badge(fn (User $record): bool => $record->status === 'active'),
                 ] : []),
                 TextColumn::make('name')
@@ -402,6 +403,9 @@ class UserResource extends Resource
                     ActionGroup::make([
                         Action::make('archive')
                             ->visible(fn (User $record): bool => $record->status !== 'archived')
+                            ->action(fn () => null),
+                        Action::make('activate')
+                            ->visible(fn (User $record): bool => $record->status !== 'active')
                             ->action(fn () => null),
                     ]),
                 ] : []),
