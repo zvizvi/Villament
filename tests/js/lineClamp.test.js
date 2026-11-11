@@ -56,3 +56,23 @@ describe('bare HTML cells', () => {
         wrapper.unmount()
     })
 })
+
+describe('bare HTML cells and extraAttributes', () => {
+    it('does not apply the column extraAttributes a second time around stock markup', () => {
+        const wrapper = mount(HtmlCell, {
+            props: {
+                cell: {
+                    type: 'html',
+                    bare: true,
+                    html: '<ul class="fi-ta-text" x-tooltip="tip"><li class="fi-ta-text-item">x</li></ul>',
+                    extraAttributes: { class: 'fi-ta-text', 'x-tooltip': 'tip' },
+                },
+            },
+        })
+
+        expect(wrapper.findAll('[x-tooltip]')).toHaveLength(1)
+        expect(wrapper.get('[x-tooltip]').element.tagName).toBe('UL')
+
+        wrapper.unmount()
+    })
+})

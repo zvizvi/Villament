@@ -28,11 +28,14 @@ defineProps({
         A BARE cell is a column's own stock markup (stacked images, say), which
         already carries its wrapper: adding `fi-ta-text` around it would pad
         it twice. `display: contents` keeps the extra element out of layout.
+        The column's `extraAttributes()` are NOT bound here: stock already put
+        them on that wrapper, and binding them twice runs every Alpine
+        directive in them twice - an `x-tooltip` on this box-less element
+        opens a second tooltip in the corner of the screen.
     -->
     <div
         v-if="cell.bare"
         style="display: contents"
-        v-bind="cell.extraAttributes ?? {}"
         v-html="cell.html"
     />
     <div
