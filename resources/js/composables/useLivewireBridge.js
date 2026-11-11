@@ -37,6 +37,8 @@
  *   `accessSelectedRecords()` work on a record or toolbar action.
  * - `applyColumnManager()` / `resetColumnManager()` / `getTableColumns()`
  *   drive Filament's column manager Livewire API.
+ * - The commit watcher also follows `activeTab`: a tab click commits a new
+ *   value and `onTabChanged(tab)` fires, so the island refetches that tab.
  * - The commit watcher notifies `onActionCompleted(methods)` after a
  *   SUCCEEDED commit whose calls include an action/column-manager method —
  *   unless the same commit also changed `tableFilters` (the filters watcher
@@ -111,7 +113,9 @@ function wireFor(livewireId) {
  * @param {{
  *     livewireId: string,
  *     initialFilters?: Object<string, *>,
+ *     initialTab?: ?string,
  *     onFiltersChanged?: (filters: Object<string, *>) => void,
+ *     onTabChanged?: (tab: ?string) => void,
  *     onActionCompleted?: (methods: string[]) => void,
  *     onDeselectAll?: () => void,
  *     getSelection?: () => TableSelection,
@@ -122,12 +126,14 @@ export function useLivewireBridge(options) {
     const {
         livewireId,
         onFiltersChanged = null,
+        onTabChanged = null,
         onActionCompleted = null,
         onDeselectAll = null,
         getSelection = null,
     } = options
 
     let lastKnownFiltersJson = JSON.stringify(options.initialFilters ?? {})
+    let lastKnownTab = options.initialTab ?? null
 
     /**
      * Removes one active filter via Filament's own `removeTableFilter`. The
@@ -461,6 +467,25 @@ export function useLivewireBridge(options) {
                     onFiltersChanged?.(JSON.parse(json))
                 }
 
+                // A tab click commits `activeTab` (Filament's tabs component
+                // `$wire.set()`s it); stock re-renders the table, the island
+                // has to refetch with the new tab itself.
+                let tab = lastKnownTab
+
+                try {
+                    tab = component.$wire.get('activeTab') ?? null
+                } catch {
+                    // A host page without tabs: nothing to follow.
+                }
+
+                const tabValue = tab === null || tab === undefined || tab === '' ? null : String(tab)
+                const hasTabChanged = tabValue !== lastKnownTab
+
+                if (hasTabChanged) {
+                    lastKnownTab = tabValue
+                    onTabChanged?.(tabValue)
+                }
+
                 const calls = Array.isArray(commit?.calls) ? commit.calls : []
 
                 const refreshMethods = calls
@@ -469,7 +494,7 @@ export function useLivewireBridge(options) {
 
                 // Double-fetch guard: a filters change already refetches via
                 // the island's filters watcher.
-                if (refreshMethods.length > 0 && ! haveFiltersChanged) {
+                if (refreshMethods.length > 0 && ! haveFiltersChanged && ! hasTabChanged) {
                     onActionCompleted?.(refreshMethods)
                 }
             })

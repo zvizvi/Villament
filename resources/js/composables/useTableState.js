@@ -138,6 +138,12 @@ export function useTableState(initialState = {}, options = {}) {
     const page = ref(urlState.page ?? initialState.page ?? 1)
     const perPage = ref(urlState.perPage ?? initialState.perPage ?? null)
     const cursor = ref(urlState.cursor ?? initialState.cursor ?? null)
+    // The page's `activeTab`. Livewire owns it — its own `#[Url(as: 'tab')]`
+    // writes the query string and a tab click commits it — so the island only
+    // echoes it to the data endpoint and follows the commits (see the bridge's
+    // `onTabChanged`). It is never written to the URL from here.
+    const initialTab = initialState.tab ?? null
+    const tab = ref(initialTab)
 
     let isApplyingUrlState = false
 
@@ -206,6 +212,12 @@ export function useTableState(initialState = {}, options = {}) {
             page.value = urlState.page ?? 1
             cursor.value = urlState.cursor ?? null
 
+            // Back/forward: Livewire restores `activeTab` from the URL without
+            // a commit, so read it the same way — an absent `tab` is the page's
+            // default, which is what the server inlined on first paint.
+            const urlTab = new URLSearchParams(window.location.search).get('tab')
+            tab.value = urlTab !== null && urlTab !== '' ? urlTab : initialTab
+
             if (urlState.perPage !== undefined) {
                 perPage.value = urlState.perPage
             }
@@ -254,6 +266,7 @@ export function useTableState(initialState = {}, options = {}) {
         page,
         perPage,
         cursor,
+        tab,
         destroy,
     }
 }

@@ -48,7 +48,7 @@ describe('useLivewireBridge', () => {
         component = {
             id: LIVEWIRE_ID,
             $wire: {
-                get: (property) => (property === 'tableFilters' ? wireState.tableFilters : undefined),
+                get: (property) => wireState[property],
                 set: wireSet,
                 removeTableFilter: (...args) => wireCalls.push(['removeTableFilter', args]),
                 resetTableFiltersForm: (...args) => wireCalls.push(['resetTableFiltersForm', args]),
@@ -135,6 +135,23 @@ describe('useLivewireBridge', () => {
 
         expect(onFiltersChanged).toHaveBeenCalledTimes(1)
         expect(onFiltersChanged).toHaveBeenCalledWith({ status: { value: 'archived' } })
+    })
+
+    it('follows a tab click and skips the action refetch in the same commit', () => {
+        const onTabChanged = vi.fn()
+        const onActionCompleted = vi.fn()
+        wireState.activeTab = 'todo'
+        makeBridge({ initialTab: 'todo', onTabChanged, onActionCompleted })
+
+        fireCommit()
+        expect(onTabChanged).not.toHaveBeenCalled()
+
+        wireState.activeTab = 'done'
+        fireCommit({ calls: [{ method: 'mountAction', params: [] }] })
+
+        expect(onTabChanged).toHaveBeenCalledTimes(1)
+        expect(onTabChanged).toHaveBeenCalledWith('done')
+        expect(onActionCompleted).not.toHaveBeenCalled()
     })
 
     it('ignores commits when the filters are unchanged', () => {

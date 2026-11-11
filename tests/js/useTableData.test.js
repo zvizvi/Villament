@@ -16,6 +16,7 @@ function makeState() {
         page: ref(1),
         perPage: ref(10),
         cursor: ref(null),
+        tab: ref(null),
         destroy: () => {},
     }
 }
@@ -125,6 +126,30 @@ describe('useTableData', () => {
 
         // Filter changes reset the page to 1.
         expect(state.page.value).toBe(1)
+        expect(params.has('page')).toBe(false)
+
+        data.destroy()
+    })
+
+    it('sends the active tab on every request, and a tab change resets the page', async () => {
+        fetchMock.mockResolvedValue(jsonResponse())
+
+        const state = makeState()
+        state.tab.value = 'todo'
+        state.page.value = 3
+
+        const data = useTableData(ENDPOINT, state, { schemaVersion: 'v1' })
+
+        state.page.value = 4
+        expect(new URL(fetchMock.mock.calls[0][0]).searchParams.get('tab')).toBe('todo')
+
+        state.tab.value = 'done'
+
+        expect(fetchMock).toHaveBeenCalledTimes(2)
+        expect(state.page.value).toBe(1)
+
+        const params = new URL(fetchMock.mock.calls[1][0]).searchParams
+        expect(params.get('tab')).toBe('done')
         expect(params.has('page')).toBe(false)
 
         data.destroy()

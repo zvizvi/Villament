@@ -179,6 +179,10 @@ trait HasVillamentTable
                 'search' => (string) $this->tableSearch,
                 'columnSearches' => $this->tableColumnSearches,
                 'filters' => $this->tableFilters ?? [],
+                // Stock's own `#[Url(as: 'tab')]` state, already defaulted by
+                // `mount()`. The island echoes it on every request and follows
+                // it when a tab click commits a new value.
+                'tab' => filled($this->activeTab) ? (string) $this->activeTab : null,
                 'page' => $this->getTablePage(),
                 'perPage' => $this->getTableRecordsPerPage(),
                 // Column manager state (session-hydrated by Filament itself);

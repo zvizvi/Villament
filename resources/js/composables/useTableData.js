@@ -89,6 +89,10 @@ export function useTableData(endpoint, state, options = {}) {
             params.set('sort', state.sort.value)
         }
 
+        if (state.tab?.value) {
+            params.set('tab', state.tab.value)
+        }
+
         if (state.grouping?.value) {
             params.set('grouping', state.grouping.value)
         }
@@ -252,6 +256,13 @@ export function useTableData(endpoint, state, options = {}) {
         watch(() => state.grouping?.value, () => {
             // Grouping reorders records (and thus repaginates); stock's
             // `updatedTableGroupColumn()` resets the page for the same reason.
+            resetPageSilently()
+            fetchNow()
+        }, { flush: 'sync' }),
+
+        watch(() => state.tab?.value, () => {
+            // A tab narrows the query (`modifyQueryWithActiveTab()`); stock's
+            // `updatedActiveTab()` resets the page for the same reason.
             resetPageSilently()
             fetchNow()
         }, { flush: 'sync' }),

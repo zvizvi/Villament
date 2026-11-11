@@ -340,6 +340,12 @@ watch(isLoading, (loading) => {
 const bridge = useLivewireBridge({
     livewireId: props.config.livewireId,
     initialFilters: props.config.state?.filters ?? {},
+    initialTab: props.config.state?.tab ?? null,
+    onTabChanged: (tab) => {
+        // Livewire owns the active tab; the tab watcher in useTableData resets
+        // the page and refetches.
+        state.tab.value = tab
+    },
     onFiltersChanged: (filters) => {
         // Livewire owns filter state (native panel commit); merge it into the
         // Vue state WITHOUT pushing it back — the bridge snapshot already

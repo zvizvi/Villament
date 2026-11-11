@@ -416,6 +416,14 @@ Filament 5.10's `loadingSkeleton()` is all CSS. During a refresh, after `wire:lo
 - **`aria-busy="true"` sits on the content container for the whole fetch,** with no delay, matching stock's unconditional `wire:loading.attr="aria-busy"`. `inert` is rendered as `inert="true"` (`:inert.attr`) to match what Livewire writes.
 - **With the skeleton on, the island drops its own `fi-loading` pulse on `.fi-ta-ctn`.** Stock only ever pulses for deferred loading. Tables that do not opt in keep the old pulse.
 
+## 2026-11-11 — List page tabs (`getTabs()`) follow the island
+
+A page with `getTabs()` showed the right tab on first paint only: the island never sent `activeTab` to the endpoint (the harness skips `mount()`, so `loadDefaultActiveTab()` never ran there either) and never noticed a tab click. Every refetch — a page turn included — therefore listed every tab's records.
+
+- **The endpoint takes `tab`**, whitelisted against the page's own `getCachedTabs()` keys (422 otherwise). With none, the harness applies `getDefaultActiveTab()`, which is what stock's `mount()` does. `modifyQueryWithActiveTab()` then narrows the query exactly as in stock.
+- **Livewire stays the owner.** A tab click is Filament's tabs component committing `activeTab`; the bridge reads it after every finished commit (like `tableFilters`) and the island resets to page 1 and refetches, mirroring `updatedActiveTab()`. The island never writes `tab` to the URL — stock's `#[Url(as: 'tab')]` does — and on popstate reads it back, falling to the inlined default when absent.
+- **Double-fetch guard**: a commit that changed the tab skips the action-completed refetch.
+
 ## Verified Filament v5 internal API map (§4.1, §4.8)
 
 Verified against **filament/filament v5.6.8** + **livewire/livewire v4.3.3** by reading installed vendor source on 2026-07-15. Paths relative to `vendor/filament/`.

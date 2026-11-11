@@ -27,7 +27,38 @@ final class RequestStateValidator
             perPage: $this->validatePerPage($request, $table),
             cursor: $this->validateCursor($request),
             grouping: $this->validateGrouping($request, $table),
+            tab: $this->validateTab($request, $table),
         );
+    }
+
+    /**
+     * Whitelists the `tab` parameter against the host page's own tabs
+     * (`getCachedTabs()`, the list `modifyQueryWithActiveTab()` reads). Stock
+     * keeps the tab in `activeTab` (`#[Url(as: 'tab')]`) and narrows the query
+     * with it, so a stateless endpoint that ignored it would page through
+     * EVERY tab's records. A blank param falls back to the page's
+     * `getDefaultActiveTab()` (see the harness), as stock's `mount()` does.
+     */
+    private function validateTab(Request $request, Table $table): ?string
+    {
+        $tab = $request->query('tab');
+
+        if (blank($tab)) {
+            return null;
+        }
+
+        if (! is_string($tab)) {
+            $this->reject('tab', 'The tab parameter must be a string.');
+        }
+
+        $livewire = $table->getLivewire();
+        $tabs = method_exists($livewire, 'getCachedTabs') ? $livewire->getCachedTabs() : [];
+
+        if (! in_array($tab, array_map('strval', array_keys($tabs)), true)) {
+            $this->reject('tab', "The tab [{$tab}] does not exist.");
+        }
+
+        return $tab;
     }
 
     /**

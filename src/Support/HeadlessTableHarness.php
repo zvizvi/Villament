@@ -115,6 +115,12 @@ final class HeadlessTableHarness
             $component->tableGrouping = $state->grouping;
         }
 
+        // `mount()` (which stock uses to `loadDefaultActiveTab()`) is never
+        // replayed here, so the default tab is applied by hand when the request
+        // names none — mirroring `loadDefaultActiveTab()`'s own rule.
+        $defaultTab = $component->getDefaultActiveTab();
+        $component->activeTab = $state->tab ?? ($defaultTab === null ? null : (string) $defaultTab);
+
         if ($state->filters !== null) {
             $component->tableFilters = array_replace($component->tableFilters ?? [], $state->filters);
         }
