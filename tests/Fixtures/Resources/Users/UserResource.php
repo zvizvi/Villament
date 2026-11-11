@@ -6,6 +6,7 @@ namespace Zvizvi\Villament\Tests\Fixtures\Resources\Users;
 
 use Closure;
 use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
@@ -178,6 +179,13 @@ class UserResource extends Resource
      */
     public static int $formatStateCalls = 0;
 
+    /**
+     * Test seam: a badge and a grouped record action whose closures demand a
+     * REAL record (`fn (User $record)`), as app code routinely writes them.
+     * Evaluated without one, they throw a TypeError and take the page down.
+     */
+    public static bool $recordTypedClosures = false;
+
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()->where('is_banned', false);
@@ -205,6 +213,10 @@ class UserResource extends Resource
 
         return $table
             ->columns([
+                ...(static::$recordTypedClosures ? [
+                    TextColumn::make('email')
+                        ->badge(fn (User $record): bool => $record->status === 'active'),
+                ] : []),
                 TextColumn::make('name')
                     ->sortable()
                     ->searchable(isIndividual: true)
@@ -386,6 +398,13 @@ class UserResource extends Resource
             ->recordActions([
                 EditAction::make(),
                 DeleteAction::make(),
+                ...(static::$recordTypedClosures ? [
+                    ActionGroup::make([
+                        Action::make('archive')
+                            ->visible(fn (User $record): bool => $record->status !== 'archived')
+                            ->action(fn () => null),
+                    ]),
+                ] : []),
             ], position: static::$recordActionsPosition)
             ->recordActionsAlignment(static::$recordActionsAlignment)
             ->recordActionsColumnLabel(static::$recordActionsColumnLabel)
