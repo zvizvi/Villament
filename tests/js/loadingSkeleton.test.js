@@ -104,6 +104,14 @@ describe('loadingSkeleton()', () => {
         await nextTick()
     }
 
+    it("merges the table's extraAttributes onto the .fi-ta root, as stock does", () => {
+        mountTable({ extraAttributes: { class: 'fi-ta-density-dense', 'data-probe': 'yes' } })
+
+        const root = wrapper.get('.fi-ta')
+        expect(root.classes()).toEqual(expect.arrayContaining(['fi-ta', 'villament-table', 'fi-ta-density-dense']))
+        expect(root.attributes('data-probe')).toBe('yes')
+    })
+
     it('renders the records in their own fi-ta-records TBODY, a direct child of the table', () => {
         mountTable({ loadingSkeleton: true })
 

@@ -35,18 +35,21 @@ const overLimitCount = computed(() => props.cell.overLimitCount ?? 0)
 
 const sizeClass = computed(() => `fi-size-${props.cell.size || 'sm'}`)
 
+/** `lineClamp()`: `--line-clamp: N` on each text item, as stock puts it. */
+const itemStyle = computed(() => props.cell.itemStyle ?? null)
+
 /**
  * Stock's fast path: one item, no bullets, no descriptions and nothing hidden
  * behind a limit collapses the whole cell into a single element.
  */
-const isSimple = computed(() => items.value === null && ! hasDescriptions.value && overLimitCount.value === 0)
+const isSimple = computed(() => items.value === null && ! hasDescriptions.value && overLimitCount.value === 0 && ! itemStyle.value)
 
 /**
  * Descriptions and the "+N more" message both need somewhere to sit BESIDE
  * the value(s), so stock boxes the cell in a wrapper `<div>` and demotes the
  * value to a `<p>` or a `<ul>` inside it.
  */
-const isBoxed = computed(() => hasDescriptions.value || overLimitCount.value > 0)
+const isBoxed = computed(() => hasDescriptions.value || overLimitCount.value > 0 || (Boolean(itemStyle.value) && items.value === null))
 
 const wrapperClasses = computed(() => [
     'fi-ta-text',
@@ -132,6 +135,7 @@ function isItemVisible(index) {
                 :key="index"
                 class="fi-ta-text-item"
                 :class="sizeClass"
+                :style="itemStyle"
             >
                 <span
                     v-if="tooltip"
@@ -145,6 +149,7 @@ function isItemVisible(index) {
             v-else
             class="fi-ta-text-item"
             :class="sizeClass"
+            :style="itemStyle"
         >
             <span
                 v-if="tooltip"
@@ -207,6 +212,7 @@ function isItemVisible(index) {
             :key="index"
             class="fi-ta-text-item"
             :class="sizeClass"
+            :style="itemStyle"
         >
             <span
                 v-if="tooltip"

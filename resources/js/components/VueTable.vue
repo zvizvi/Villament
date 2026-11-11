@@ -1090,7 +1090,7 @@ function recordCellClasses(column, cellValue = null) {
 </script>
 
 <template>
-    <div class="fi-ta villament-table">
+    <div class="fi-ta villament-table" v-bind="schema.extraAttributes ?? {}">
         <div
             class="fi-ta-ctn fi-ta-ctn-with-footer"
             :class="{

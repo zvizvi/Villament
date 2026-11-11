@@ -110,6 +110,10 @@ final class SchemaSerializer
             // (plus `inert` on the records) after the same delay stock's
             // `wire:loading.delay.*` would wait.
             'loadingSkeleton' => $table->hasLoadingSkeleton(),
+            // `extraAttributes()` on the table: stock merges them onto the
+            // `.fi-ta` root (`$getExtraAttributeBag()->class(['fi-ta', …])`),
+            // and app CSS keys off classes placed there.
+            'extraAttributes' => $table->getExtraAttributes(),
             'loadingDelayMs' => $this->livewireLoadingDelayMs(),
             'strings' => $this->strings($table),
             'icons' => $this->icons($table),

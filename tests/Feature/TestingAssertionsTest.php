@@ -3,11 +3,14 @@
 declare(strict_types=1);
 
 use PHPUnit\Framework\AssertionFailedError;
+use Zvizvi\Villament\Support\SchemaSerializer;
 use Zvizvi\Villament\Tests\Fixtures\Models\User;
 use Zvizvi\Villament\Tests\Fixtures\Resources\Users\Pages\ListUsers;
 use Zvizvi\Villament\Tests\Fixtures\Resources\Users\Pages\VueListUsers;
+use Zvizvi\Villament\Tests\Fixtures\Resources\Users\UserResource;
 
 use function Pest\Laravel\actingAs;
+use function Pest\Laravel\getJson;
 use function Pest\Livewire\livewire;
 
 beforeEach(function (): void {
@@ -47,4 +50,52 @@ it('keeps the HTML-based behaviour on a stock page', function (): void {
     livewire(ListUsers::class)
         ->assertCanSeeTableRecords([$this->active, $this->pending])
         ->assertSeeHtml('.table.records.'.$this->active->getKey());
+});
+
+it('renders a column on a Villament page exactly when the rows carry its cell', function (): void {
+    livewire(VueListUsers::class)
+        ->assertCanRenderTableColumn('name')
+        // Toggled hidden by default, so no row carries it.
+        ->assertCanNotRenderTableColumn('created_at');
+});
+
+it('finds what the cells say, formatted and escaped as a stock assertSee would', function (): void {
+    livewire(VueListUsers::class)
+        ->assertSeeInTable('AARON ACTIVE')
+        ->set('activeTab', 'pending')
+        ->assertSeeInTable('PENNY PENDING')
+        ->assertDontSeeInTable('AARON ACTIVE');
+});
+
+it('hands back the text it searches', function (): void {
+    expect(livewire(VueListUsers::class)->getTableText())->toContain('AARON ACTIVE');
+});
+
+it("carries the table's extraAttributes into the island schema", function (): void {
+    UserResource::$tableExtraAttributes = ['class' => 'fi-ta-density-dense'];
+
+    try {
+        $table = livewire(VueListUsers::class)->instance()->getTable();
+
+        expect((new SchemaSerializer)->serialize($table)['extraAttributes'])->toBe(['class' => 'fi-ta-density-dense']);
+    } finally {
+        UserResource::$tableExtraAttributes = [];
+    }
+});
+
+it('carries lineClamp() onto the text item, as stock styles it', function (): void {
+    UserResource::$nameLineClamp = 2;
+
+    try {
+        $cell = getJson('/admin/villament/users/data')->assertOk()->json('records.0.cells.name');
+
+        expect($cell['itemStyle'])->toBe('--line-clamp: 2');
+    } finally {
+        UserResource::$nameLineClamp = null;
+    }
+});
+
+it('leaves a column without lineClamp() unstyled', function (): void {
+    expect(getJson('/admin/villament/users/data')->assertOk()->json('records.0.cells.name'))
+        ->not->toHaveKey('itemStyle');
 });

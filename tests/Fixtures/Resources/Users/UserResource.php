@@ -186,6 +186,12 @@ class UserResource extends Resource
      */
     public static bool $recordTypedClosures = false;
 
+    /** Test seam: `lineClamp()` on the name column. */
+    public static ?int $nameLineClamp = null;
+
+    /** Test seam: `extraAttributes()` on the table itself. */
+    public static array $tableExtraAttributes = [];
+
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()->where('is_banned', false);
@@ -219,6 +225,7 @@ class UserResource extends Resource
                         ->badge(fn (User $record): bool => $record->status === 'active'),
                 ] : []),
                 TextColumn::make('name')
+                    ->lineClamp(static::$nameLineClamp)
                     ->sortable()
                     ->searchable(isIndividual: true)
                     ->formatStateUsing(function (string $state): string {
@@ -307,6 +314,7 @@ class UserResource extends Resource
             ->searchOnBlur(static::$searchOnBlur)
             ->searchPlaceholder(static::$searchPlaceholder)
             ->loadingSkeleton(static::$hasLoadingSkeleton)
+            ->extraAttributes(static::$tableExtraAttributes)
             ->persistSortInSession(static::$persistsInSession)
             ->persistSearchInSession(static::$persistsInSession)
             ->persistColumnSearchesInSession(static::$persistsInSession)

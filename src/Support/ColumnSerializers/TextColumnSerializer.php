@@ -107,10 +107,16 @@ final class TextColumnSerializer implements ColumnSerializer
 
         $formatted = implode(', ', $formattedItems);
 
+        // `lineClamp()`: stock puts `--line-clamp: N` on every text ITEM (never
+        // on a badge), and Filament's CSS clamps `.fi-ta-text-item` off it.
+        $lineClamp = $column->isBadge() ? null : $column->getLineClamp();
+        $itemStyle = filled($lineClamp) ? "--line-clamp: {$lineClamp}" : null;
+
         if ($containsHtml) {
             return [
                 'type' => 'html',
                 'html' => $formatted,
+                ...($itemStyle === null ? [] : ['itemStyle' => $itemStyle]),
             ];
         }
 
@@ -124,6 +130,7 @@ final class TextColumnSerializer implements ColumnSerializer
             'description' => $this->stringable($column->getDescriptionBelow()),
             'tooltip' => $this->stringable($column->getTooltip($state)),
             'size' => $textSize instanceof \BackedEnum ? $textSize->value : $textSize,
+            ...($itemStyle === null ? [] : ['itemStyle' => $itemStyle]),
         ];
 
         if ($column->isBadge()) {

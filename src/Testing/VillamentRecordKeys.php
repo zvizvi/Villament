@@ -7,6 +7,7 @@ namespace Zvizvi\Villament\Testing;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 use Zvizvi\Villament\Concerns\HasVillamentTable;
+use Zvizvi\Villament\Support\RecordSerializer;
 
 /**
  * @internal The record lookups behind {@see TestsVillamentRecords}, kept off
@@ -54,5 +55,35 @@ final class VillamentRecordKeys
         }
 
         return $keys;
+    }
+
+    /**
+     * Every string in the record payload the island receives for the current
+     * page, one per line.
+     */
+    public static function tableText(object $component): string
+    {
+        $component->flushCachedTableRecords();
+
+        $payload = app(RecordSerializer::class)->serialize(
+            $component,
+            $component::getResource(),
+            $component->getTableRecords(),
+        );
+
+        $strings = [];
+
+        array_walk_recursive($payload, function (mixed $value) use (&$strings): void {
+            if (is_string($value)) {
+                $strings[] = $value;
+            }
+        });
+
+        return implode("\n", $strings);
+    }
+
+    public static function contains(string $haystack, string $value, bool $escape): bool
+    {
+        return str_contains($haystack, $value) || ($escape && str_contains($haystack, e($value)));
     }
 }
