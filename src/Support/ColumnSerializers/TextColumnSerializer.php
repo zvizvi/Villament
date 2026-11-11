@@ -66,7 +66,7 @@ final class TextColumnSerializer implements ColumnSerializer
         // the column's own markup rather than silently linking the whole cell
         // to the first item's url.
         if ($column->hasStateBasedUrls()) {
-            return ['type' => 'html', 'html' => $column->toHtml()];
+            return $this->stockCell($column);
         }
 
         $state = $column->getState();
@@ -101,24 +101,15 @@ final class TextColumnSerializer implements ColumnSerializer
             ];
         }
 
+        if ($containsHtml || $this->usesUnmodelledOptions($column, $stateItems)) {
+            return $this->stockCell($column);
+        }
+
         // Applies `limitList()` to `$formattedItems` before anything is joined,
         // exactly where stock slices the state.
         $list = $this->list($column, $formattedItems);
 
         $formatted = implode(', ', $formattedItems);
-
-        // `lineClamp()`: stock puts `--line-clamp: N` on every text ITEM (never
-        // on a badge), and Filament's CSS clamps `.fi-ta-text-item` off it.
-        $lineClamp = $column->isBadge() ? null : $column->getLineClamp();
-        $itemStyle = filled($lineClamp) ? "--line-clamp: {$lineClamp}" : null;
-
-        if ($containsHtml) {
-            return [
-                'type' => 'html',
-                'html' => $formatted,
-                ...($itemStyle === null ? [] : ['itemStyle' => $itemStyle]),
-            ];
-        }
 
         $textSize = $column->getSize($state);
 
@@ -130,7 +121,6 @@ final class TextColumnSerializer implements ColumnSerializer
             'description' => $this->stringable($column->getDescriptionBelow()),
             'tooltip' => $this->stringable($column->getTooltip($state)),
             'size' => $textSize instanceof \BackedEnum ? $textSize->value : $textSize,
-            ...($itemStyle === null ? [] : ['itemStyle' => $itemStyle]),
         ];
 
         if ($column->isBadge()) {
@@ -143,6 +133,54 @@ final class TextColumnSerializer implements ColumnSerializer
         }
 
         return $cell;
+    }
+
+    /**
+     * The column's own stock markup, as a BARE cell: it already is the
+     * `.fi-ta-text` wrapper, so the island adds nothing around it.
+     *
+     * @return array<string, mixed>
+     */
+    private function stockCell(TextColumn $column): array
+    {
+        return ['type' => 'html', 'html' => $column->toHtml(), 'bare' => true];
+    }
+
+    /**
+     * Whether this cell needs anything the island's text cell does not draw
+     * exactly as stock does — then stock draws it (`stockCell()`), rather than
+     * a near-copy that silently drops the difference. Answered per record,
+     * since each of these may be a closure: a non-badge `icon()` (a lock on a
+     * private row), a text `color()`, `weight()`, `fontFamily()`,
+     * `copyable()`, `wrap()` (`fi-wrapped`) and `lineClamp()`.
+     *
+     * @param  list<mixed>  $stateItems
+     */
+    private function usesUnmodelledOptions(TextColumn $column, array $stateItems): bool
+    {
+        if ($column->canWrap() || filled($column->getLineClamp())) {
+            return true;
+        }
+
+        $isBadge = $column->isBadge();
+
+        foreach ($stateItems as $stateItem) {
+            if (blank($stateItem)) {
+                continue;
+            }
+
+            if (
+                (! $isBadge && filled($column->getIcon($stateItem)))
+                || (! $isBadge && filled($column->getColor($stateItem)))
+                || filled($column->getWeight($stateItem))
+                || filled($column->getFontFamily($stateItem))
+                || $column->isCopyable($stateItem)
+            ) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

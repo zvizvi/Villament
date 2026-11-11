@@ -83,19 +83,20 @@ it("carries the table's extraAttributes into the island schema", function (): vo
     }
 });
 
-it('carries lineClamp() onto the text item, as stock styles it', function (): void {
+it('draws a lineClamp() column with its stock markup, the clamp on the item', function (): void {
     UserResource::$nameLineClamp = 2;
 
     try {
         $cell = getJson('/admin/villament/users/data')->assertOk()->json('records.0.cells.name');
 
-        expect($cell['itemStyle'])->toBe('--line-clamp: 2');
+        expect($cell['type'])->toBe('html')
+            ->and($cell['bare'])->toBeTrue()
+            ->and($cell['html'])->toContain('fi-ta-text-item')->toContain('--line-clamp: 2');
     } finally {
         UserResource::$nameLineClamp = null;
     }
 });
 
-it('leaves a column without lineClamp() unstyled', function (): void {
-    expect(getJson('/admin/villament/users/data')->assertOk()->json('records.0.cells.name'))
-        ->not->toHaveKey('itemStyle');
+it('keeps a plain text column as a structured text cell', function (): void {
+    expect(getJson('/admin/villament/users/data')->assertOk()->json('records.0.cells.name.type'))->toBe('text');
 });

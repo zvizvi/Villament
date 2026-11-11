@@ -192,6 +192,11 @@ class UserResource extends Resource
      */
     public static bool $stackedImages = false;
 
+    /** Test seams: `icon()` / `iconColor()` / `wrap()` on the name column. */
+    public static ?Closure $nameIcon = null;
+
+    public static bool $nameWraps = false;
+
     /** Test seam: `lineClamp()` on the name column. */
     public static ?int $nameLineClamp = null;
 
@@ -239,6 +244,9 @@ class UserResource extends Resource
                 ] : []),
                 TextColumn::make('name')
                     ->lineClamp(static::$nameLineClamp)
+                    ->icon(static::$nameIcon)
+                    ->iconColor('warning')
+                    ->wrap(static::$nameWraps)
                     ->sortable()
                     ->searchable(isIndividual: true)
                     ->formatStateUsing(function (string $state): string {
