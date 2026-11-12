@@ -15,6 +15,14 @@ class ListPickedUsers extends VillamentListRecords
 
     public ?string $pickedStatus = null;
 
+    /** Typed properties a query string can only carry as strings. */
+    public ?int $pickedYear = null;
+
+    public bool $pickedFlag = false;
+
+    /** @var list<string> */
+    public array $pickedList = ['active'];
+
     /** Declared too, and never written from a request. */
     #[Locked]
     public string $lockedStatus = 'active';
@@ -24,7 +32,7 @@ class ListPickedUsers extends VillamentListRecords
      */
     public function getVillamentStateProperties(): array
     {
-        return ['pickedStatus', 'lockedStatus'];
+        return ['pickedStatus', 'lockedStatus', 'pickedYear', 'pickedFlag', 'pickedList'];
     }
 
     protected function getTableQuery(): Builder

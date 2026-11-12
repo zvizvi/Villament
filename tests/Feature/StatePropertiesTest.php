@@ -20,7 +20,7 @@ beforeEach(function (): void {
 it("inlines the page's own properties into the island state", function (): void {
     $config = livewire(ListPickedUsers::class)->set('pickedStatus', 'pending')->instance()->getVillamentTableConfig();
 
-    expect($config['state']['properties'])->toBe(['pickedStatus' => 'pending', 'lockedStatus' => 'active']);
+    expect($config['state']['properties'])->toBe(['pickedStatus' => 'pending', 'lockedStatus' => 'active', 'pickedYear' => null, 'pickedFlag' => false, 'pickedList' => ['active']]);
 });
 
 it('narrows the endpoint by a property the request carries', function (): void {
@@ -57,3 +57,36 @@ it('refuses a value the property cannot take', function (): void {
         ->assertStatus(422)
         ->assertJsonValidationErrors('properties.pickedStatus');
 });
+
+it('casts a query-string value to the property\'s declared type', function (): void {
+    $component = app(HeadlessTableHarness::class)
+        ->forPage(ListPickedUsers::class)
+        ->withStateProperties(['pickedYear' => '2026', 'pickedFlag' => 'true', 'pickedList' => ['a', 'b']])
+        ->getComponent();
+
+    expect($component->pickedYear)->toBe(2026)
+        ->and($component->pickedFlag)->toBeTrue()
+        ->and($component->pickedList)->toBe(['a', 'b']);
+
+    getJson(PICKED_ENDPOINT.'?properties[pickedYear]=2026&properties[pickedFlag]=0')->assertOk();
+});
+
+it('reads an empty value as null on a nullable property and [] on an array one', function (): void {
+    $component = app(HeadlessTableHarness::class)
+        ->forPage(ListPickedUsers::class)
+        ->withStateProperties(['pickedYear' => '', 'pickedList' => ''])
+        ->getComponent();
+
+    expect($component->pickedYear)->toBeNull()
+        ->and($component->pickedList)->toBe([]);
+});
+
+it('refuses a value the declared type cannot honestly take', function (string $query, string $property): void {
+    getJson(PICKED_ENDPOINT.'?'.$query)
+        ->assertStatus(422)
+        ->assertJsonValidationErrors("properties.{$property}");
+})->with([
+    'int from text' => ['properties[pickedYear]=soon', 'pickedYear'],
+    'bool from text' => ['properties[pickedFlag]=maybe', 'pickedFlag'],
+    'array from a scalar' => ['properties[pickedList]=x', 'pickedList'],
+]);

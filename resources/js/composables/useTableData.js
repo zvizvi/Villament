@@ -97,7 +97,11 @@ export function useTableData(endpoint, state, options = {}) {
         // page's mount(), so a property left out would be at its class default
         // there rather than at what the page holds.
         for (const [name, value] of Object.entries(state.properties?.value ?? {})) {
-            if (Array.isArray(value)) {
+            if (Array.isArray(value) && value.length === 0) {
+                // A list with no items leaves no trace in a query string: one
+                // empty value says "emptied", which the endpoint reads as [].
+                params.set(`properties[${name}]`, '')
+            } else if (Array.isArray(value)) {
                 for (const item of value) {
                     params.append(`properties[${name}][]`, item ?? '')
                 }

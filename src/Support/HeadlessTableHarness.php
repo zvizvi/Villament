@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Zvizvi\Villament\Support;
 
+use Closure;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Tables\Table;
 use Illuminate\Contracts\Pagination\CursorPaginator;
@@ -17,6 +18,7 @@ use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 use Livewire\Attributes\Locked;
 use Livewire\LivewireManager;
+use ReflectionNamedType;
 use ReflectionProperty;
 use TypeError;
 use Zvizvi\Villament\Events\HeadlessTableBooted;
@@ -102,9 +104,7 @@ final class HeadlessTableHarness
                 throw ValidationException::withMessages(["properties.{$name}" => "The property [{$name}] must be a scalar or a list of scalars."]);
             }
 
-            if ($value === '' && $property->getType()?->allowsNull()) {
-                $value = null;
-            }
+            $value = $this->coerceToPropertyType($property, $value, $name);
 
             try {
                 $component->{$name} = $value;
@@ -114,6 +114,61 @@ final class HeadlessTableHarness
         }
 
         return $this;
+    }
+
+    /**
+     * A query string carries only strings, so a value is cast to the
+     * property's declared type here, as Livewire's hydration would: under
+     * strict types an `int` or `bool` property would refuse `"2026"` or `"1"`.
+     * An empty value is `null` on a nullable property and `[]` on an array one
+     * (the island sends an emptied list as one empty value, since a list with
+     * no items would leave no trace in the query string). A value the type
+     * cannot honestly take is a 422.
+     */
+    private function coerceToPropertyType(ReflectionProperty $property, mixed $value, string $name): mixed
+    {
+        $type = $property->getType();
+
+        if (! $type instanceof ReflectionNamedType || ! $type->isBuiltin() || $type->getName() === 'mixed') {
+            return $value === '' && $type?->allowsNull() ? null : $value;
+        }
+
+        $refuse = fn (): never => throw ValidationException::withMessages(["properties.{$name}" => "The property [{$name}] does not take that value."]);
+
+        if ($value === '' || $value === null) {
+            return match (true) {
+                $type->getName() === 'array' => [],
+                $type->allowsNull() => null,
+                $value === null => $refuse(),
+                default => $this->castScalar($type->getName(), '', $refuse),
+            };
+        }
+
+        if ($type->getName() === 'array') {
+            return is_array($value) ? $value : $refuse();
+        }
+
+        return is_array($value) ? $refuse() : $this->castScalar($type->getName(), $value, $refuse);
+    }
+
+    /**
+     * @param  Closure(): never  $refuse
+     */
+    private function castScalar(string $type, mixed $value, Closure $refuse): mixed
+    {
+        $string = is_bool($value) ? ($value ? '1' : '0') : (string) $value;
+
+        return match ($type) {
+            'string' => $string,
+            'int' => filter_var($string, FILTER_VALIDATE_INT) !== false ? (int) $string : $refuse(),
+            'float' => is_numeric($string) ? (float) $string : $refuse(),
+            'bool' => match (strtolower($string)) {
+                '1', 'true' => true,
+                '0', 'false', '' => false,
+                default => $refuse(),
+            },
+            default => $value,
+        };
     }
 
     /**

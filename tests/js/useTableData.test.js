@@ -153,6 +153,9 @@ describe('useTableData', () => {
 
         params = new URL(fetchMock.mock.calls[1][0]).searchParams
         expect(params.get('properties[selectedCampaign]')).toBe('c-1')
+        // An emptied list still says so: one empty value, read as [] server-side.
+        expect(params.get('properties[campaigns]')).toBe('')
+        expect(params.has('properties[campaigns][]')).toBe(false)
         expect(params.has('page')).toBe(false)
 
         data.destroy()
