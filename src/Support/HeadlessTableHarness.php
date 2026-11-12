@@ -15,6 +15,7 @@ use Illuminate\Pagination\Cursor;
 use Illuminate\Support\Collection;
 use InvalidArgumentException;
 use Livewire\LivewireManager;
+use Zvizvi\Villament\Events\HeadlessTableBooted;
 
 use function Livewire\wrap;
 
@@ -86,6 +87,8 @@ final class HeadlessTableHarness
 
         $this->callHook('booted');
         $this->callTraitHooks('booted');
+
+        event(new HeadlessTableBooted($this->component));
 
         return $this;
     }
