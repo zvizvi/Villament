@@ -93,6 +93,19 @@ export function useTableData(endpoint, state, options = {}) {
             params.set('tab', state.tab.value)
         }
 
+        // Always sent, an empty value included: the endpoint never ran the
+        // page's mount(), so a property left out would be at its class default
+        // there rather than at what the page holds.
+        for (const [name, value] of Object.entries(state.properties?.value ?? {})) {
+            if (Array.isArray(value)) {
+                for (const item of value) {
+                    params.append(`properties[${name}][]`, item ?? '')
+                }
+            } else {
+                params.set(`properties[${name}]`, value ?? '')
+            }
+        }
+
         if (state.grouping?.value) {
             params.set('grouping', state.grouping.value)
         }
@@ -259,6 +272,12 @@ export function useTableData(endpoint, state, options = {}) {
             resetPageSilently()
             fetchNow()
         }, { flush: 'sync' }),
+
+        watch(() => state.properties?.value, () => {
+            // A page property narrows the query like a filter does.
+            resetPageSilently()
+            fetchNow()
+        }, { deep: true, flush: 'sync' }),
 
         watch(() => state.tab?.value, () => {
             // A tab narrows the query (`modifyQueryWithActiveTab()`); stock's

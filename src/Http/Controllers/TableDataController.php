@@ -59,6 +59,13 @@ final class TableDataController
             $this->harness->withParentRecord($parentRecord);
         }
 
+        // The page's own query-shaping properties, BEFORE boot: the table is
+        // built during boot, and a table may decide which filters exist from
+        // them (filters offered only for a picked campaign, say) — set after,
+        // the island's state would name filters the endpoint never built.
+        $properties = $request->query('properties');
+        $this->harness->withStateProperties(is_array($properties) ? $properties : []);
+
         $this->harness->boot();
 
         $table = $this->harness->getTable();

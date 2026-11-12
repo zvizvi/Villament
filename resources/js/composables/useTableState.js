@@ -144,6 +144,10 @@ export function useTableState(initialState = {}, options = {}) {
     // `onTabChanged`). It is never written to the URL from here.
     const initialTab = initialState.tab ?? null
     const tab = ref(initialTab)
+    // The page's own query-shaping properties
+    // (`HasVillamentTable::getVillamentStateProperties()`). Livewire owns them,
+    // as it owns the tab; the island only echoes them and follows commits.
+    const properties = ref(JSON.parse(JSON.stringify(initialState.properties ?? {})))
 
     let isApplyingUrlState = false
 
@@ -267,6 +271,7 @@ export function useTableState(initialState = {}, options = {}) {
         perPage,
         cursor,
         tab,
+        properties,
         destroy,
     }
 }

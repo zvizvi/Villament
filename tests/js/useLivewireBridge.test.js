@@ -154,6 +154,22 @@ describe('useLivewireBridge', () => {
         expect(onActionCompleted).not.toHaveBeenCalled()
     })
 
+    it("follows a page property a commit changed, and skips the action refetch with it", () => {
+        const onPropertiesChanged = vi.fn()
+        const onActionCompleted = vi.fn()
+        wireState.selectedCampaign = null
+        makeBridge({ initialProperties: { selectedCampaign: null }, onPropertiesChanged, onActionCompleted })
+
+        fireCommit()
+        expect(onPropertiesChanged).not.toHaveBeenCalled()
+
+        wireState.selectedCampaign = 'c-1'
+        fireCommit({ calls: [{ method: 'mountAction', params: [] }] })
+
+        expect(onPropertiesChanged).toHaveBeenCalledWith({ selectedCampaign: 'c-1' })
+        expect(onActionCompleted).not.toHaveBeenCalled()
+    })
+
     it('ignores commits when the filters are unchanged', () => {
         const onFiltersChanged = vi.fn()
         makeBridge({ onFiltersChanged })

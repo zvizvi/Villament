@@ -17,6 +17,7 @@ function makeState() {
         perPage: ref(10),
         cursor: ref(null),
         tab: ref(null),
+        properties: ref({}),
         destroy: () => {},
     }
 }
@@ -126,6 +127,32 @@ describe('useTableData', () => {
 
         // Filter changes reset the page to 1.
         expect(state.page.value).toBe(1)
+        expect(params.has('page')).toBe(false)
+
+        data.destroy()
+    })
+
+    it("sends the page's own properties on every request, and a change refetches from page 1", async () => {
+        fetchMock.mockResolvedValue(jsonResponse())
+
+        const state = makeState()
+        state.properties.value = { selectedCampaign: null, campaigns: ['a', 'b'] }
+        state.page.value = 3
+
+        const data = useTableData(ENDPOINT, state, { schemaVersion: 'v1' })
+
+        state.page.value = 4
+        let params = new URL(fetchMock.mock.calls[0][0]).searchParams
+        expect(params.get('properties[selectedCampaign]')).toBe('')
+        expect(params.getAll('properties[campaigns][]')).toEqual(['a', 'b'])
+
+        state.properties.value = { selectedCampaign: 'c-1', campaigns: [] }
+
+        expect(fetchMock).toHaveBeenCalledTimes(2)
+        expect(state.page.value).toBe(1)
+
+        params = new URL(fetchMock.mock.calls[1][0]).searchParams
+        expect(params.get('properties[selectedCampaign]')).toBe('c-1')
         expect(params.has('page')).toBe(false)
 
         data.destroy()

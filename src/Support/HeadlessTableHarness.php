@@ -13,8 +13,12 @@ use Illuminate\Pagination\AbstractCursorPaginator;
 use Illuminate\Pagination\AbstractPaginator;
 use Illuminate\Pagination\Cursor;
 use Illuminate\Support\Collection;
+use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
+use Livewire\Attributes\Locked;
 use Livewire\LivewireManager;
+use ReflectionProperty;
+use TypeError;
 use Zvizvi\Villament\Events\HeadlessTableBooted;
 
 use function Livewire\wrap;
@@ -60,6 +64,54 @@ final class HeadlessTableHarness
     public function withParentRecord(Model $parentRecord): self
     {
         $this->component->parentRecord = $parentRecord;
+
+        return $this;
+    }
+
+    /**
+     * Sets the page's own query-shaping properties
+     * (`HasVillamentTable::getVillamentStateProperties()`) from the request,
+     * where Livewire would have hydrated them on a page. Only the declared
+     * names are read, a `#[Locked]` property is never written, and a value the
+     * property's type refuses is a 422 rather than a crash.
+     *
+     * @param  array<string, mixed>  $values
+     */
+    public function withStateProperties(array $values): self
+    {
+        $component = $this->component;
+
+        if (! method_exists($component, 'getVillamentStateProperties')) {
+            return $this;
+        }
+
+        foreach ($component->getVillamentStateProperties() as $name) {
+            if (! array_key_exists($name, $values) || ! property_exists($component, $name)) {
+                continue;
+            }
+
+            $property = new ReflectionProperty($component, $name);
+
+            if (! $property->isPublic() || $property->getAttributes(Locked::class) !== []) {
+                continue;
+            }
+
+            $value = $values[$name];
+
+            if (! (is_scalar($value) || $value === null || (is_array($value) && array_is_list($value) && array_filter($value, fn (mixed $item): bool => ! is_scalar($item)) === []))) {
+                throw ValidationException::withMessages(["properties.{$name}" => "The property [{$name}] must be a scalar or a list of scalars."]);
+            }
+
+            if ($value === '' && $property->getType()?->allowsNull()) {
+                $value = null;
+            }
+
+            try {
+                $component->{$name} = $value;
+            } catch (TypeError) {
+                throw ValidationException::withMessages(["properties.{$name}" => "The property [{$name}] does not take that value."]);
+            }
+        }
 
         return $this;
     }

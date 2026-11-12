@@ -348,6 +348,12 @@ const bridge = useLivewireBridge({
     livewireId: props.config.livewireId,
     initialFilters: props.config.state?.filters ?? {},
     initialTab: props.config.state?.tab ?? null,
+    initialProperties: props.config.state?.properties ?? {},
+    onPropertiesChanged: (properties) => {
+        // Livewire owns these; the properties watcher in useTableData resets
+        // the page and refetches.
+        state.properties.value = properties
+    },
     onTabChanged: (tab) => {
         // Livewire owns the active tab; the tab watcher in useTableData resets
         // the page and refetches.

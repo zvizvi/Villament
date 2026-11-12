@@ -127,6 +127,7 @@ export function useLivewireBridge(options) {
         livewireId,
         onFiltersChanged = null,
         onTabChanged = null,
+        onPropertiesChanged = null,
         onActionCompleted = null,
         onDeselectAll = null,
         getSelection = null,
@@ -134,6 +135,8 @@ export function useLivewireBridge(options) {
 
     let lastKnownFiltersJson = JSON.stringify(options.initialFilters ?? {})
     let lastKnownTab = options.initialTab ?? null
+    const propertyNames = Object.keys(options.initialProperties ?? {})
+    let lastKnownPropertiesJson = JSON.stringify(options.initialProperties ?? {})
 
     /**
      * Removes one active filter via Filament's own `removeTableFilter`. The
@@ -486,6 +489,31 @@ export function useLivewireBridge(options) {
                     onTabChanged?.(tabValue)
                 }
 
+                // The page's own query-shaping properties: a toolbar component
+                // (a campaign picker) dispatches an event, the page sets the
+                // property, and the island has to refetch with the new value.
+                let havePropertiesChanged = false
+
+                if (propertyNames.length > 0) {
+                    const properties = {}
+
+                    for (const name of propertyNames) {
+                        try {
+                            properties[name] = component.$wire.get(name) ?? null
+                        } catch {
+                            properties[name] = null
+                        }
+                    }
+
+                    const json = JSON.stringify(properties)
+
+                    if (json !== lastKnownPropertiesJson) {
+                        lastKnownPropertiesJson = json
+                        havePropertiesChanged = true
+                        onPropertiesChanged?.(JSON.parse(json))
+                    }
+                }
+
                 const calls = Array.isArray(commit?.calls) ? commit.calls : []
 
                 const refreshMethods = calls
@@ -494,7 +522,7 @@ export function useLivewireBridge(options) {
 
                 // Double-fetch guard: a filters change already refetches via
                 // the island's filters watcher.
-                if (refreshMethods.length > 0 && ! haveFiltersChanged && ! hasTabChanged) {
+                if (refreshMethods.length > 0 && ! haveFiltersChanged && ! hasTabChanged && ! havePropertiesChanged) {
                     onActionCompleted?.(refreshMethods)
                 }
             })

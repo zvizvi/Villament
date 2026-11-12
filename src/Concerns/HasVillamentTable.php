@@ -42,6 +42,28 @@ trait HasVillamentTable
     }
 
     /**
+     * The page's own public properties its table query depends on.
+     *
+     * Filament keeps a table's state in properties it owns (sort, search,
+     * filters, tab), and the island knows those. A page may narrow its query by
+     * a property of its OWN — a campaign picked in a toolbar component, say,
+     * kept in `$selectedCampaign` and read in `getTableQuery()`. The data
+     * endpoint never runs the page's `mount()` and never sees a Livewire
+     * update, so such a property would be at its default there, and changing
+     * it on the page would never refetch. Naming it here makes the island send
+     * its value with every request (set on the page before the records are
+     * read) and refetch whenever a Livewire commit changes it.
+     *
+     * A `#[Locked]` property is never set from the request.
+     *
+     * @return list<string>
+     */
+    public function getVillamentStateProperties(): array
+    {
+        return [];
+    }
+
+    /**
      * Opt in to a teleport slot in the header filter row, per column.
      *
      * That row — the one directly under the header, which stock fills with the
@@ -199,6 +221,11 @@ trait HasVillamentTable
                 // `mount()`. The island echoes it on every request and follows
                 // it when a tab click commits a new value.
                 'tab' => filled($this->activeTab) ? (string) $this->activeTab : null,
+                // The page's own query-shaping properties
+                // (`getVillamentStateProperties()`), echoed on every request.
+                'properties' => collect($this->getVillamentStateProperties())
+                    ->mapWithKeys(fn (string $name): array => [$name => $this->{$name} ?? null])
+                    ->all(),
                 'page' => $this->getTablePage(),
                 'perPage' => $this->getTableRecordsPerPage(),
                 // Column manager state (session-hydrated by Filament itself);
