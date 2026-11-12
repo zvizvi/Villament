@@ -4,12 +4,15 @@
  * Scans the document for `[data-villament]` mount points, parses the embedded
  * `script[data-villament-config]` JSON, and mounts one Vue app per island.
  * Survives `wire:navigate` by re-scanning on `livewire:navigated` and tearing
- * down apps whose mount point left the DOM.
+ * down apps whose mount point left the DOM. A page restored from Livewire's
+ * back/forward snapshot carries a lifeless copy of the previous render, which
+ * is cleared before the new app mounts (`support/staleRender.js`).
  */
 
 import { createApp } from 'vue'
 import VueTable from './components/VueTable.vue'
 import { registerCellComponent } from './support/cellRegistry.js'
+import { clearStaleRender } from './support/staleRender.js'
 import tableStyles from './styles/table.css?inline'
 
 /** @type {Map<Element, import('vue').App>} */
@@ -65,6 +68,10 @@ function scan() {
             return
         }
 
+        // Never mounted here, yet already holding a render: a copy that came
+        // back inside a Livewire navigate snapshot.
+        clearStaleRender(element)
+
         const config = parseConfig(element)
 
         if (! config) {
@@ -74,6 +81,7 @@ function scan() {
         // Mount into a dedicated child so the config <script> tag survives
         // (the island element itself is wire:ignore'd by Livewire).
         const mountPoint = document.createElement('div')
+        mountPoint.setAttribute('data-villament-mount', '')
         element.appendChild(mountPoint)
 
         const app = createApp(VueTable, { config, rootElement: element })
@@ -111,6 +119,25 @@ if (document.readyState === 'loading') {
 } else {
     scan()
 }
+
+/**
+ * Clears stale renders out of a page just swapped in by `wire:navigate`,
+ * BEFORE Alpine initializes it: Alpine teleports into the native slots by
+ * selector, and a slot left inside a stale copy would be found first.
+ *
+ * @returns {void}
+ */
+function clearStaleRendersOnSwap() {
+    document.querySelectorAll('[data-villament]').forEach((element) => {
+        if (! mountedIslands.has(element)) {
+            clearStaleRender(element)
+        }
+    })
+}
+
+document.addEventListener('livewire:navigating', (event) => {
+    event.detail?.onSwap?.(clearStaleRendersOnSwap)
+})
 
 document.addEventListener('livewire:navigated', () => {
     teardownOrphans()
