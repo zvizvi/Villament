@@ -17,6 +17,7 @@ use Zvizvi\Villament\Support\RequestStateValidator;
 use Zvizvi\Villament\Support\ResourceRegistry;
 use Zvizvi\Villament\Support\SchemaSerializer;
 use Zvizvi\Villament\Support\SummarySerializer;
+use Zvizvi\Villament\Support\ToolbarRenderHooks;
 
 /**
  * Swaps the embedded Livewire table on a ListRecords page for the Vue island
@@ -165,6 +166,9 @@ trait HasVillamentTable
             // anything the table() definition says, and it must not move the
             // schema hash for tables that never turn it on.
             'columnFilterSlots' => $this->getVillamentColumnFilterSlots(),
+            // Page-level too, and for the same reason: which header/toolbar
+            // render hooks have something registered for THIS page class.
+            'renderHooks' => ToolbarRenderHooks::presentFor(static::class),
             'schema' => $schema,
             'initialData' => [
                 // The endpoint is not the only consumer of the record payload:

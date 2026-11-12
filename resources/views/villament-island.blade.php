@@ -50,6 +50,10 @@
         @include('villament::partials.header')
     @endif
 
+    @if ($renderHooks !== [])
+        @include('villament::partials.render-hooks')
+    @endif
+
     @if ($withColumnFilterSlots)
         @include('villament::partials.column-filter-slots')
     @endif

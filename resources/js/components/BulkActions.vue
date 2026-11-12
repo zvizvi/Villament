@@ -74,6 +74,9 @@ function onMount(name) {
         ref="root"
         class="fi-ta-actions fi-align-start fi-wrapped"
     >
+        <!-- Leading siblings inside the same actions row (e.g. render hooks stock puts before the actions). -->
+        <slot name="leading" />
+
         <template
             v-for="(item, index) in actions"
             :key="item.type === 'group' ? `group-${index}` : item.name"

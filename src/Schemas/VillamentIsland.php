@@ -32,6 +32,7 @@ final class VillamentIsland extends Component
                 'withNativeColumnManager' => (bool) ($config['schema']['hasColumnManager'] ?? false),
                 'withNativeHeader' => (bool) ($config['schema']['header']['hasCustomView'] ?? false),
                 'withColumnFilterSlots' => ($config['columnFilterSlots'] ?? []) !== [],
+                'renderHooks' => $config['renderHooks'] ?? [],
             ];
         });
         $static->configure();

@@ -63,6 +63,13 @@ const icons = schema.icons ?? {}
  */
 const columnFilterSlots = props.config.columnFilterSlots ?? {}
 
+/**
+ * The header/toolbar render hooks with something registered for this page
+ * (`Support\ToolbarRenderHooks`). Each is Blade-rendered and teleported into a
+ * `hook` NativeSlot at the place stock renders it.
+ */
+const renderHooks = new Set(props.config.renderHooks ?? [])
+
 const hasColumnFilterSlots = Object.keys(columnFilterSlots).length > 0
 
 /**
@@ -1107,6 +1114,8 @@ function recordCellClasses(column, cellValue = null) {
                     v-if="hasHeaderContainer"
                     class="fi-ta-header-ctn"
                 >
+                    <NativeSlot v-if="renderHooks.has('header-before')" family="hook" name="header-before" style="display: contents" />
+
                     <!--
                         `Table::header(view(...))` REPLACES the whole block in
                         stock (`@if ($header) … @elseif ($heading || …)`), so
@@ -1153,13 +1162,19 @@ function recordCellClasses(column, cellValue = null) {
                         />
                     </div>
 
+                    <NativeSlot v-if="renderHooks.has('header-after')" family="hook" name="header-after" style="display: contents" />
+
                     <!-- AboveContent filters teleport here (stock: inside the header ctn, before the toolbar). -->
                     <div v-if="filtersSlot === 'above'" data-villament-filters-outlet="above" />
+
+                    <NativeSlot v-if="renderHooks.has('toolbar-before')" family="hook" name="toolbar-before" style="display: contents" />
 
                     <div
                         v-if="hasHeaderToolbar"
                         class="fi-ta-header-toolbar"
                     >
+                        <NativeSlot v-if="renderHooks.has('toolbar-start')" family="hook" name="toolbar-start" style="display: contents" />
+
                         <!--
                             The grouping settings live INSIDE the leading
                             `fi-ta-actions` row (stock parity), as a trailing
@@ -1172,11 +1187,20 @@ function recordCellClasses(column, cellValue = null) {
                             :actions="bulkActionsStructure"
                             @mount="bridge.mountBulkAction($event)"
                         >
+                            <template v-if="! toolbarActionsStructure.length" #leading>
+                                <NativeSlot v-if="renderHooks.has('reorder-trigger-before')" family="hook" name="reorder-trigger-before" style="display: contents" />
+                                <NativeSlot v-if="renderHooks.has('reorder-trigger-after')" family="hook" name="reorder-trigger-after" style="display: contents" />
+                            </template>
+
+                            <template v-if="! toolbarActionsStructure.length">
+                            <NativeSlot v-if="renderHooks.has('grouping-selector-before')" family="hook" name="grouping-selector-before" style="display: contents" />
                             <TableGrouping
-                                v-if="hasGrouping && ! toolbarActionsStructure.length"
+                                v-if="hasGrouping"
                                 v-bind="groupingProps"
                                 @update:model-value="state.grouping.value = $event"
                             />
+                            <NativeSlot v-if="renderHooks.has('grouping-selector-after')" family="hook" name="grouping-selector-after" style="display: contents" />
+                            </template>
                         </BulkActions>
 
                         <BulkActions
@@ -1184,25 +1208,37 @@ function recordCellClasses(column, cellValue = null) {
                             :actions="toolbarActionsStructure"
                             @mount="bridge.mountTableAction($event)"
                         >
+                            <template #leading>
+                                <NativeSlot v-if="renderHooks.has('reorder-trigger-before')" family="hook" name="reorder-trigger-before" style="display: contents" />
+                                <NativeSlot v-if="renderHooks.has('reorder-trigger-after')" family="hook" name="reorder-trigger-after" style="display: contents" />
+                            </template>
+                            <NativeSlot v-if="renderHooks.has('grouping-selector-before')" family="hook" name="grouping-selector-before" style="display: contents" />
                             <TableGrouping
                                 v-if="hasGrouping"
                                 v-bind="groupingProps"
                                 @update:model-value="state.grouping.value = $event"
                             />
+                            <NativeSlot v-if="renderHooks.has('grouping-selector-after')" family="hook" name="grouping-selector-after" style="display: contents" />
                         </BulkActions>
 
                         <div
                             v-if="! hasBulkActionsBar && ! toolbarActionsStructure.length"
                             class="fi-ta-actions fi-align-start fi-wrapped"
                         >
+                            <NativeSlot v-if="renderHooks.has('reorder-trigger-before')" family="hook" name="reorder-trigger-before" style="display: contents" />
+                            <NativeSlot v-if="renderHooks.has('reorder-trigger-after')" family="hook" name="reorder-trigger-after" style="display: contents" />
+                            <NativeSlot v-if="renderHooks.has('grouping-selector-before')" family="hook" name="grouping-selector-before" style="display: contents" />
                             <TableGrouping
                                 v-if="hasGrouping"
                                 v-bind="groupingProps"
                                 @update:model-value="state.grouping.value = $event"
                             />
+                            <NativeSlot v-if="renderHooks.has('grouping-selector-after')" family="hook" name="grouping-selector-after" style="display: contents" />
                         </div>
 
                         <div>
+                            <NativeSlot v-if="renderHooks.has('search-before')" family="hook" name="search-before" style="display: contents" />
+
                             <TableSearch
                                 v-if="schema.globallySearchable"
                                 :model-value="state.search.value"
@@ -1219,6 +1255,8 @@ function recordCellClasses(column, cellValue = null) {
                                 the Blade partial — fully native, badge
                                 included. Vue renders only this slot.
                             -->
+                            <NativeSlot v-if="renderHooks.has('search-after')" family="hook" name="search-after" style="display: contents" />
+
                             <div
                                 v-if="filtersToolbarSlot"
                                 data-villament-filters-outlet="toolbar"
@@ -1230,12 +1268,20 @@ function recordCellClasses(column, cellValue = null) {
                                 teleports here from the Blade partial. Vue
                                 renders only this slot.
                             -->
+                            <NativeSlot v-if="hasColumnManager && renderHooks.has('column-manager-trigger-before')" family="hook" name="column-manager-trigger-before" style="display: contents" />
+
                             <div
                                 v-if="hasColumnManager"
                                 data-villament-columns-outlet="toolbar"
                             />
+
+                            <NativeSlot v-if="hasColumnManager && renderHooks.has('column-manager-trigger-after')" family="hook" name="column-manager-trigger-after" style="display: contents" />
                         </div>
+
+                        <NativeSlot v-if="renderHooks.has('toolbar-end')" family="hook" name="toolbar-end" style="display: contents" />
                     </div>
+
+                    <NativeSlot v-if="hasHeaderToolbar && renderHooks.has('toolbar-after')" family="hook" name="toolbar-after" style="display: contents" />
                 </div>
 
                 <!-- Stock drops the indicator entirely for single-select tables. -->
