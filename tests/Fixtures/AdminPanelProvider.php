@@ -32,6 +32,7 @@ class AdminPanelProvider extends PanelProvider
             ->pages([
                 Pages\RepeaterFormPage::class,
                 Pages\ClientRepeaterVariantsPage::class,
+                Pages\RelationshipRepeaterPage::class,
             ])
             ->resources([
                 TeamResource::class,

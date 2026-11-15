@@ -237,6 +237,23 @@ describe('client rendering', () => {
         expect([...list.children].map((item) => item.getAttribute('x-sortable-item'))).toEqual(['a', 'b'])
     })
 
+    it('drops a row the state has no item for, and builds one for an item without a row', () => {
+        // Livewire's back button restored a DOM with a browser-added row
+        // ("ghost") next to a state from before that add.
+        const repeater = mount({
+            rows: [
+                shell('a', slot('a', 'Jane') + content('a', '', { pending: true })),
+                shell('ghost', content('ghost', '', { pending: true })),
+            ],
+        })
+
+        expect(repeater.item('ghost')).toBeNull()
+        // `b` is in the state and had no row: built from the template.
+        expect(repeater.item('b')).not.toBeNull()
+        expect(repeater.item('b').querySelector('input').getAttribute('wire:model')).toBe('data.items.b.label')
+        expect([...repeater.root.querySelectorAll(':scope > ul > li[x-sortable-item]')].map((item) => item.getAttribute('x-sortable-item'))).toEqual(['a', 'b'])
+    })
+
     it('ignores responses for other components, and unhooks on destroy', () => {
         const repeater = mount({ rows: [shell('a', slot('a', 'Jane') + content('a', '', { pending: true }))] })
 

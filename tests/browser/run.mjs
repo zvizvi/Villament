@@ -643,6 +643,109 @@ test('without the browser module (not published, failed), a Livewire response st
     assert.equal(await rows.first().locator('input[wire\\:model$=".label"]').count(), 1, 'the row still has its fields')
 })
 
+test('relationship(): records added, edited, moved and deleted in the browser save like stock', async (page, requests) => {
+    await page.goto(`${baseUrl}/admin/relationship-repeater`)
+    await settle(page)
+
+    for (const name of ['clientNotes', 'stockNotes']) {
+        const before = requests.count
+        const rows = items(page, name)
+
+        assert.equal(await rows.count(), 2, `${name}: the two existing records`)
+        assert.match(await rows.first().getAttribute('x-sortable-item'), /^record-\d+$/)
+
+        await press(addButton(page, name))
+        await settle(page)
+        await rows.nth(2).locator('input[type="text"]').fill('Third')
+        await rows.nth(0).locator('input[type="text"]').fill('First, edited')
+        await press(control(rows.nth(2), 'Move up'))
+        await settle(page)
+        await press(control(rows.nth(0), 'Clone'))
+        await settle(page)
+        await press(control(rows.nth(2), 'Delete'))
+        await settle(page)
+
+        if (name === 'clientNotes') {
+            assert.equal(requests.count - before, 0, 'relationship() structure changes stay in the browser')
+        }
+    }
+
+    await page.click('#save-form')
+    await page.waitForSelector('#stored-notes')
+    await settle(page)
+
+    const stored = JSON.parse(await page.textContent('#stored-notes'))
+
+    assert.deepEqual(stored.client.map((note) => note.body), ['First, edited', 'Third', 'First, edited'])
+    assert.deepEqual(stored.client, stored.stock)
+})
+
+test('wire:navigate: a ClientRepeater works after an SPA visit, and after the back button', async (page, requests) => {
+    const errors = []
+
+    page.on('pageerror', (error) => errors.push(error.message))
+
+    // Repeater form → (wire:navigate) → relationship page.
+    await page.click('#go-relationship-repeater')
+    await page.waitForURL(/relationship-repeater/)
+    await settle(page)
+
+    // The suite's scenarios share one database: count from what is there.
+    const existing = await items(page, 'clientNotes').count()
+    let before = requests.count
+
+    await press(addButton(page, 'clientNotes'))
+    await settle(page)
+
+    assert.equal(await items(page, 'clientNotes').count(), existing + 1, 'the add works on a navigated-to page')
+    assert.equal(requests.count - before, 0)
+
+    await items(page, 'clientNotes').last().locator('input[type="text"]').fill('Before navigating away')
+
+    // → (wire:navigate) → back to the repeater form.
+    await page.click('#go-repeater-form')
+    await page.waitForURL(/repeater-form/)
+    await settle(page)
+
+    before = requests.count
+
+    await press(addButton(page, 'client_flat'))
+    await settle(page)
+
+    assert.equal(await items(page, 'client_flat').count(), 3)
+    assert.equal(requests.count - before, 0)
+
+    // Back: Livewire restores the DOM as it was left (the browser's added
+    // row included) but the component's state from its last server
+    // snapshot, where that deferred add never arrived. The rows must follow
+    // the state: no ghost row without an item behind it.
+    await page.goBack()
+    await page.waitForURL(/relationship-repeater/)
+    await settle(page)
+
+    const restored = await items(page, 'clientNotes').count()
+
+    assert.equal(restored, existing, 'the rows are the restored state\'s items, no ghost row')
+
+    before = requests.count
+
+    await press(addButton(page, 'clientNotes'))
+    await settle(page)
+
+    assert.equal(await items(page, 'clientNotes').count(), restored + 1, 'and the add still works')
+    assert.equal(requests.count - before, 0)
+
+    const saved = await items(page, 'clientNotes').last().locator('input[type="text"]')
+
+    await saved.fill('After back')
+    await page.click('#save-form')
+    await page.waitForSelector('#stored-notes')
+    await settle(page)
+
+    assert.ok(JSON.parse(await page.textContent('#stored-notes')).client.some((note) => note.body === 'After back'))
+    assert.deepEqual(errors.filter((message) => ! message.startsWith('Failed to fetch dynamically imported module')), [])
+})
+
 const browser = await chromium.launch()
 let failures = 0
 
@@ -651,7 +754,7 @@ try {
 
     for (const { name, run } of scenarios) {
         const page = await browser.newPage()
-        const requests = { count: 0, saves: 0 }
+        const requests = { count: 0, saves: 0, log: [] }
         const errors = []
 
         page.on('pageerror', (error) => errors.push(error.message))
@@ -660,8 +763,8 @@ try {
         await page.goto(`${baseUrl}/__browser/login`)
         await settle(page)
 
-        // What the assertions mean by "reached the server": any request
-        // except the two kinds that are not structural — a field's own
+        // What the assertions mean by "reached the server": any request to
+        // the page's component except the two kinds that are not structural — a field's own
         // `callSchemaComponentMethod()` (a FileUpload loading its files once
         // its `x-load` module arrives, whenever that is; it carries the
         // repeater's deferred state along, as it is meant to) and the save.
@@ -672,8 +775,16 @@ try {
                 return
             }
 
-            const components = JSON.parse(request.postData() ?? '{}').components ?? []
+            // Only the fixture page's component, the one holding the
+            // repeaters: Filament's own notifications component pulls on
+            // its own schedule (and on every `wire:navigate`).
+            const components = (JSON.parse(request.postData() ?? '{}').components ?? [])
+                .filter((component) => JSON.parse(component.snapshot ?? '{}').memo?.name?.includes('Tests\\Fixtures\\Pages'))
             const calls = components.flatMap((component) => component.calls ?? [])
+
+            if (components.length === 0) {
+                return
+            }
 
             if (calls.some((call) => call.method === 'save')) {
                 requests.saves++
@@ -681,6 +792,7 @@ try {
 
             if ((calls.length === 0) || calls.some((call) => ! ['callSchemaComponentMethod', 'save'].includes(call.method))) {
                 requests.count++
+                requests.log.push(calls.length ? calls.map((call) => `${call.method}(${JSON.stringify(call.params).slice(0, 80)})`).join(', ') : `commit ${JSON.stringify(components.map((component) => Object.keys(component.updates ?? {}))).slice(0, 120)}`)
             }
         })
 
@@ -693,7 +805,7 @@ try {
             console.log(`  ✓ ${name}`)
         } catch (error) {
             failures++
-            console.log(`  ✗ ${name}\n    ${error.message.split('\n').slice(0, 4).join('\n    ')}`)
+            console.log(`  ✗ ${name}\n    ${error.message.split('\n').slice(0, 4).join('\n    ')}${requests.log.length ? `\n    counted requests: ${requests.log.join(' | ')}` : ''}`)
         } finally {
             await page.close()
         }

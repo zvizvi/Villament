@@ -30,4 +30,30 @@ class Team extends Model
     {
         return $this->hasMany(User::class);
     }
+
+    /**
+     * @return HasMany<TeamNote, $this>
+     */
+    public function notes(): HasMany
+    {
+        return $this->hasMany(TeamNote::class);
+    }
+
+    /**
+     * The relationship repeater fixture's two sides (`RelationshipRepeaterPage`).
+     *
+     * @return HasMany<TeamNote, $this>
+     */
+    public function clientNotes(): HasMany
+    {
+        return $this->hasMany(TeamNote::class)->where('kind', 'client');
+    }
+
+    /**
+     * @return HasMany<TeamNote, $this>
+     */
+    public function stockNotes(): HasMany
+    {
+        return $this->hasMany(TeamNote::class)->where('kind', 'stock');
+    }
 }
