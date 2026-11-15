@@ -317,6 +317,12 @@ $methodContract = [
     [Field::class, 'shouldShowAllValidationMessages'],
     [Field::class, 'hasErrorForPath'],
     [LivewireManager::class, 'isLivewireRequest'],
+    // `table()`: the reorder column's condition and the actions column's.
+    [Repeater::class, 'getTableColumns'],
+    [Repeater::class, 'isReorderableWithButtons'],
+    [Repeater::class, 'isReorderableWithDragAndDrop'],
+    [Repeater::class, 'getExtraItemActions'],
+    [Repeater::class, 'isDeletable'],
 ];
 
 $propertyContract = [
@@ -393,7 +399,7 @@ it('still declares every stock structural repeater action inline in Repeater.php
 it('still renders the repeater markup ClientRepeater cuts its template from', function (): void {
     $source = file_get_contents((new ReflectionClass(Repeater::class))->getFileName());
 
-    foreach (['class="fi-fo-repeater-item-content"', 'class="fi-fo-simple-repeater-item-content"', 'data-reorder-owner', 'x-ref\' => \'reorderItems', 'fi-fo-repeater-add', 'fi-fo-simple-repeater-add', 'data-reorder-description', 'fi-fo-repeater-add-between-items-ctn', 'repeaterFormComponent('] as $marker) {
+    foreach (['$hasReorderColumn = ($itemCount > 1)', '$hasActionsColumn = count($extraItemActions) || $isCloneable || $isDeletable', 'fi-fo-table-repeater-add', 'fi-fo-table-repeater-actions', '<tbody x-sortable', 'class="fi-fo-repeater-item-content"', 'class="fi-fo-simple-repeater-item-content"', 'data-reorder-owner', 'x-ref\' => \'reorderItems', 'fi-fo-repeater-add', 'fi-fo-simple-repeater-add', 'data-reorder-description', 'fi-fo-repeater-add-between-items-ctn', 'repeaterFormComponent('] as $marker) {
         expect(str_contains($source, $marker))->toBeTrue("Filament internal API drift: Repeater markup no longer contains [{$marker}].");
     }
 });

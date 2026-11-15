@@ -32,23 +32,31 @@ function templateReferences(string $html): array
 }
 
 it('ships one template for a nested repeater however many rows there are', function (int $rows): void {
-    $component = livewire(RepeaterFormPage::class);
-    $item = $component->get('data.client_items');
-    $items = [];
+    $root = function (int $rows) use (&$keys): string {
+        $component = livewire(RepeaterFormPage::class);
+        $item = $component->get('data.client_items');
+        $items = [];
 
-    for ($i = 0; $i < $rows; $i++) {
-        $items[(string) Str::uuid()] = reset($item);
-    }
+        for ($i = 0; $i < $rows; $i++) {
+            $items[(string) Str::uuid()] = reset($item);
+        }
 
-    $html = $component->set('data.client_items', $items)->html();
-    $root = substr($html, strpos($html, 'id="form.client_items"'), strpos($html, 'id="form.stock_items"') - strpos($html, 'id="form.client_items"'));
+        $keys = array_keys($items);
+        $html = $component->set('data.client_items', $items)->html();
+        $start = strpos($html, 'id="form.client_items"');
 
-    $references = array_values(array_filter(templateReferences($root), fn (array $reference): bool => $reference['ancestor'] === 'form.client_items'));
+        return substr($html, $start, strpos($html, 'id="form.stock_items"') - $start);
+    };
+
+    $single = $root(1);
+    $many = $root($rows);
+
+    $references = array_values(array_filter(templateReferences($many), fn (array $reference): bool => $reference['ancestor'] === 'form.client_items'));
 
     expect($references)->toHaveCount($rows)
-        ->and(array_column($references, 'item'))->toBe(array_keys($items))
+        ->and(array_column($references, 'item'))->toBe($keys)
         // The outer template, and inside it the nested one: constant.
-        ->and(substr_count($root, '<template data-villament-repeater-template wire:key'))->toBe(substr_count(livewire(RepeaterFormPage::class)->html(), '<template data-villament-repeater-template wire:key') - 2);
+        ->and(substr_count($many, '<template data-villament-repeater-template wire:key'))->toBe(substr_count($single, '<template data-villament-repeater-template wire:key'));
 })->with([1, 5]);
 
 it('carries the instance\'s own meta in the reference', function (): void {

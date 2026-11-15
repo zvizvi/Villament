@@ -6,6 +6,7 @@ use Filament\Forms\Components\Repeater;
 use Illuminate\Support\Str;
 use Livewire\Features\SupportTesting\Testable;
 use Zvizvi\Villament\Forms\ClientRepeater;
+use Zvizvi\Villament\Forms\Support\HtmlFragments;
 use Zvizvi\Villament\Tests\Fixtures\Models\User;
 use Zvizvi\Villament\Tests\Fixtures\Pages\ClientRepeaterVariantsPage;
 use Zvizvi\Villament\Tests\Fixtures\Pages\RepeaterFormPage;
@@ -202,6 +203,36 @@ it('still validates and saves the browser-rendered rows like any other state', f
 
     // The error reaches the browser through the snapshot (`$wire.$errors`).
     expect($component->snapshot['memo']['errors'])->toHaveKey("data.client_flat.{$key}.label");
+});
+
+it('renders table() cells in the browser: keyed, ignored cells on a page load, keyed placeholders on requests', function (): void {
+    $component = livewire(RepeaterFormPage::class);
+    $key = array_key_first($component->get('data.client_table'));
+    $row = fn (string $html): string => (string) HtmlFragments::element($html, 'x-sortable-item="'.$key.'"', 'tr');
+
+    // A page load: the cells render, each owned by the browser and keyed.
+    $pageLoad = $row($component->html());
+
+    foreach ([0, 1, 2] as $index) {
+        expect($pageLoad)->toContain('<td wire:ignore wire:key="villament-repeater-cell.'.$key.'.'.$index.'"');
+    }
+
+    expect($pageLoad)->toContain('wire:model="data.client_table.'.$key.'.sku"');
+
+    // A Livewire request: three keyed, empty placeholders, no field.
+    $update = $row(livewireRequest($component)->html());
+
+    expect(preg_match_all('/<td wire:ignore wire:key="villament-repeater-cell\.'.preg_quote($key, '/').'\.\d" data-villament-repeater-pending><\/td>/', $update))->toBe(3)
+        ->and($update)->not->toContain('wire:model="data.client_table.'.$key.'.sku"')
+        // The row's own actions are still the server's, as in stock.
+        ->and($update)->toContain('data-villament-repeater-action="delete"');
+});
+
+it('keeps a table() with a Hidden field on the server: Filament renders it outside any cell', function (): void {
+    $html = livewire(ClientRepeaterVariantsPage::class)->html();
+
+    expect(templateMeta($html, 'hidden_table')['rendering'])->toBeNull()
+        ->and(templateMeta($html, 'hidden_table')['layout'])->toBe('table');
 });
 
 it('turns client rendering off with clientRendering(false), keeping the client structure', function (): void {

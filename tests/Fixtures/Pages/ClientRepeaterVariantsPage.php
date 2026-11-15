@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Zvizvi\Villament\Tests\Fixtures\Pages;
 
 use Filament\Actions\Action;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Repeater;
+use Filament\Forms\Components\Repeater\TableColumn;
 use Filament\Forms\Components\TextInput;
 use Filament\Pages\Page;
 use Filament\Schemas\Schema;
@@ -67,6 +69,9 @@ class ClientRepeaterVariantsPage extends Page
                 Repeater::make('stock_outer')->schema([
                     ClientRepeater::make('inner')->schema($field()),
                 ]),
+                ClientRepeater::make('hidden_table')
+                    ->table([TableColumn::make('Name')])
+                    ->schema([TextInput::make('name'), Hidden::make('secret')]),
                 ClientRepeater::make('server_rendered')->schema($field())->clientRendering(false),
                 ClientRepeater::make('opted_out')->schema($field())->clientStructure(false),
                 ClientRepeater::make('empty')->schema($field())->defaultItems(0),

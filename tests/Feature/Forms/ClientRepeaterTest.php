@@ -94,6 +94,7 @@ it('saves the same state as stock for the same sequence of operations', function
     // add, add, add-between the first two (where enabled), type into each,
     // move the last up, delete the first.
     $items = items($component, $client);
+    $expected = count($items) + 2 + ($hasAddBetween ? 1 : 0) - 1;
     [$items] = clientAdd($items, $meta);
     [$items, $third] = clientAdd($items, $meta);
 
@@ -104,6 +105,7 @@ it('saves the same state as stock for the same sequence of operations', function
     $field = match ($client) {
         'client_flat' => 'label',
         'client_simple' => 'email',
+        'client_table' => 'sku',
         default => 'name',
     };
 
@@ -136,11 +138,12 @@ it('saves the same state as stock for the same sequence of operations', function
     $saved = $component->get('saved');
 
     expect($saved[$client])->toBe($saved[$stock])
-        ->and($saved[$client])->toHaveCount(3);
+        ->and($saved[$client])->toHaveCount($expected);
 })->with([
     'every field type, nested repeaters' => ['client_items', 'stock_items', true],
     'flat, numbered, min/max' => ['client_flat', 'stock_flat', false],
     'simple()' => ['client_simple', 'stock_simple', false],
+    'table()' => ['client_table', 'stock_table', false],
 ]);
 
 it('clones in the browser only when every field draws its value from the state', function (): void {
@@ -224,6 +227,29 @@ it('decides per action which ones run in the browser', function (): void {
     // A confirmation or a lifecycle hook needs the server.
     expect(templateMeta($html, 'confirmed')['actions'])->toMatchArray(['add' => false, 'delete' => false, 'moveUp' => true])
         ->and(templateMeta($html, 'replaced')['actions'])->toMatchArray(['add' => false, 'delete' => true]);
+});
+
+it('runs the table() layout in the browser, from a template it can parse', function (): void {
+    $html = livewire(RepeaterFormPage::class)->html();
+    $meta = templateMeta($html, 'client_table');
+
+    expect($meta['layout'])->toBe('table')
+        ->and($meta['reorderColumn'])->toBeTrue()
+        ->and($meta['actions'])->toMatchArray(['add' => true, 'clone' => true, 'delete' => true, 'moveUp' => true])
+        // The component cells: after the reorder cell, three of them.
+        ->and($meta['rendering']['cells'])->toBe(['start' => 1, 'count' => 3])
+        ->and(array_column($meta['rendering']['fields'], 'key'))->toBe(['sku', 'size', 'active']);
+
+    preg_match('/id="form\.client_table"[^>]*>(<template data-villament-repeater-template[\s\S]*?<\/template>)\s*<span wire:ignore x-ref="reorderStatus"/', $html, $template);
+
+    // The shell: the whole table, its header WITH the reorder column (the
+    // template renders two rows), around an empty body.
+    expect($template[1])->toMatch('/<table> ?<thead> ?<tr> ?<th scope="col" class="fi-fo-table-repeater-empty-header-cell">/')
+        ->toMatch('/<tbody x-sortable[^>]*x-ref="reorderItems"><\/tbody> ?<\/table>/')
+        // The row in a template of its own: a bare `<tr>` would be dropped
+        // by the HTML parser.
+        ->toMatch('/<template data-villament-repeater-row><tr\s[^>]*x-sortable-item="villament-/')
+        ->toMatch('/<template data-villament-repeater-add><div\s+class="fi-fo-table-repeater-add/');
 });
 
 it('falls back to the stock Repeater wholesale when the browser cannot keep up', function (string $name): void {

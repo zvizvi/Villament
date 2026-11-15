@@ -53,7 +53,7 @@ const repeater = (page, name) => page.locator(`[id="form.${name}"]`)
 const items = (page, name) => repeater(page, name).locator(':scope > ul > li[x-sortable-item]')
 // The item's own controls: the card layout's header, or `simple()`'s action list.
 const control = (item, label) => item.locator(':scope > .fi-fo-repeater-item-header, :scope > .fi-fo-simple-repeater-item-actions').first().getByRole('button', { name: label, exact: true })
-const addButton = (page, name) => repeater(page, name).locator(':scope > .fi-fo-repeater-add button, :scope > .fi-fo-simple-repeater-add button')
+const addButton = (page, name) => repeater(page, name).locator(':scope > .fi-fo-repeater-add button, :scope > .fi-fo-simple-repeater-add button, :scope > .fi-fo-table-repeater-add button')
 
 /**
  * Clicks once the control is out of Livewire's loading state: Filament's
@@ -411,6 +411,161 @@ test('a nested repeater in a server-rendered row works from the reference to its
 
     assert.deepEqual(titles('client_items'), ['Task', 'From the page load', 'From the slot'])
     assert.deepEqual(titles('client_items'), titles('stock_items'))
+})
+
+test('table(): rows, the reorder column and the empty table follow the browser\'s operations like stock', async (page, requests) => {
+    const rows = (name) => repeater(page, name).locator(':scope > table > tbody > tr[x-sortable-item]')
+    const headCells = (name) => repeater(page, name).locator(':scope > table > thead > tr > th')
+    const cellControl = (row, label) => row.getByRole('button', { name: label, exact: true })
+    const normalize = (html) => html
+        // Icons are compared as Filament's output on both sides, not here:
+        // a stock button has a `wire:click`, so Filament adds a loading
+        // spinner targeting that request (ours make none) and renders its
+        // icon through that path.
+        .replace(/<svg[\s\S]*?<\/svg>/g, '')
+        .replace(/(client|stock)_table/g, 'X')
+        .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g, 'KEY')
+        .replace(/[0-9a-f]{32}/g, 'MD5')
+        .replace(/ data-villament-repeater-action="[^"]*"/g, '')
+        .replace(/ wire:click="[^"]*"/g, '')
+        .replace(/ data-reorder-action="[^"]*"/g, '')
+        .replace(/ wire:key="[^"]*"/g, '')
+        // The cells the browser owns are marked so (and keyed, above).
+        .replace(/ wire:ignore=""/g, '')
+        .replace(/<([a-z]+) +>/g, '<$1>')
+        .replace(/>\s+</g, '><')
+        .replace(/\s+/g, ' ')
+
+    for (const name of ['client_table', 'stock_table']) {
+        const before = requests.count
+
+        // One row: no reorder column.
+        assert.equal(await headCells(name).count(), 4, `${name}: three columns and the actions`)
+
+        await press(addButton(page, name))
+        await settle(page)
+
+        assert.equal(await headCells(name).count(), 5, `${name}: two rows bring the reorder column`)
+
+        await rows(name).nth(1).locator('input[type="text"]').fill(`Second ${name}`)
+        await press(cellControl(rows(name).nth(0), 'Clone'))
+        await settle(page)
+        await press(cellControl(rows(name).nth(1), 'Move up'))
+        await settle(page)
+        await press(addButton(page, name))
+        await settle(page)
+
+        assert.equal(await rows(name).count(), 4)
+        assert.equal(await repeater(page, name).locator(':scope > .fi-fo-table-repeater-add').count(), 0, `${name}: maxItems drops the add button`)
+        assert.equal(await repeater(page, name).locator('button[aria-label="Clone"]').count(), 0, `${name}: … and every clone button`)
+
+        if (name === 'client_table') {
+            assert.equal(requests.count - before, 0, 'table() structure changes stay in the browser')
+        }
+    }
+
+    // Serialized with sorted attributes: the browser toggles `disabled` /
+    // `aria-disabled` at runtime, which appends them; `data-has-alpine-state`
+    // is Livewire's runtime marker, not markup.
+    const serialize = (element) => element.evaluate((root) => {
+        const walk = (node) => {
+            if (node.nodeType === Node.TEXT_NODE) {
+                return node.textContent
+            }
+
+            if (node.nodeType !== Node.ELEMENT_NODE) {
+                return ''
+            }
+
+            const attributes = [...node.attributes]
+                .filter((attribute) => attribute.name !== 'data-has-alpine-state')
+                .map((attribute) => `${attribute.name}="${attribute.value}"`)
+                .sort()
+                .join(' ')
+
+            return `<${node.localName} ${attributes}>${[...node.childNodes].map(walk).join('')}</${node.localName}>`
+        }
+
+        return walk(root)
+    })
+
+    assert.equal(
+        normalize(await serialize(repeater(page, 'client_table').locator(':scope > table'))),
+        normalize(await serialize(repeater(page, 'stock_table').locator(':scope > table'))),
+        'the same table markup as stock',
+    )
+
+    const saved = await save(page)
+
+    assert.deepEqual(saved.client_table.map((row) => row.sku), saved.stock_table.map((row) => row.sku.replace('stock_table', 'client_table')))
+
+    // Back to one row: the reorder column goes; to none: the table goes.
+    for (let index = 0; index < 3; index++) {
+        await press(cellControl(rows('client_table').first(), 'Delete'))
+    }
+
+    assert.equal(await headCells('client_table').count(), 4)
+
+    await press(cellControl(rows('client_table').first(), 'Delete'))
+
+    assert.equal(await repeater(page, 'client_table').locator(':scope > table').count(), 0)
+
+    await press(addButton(page, 'client_table'))
+
+    assert.equal(await rows('client_table').count(), 1)
+    assert.equal(await headCells('client_table').count(), 4)
+    assert.equal((await save(page)).client_table.length, 1)
+})
+
+test('table() client rendering: cells come from the browser, errors from $wire.$errors', async (page) => {
+    const responses = []
+
+    page.on('response', async (response) => {
+        if (response.request().method() === 'POST' && /\/livewire[^/]*\/update/.test(response.url())) {
+            responses.push(await response.text())
+        }
+    })
+
+    const rows = (name) => repeater(page, name).locator(':scope > table > tbody > tr[x-sortable-item]')
+
+    for (const name of ['client_table', 'stock_table']) {
+        await press(addButton(page, name))
+        await settle(page)
+        await rows(name).nth(0).locator('input[type="text"]').fill('Kept')
+        await rows(name).nth(1).locator('input[type="text"]').fill('bad')
+    }
+
+    await page.click('#save-form')
+    await settle(page)
+
+    const html = JSON.parse(responses.at(-1)).components[0].effects.html
+    const client = html.slice(html.indexOf('id="form.client_table"'), html.indexOf('id="form.stock_table"'))
+
+    // Each row: three pending placeholders, no field.
+    assert.equal((client.match(/<td wire:ignore wire:key="villament-repeater-cell\.[^"]+" data-villament-repeater-pending><\/td>/g) ?? []).length, 6)
+    assert.equal((client.match(/wire:model="data\.client_table\.[0-9a-f]{8}-[0-9a-f-]{27}\.sku"/g) ?? []).length, 0)
+
+    assert.equal(await rows('client_table').nth(0).locator('input[type="text"]').inputValue(), 'Kept')
+    assert.equal(await rows('client_table').locator('td[data-villament-repeater-pending]').count(), 0, 'every placeholder was filled')
+
+    const errorOf = (name) => rows(name).nth(1).locator('[data-validation-error]')
+
+    assert.equal(await errorOf('client_table').count(), 1)
+    assert.equal(await errorOf('client_table').textContent(), await errorOf('stock_table').textContent())
+    assert.equal(
+        await rows('client_table').nth(1).locator('.fi-input-wrp').first().getAttribute('class'),
+        await rows('stock_table').nth(1).locator('.fi-input-wrp').first().getAttribute('class'),
+    )
+
+    for (const name of ['client_table', 'stock_table']) {
+        await rows(name).nth(1).locator('input[type="text"]').fill('Fine')
+    }
+
+    const saved = await save(page)
+
+    assert.equal(await errorOf('client_table').count(), 0)
+    assert.deepEqual(saved.client_table.map((row) => row.sku), ['Kept', 'Fine'])
+    assert.deepEqual(saved.client_table, saved.stock_table)
 })
 
 const browser = await chromium.launch()

@@ -7,6 +7,7 @@ namespace Zvizvi\Villament\Tests\Fixtures\Pages;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Repeater;
+use Filament\Forms\Components\Repeater\TableColumn;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -52,12 +53,38 @@ class RepeaterFormPage extends Page
                 static::flatRepeater(Repeater::class, 'stock_flat'),
                 static::simpleRepeater(ClientRepeater::class, 'client_simple'),
                 static::simpleRepeater(Repeater::class, 'stock_simple'),
+                static::tableRepeater(ClientRepeater::class, 'client_table'),
+                static::tableRepeater(Repeater::class, 'stock_table'),
             ]);
     }
 
     public function save(): void
     {
         $this->saved = $this->form->getState();
+    }
+
+    /**
+     * The `table()` layout: rows of cells, a reorder column from two rows.
+     *
+     * @param  class-string<Repeater>  $class
+     */
+    public static function tableRepeater(string $class, string $name): Repeater
+    {
+        return $class::make($name)
+            ->table([
+                TableColumn::make('SKU'),
+                TableColumn::make('Size'),
+                TableColumn::make('Active'),
+            ])
+            ->schema([
+                TextInput::make('sku')->default('NEW')->rule('not_in:bad'),
+                Select::make('size')->native()->options(['s' => 'S', 'm' => 'M'])->default('s'),
+                Toggle::make('active')->default(true),
+            ])
+            ->defaultItems(1)
+            ->cloneable()
+            ->reorderableWithButtons()
+            ->maxItems(4);
     }
 
     /**
