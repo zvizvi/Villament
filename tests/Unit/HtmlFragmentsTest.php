@@ -45,3 +45,13 @@ it('collapses whitespace between tags only, never inside a tag or a pre/textarea
 
     expect(HtmlFragments::collapseWhitespace($html))->toBe("<div> <span\n        x-init=\"let a = 1\n        let b = 2 // ASI\n        run(a, b)\"\n    >x</span> <textarea>  keep\n  </textarea> <pre>\n  <b>a</b>\n  </pre> </div>");
 });
+
+it('cuts intact fragments when an attribute value holds raw < and >', function (): void {
+    // An app's `extraAttributes()` is merged with `escape: false`.
+    $html = '<div data-reorder-owner data-x="a > b" data-y="<li>"><ul><li x-sortable-item="k" data-z="1 > 0 < 2"><span>x</span></li><li x-sortable-item="m"></li></ul></div>';
+
+    expect(HtmlFragments::element($html, 'x-sortable-item="k"', 'li'))->toBe('<li x-sortable-item="k" data-z="1 > 0 < 2"><span>x</span></li>')
+        ->and(HtmlFragments::openingTag($html, 'data-reorder-owner'))->toBe('<div data-reorder-owner data-x="a > b" data-y="<li>">')
+        ->and(HtmlFragments::insertAfterOpeningTag($html, 'data-reorder-owner', '<i></i>'))->toStartWith('<div data-reorder-owner data-x="a > b" data-y="<li>"><i></i><ul>')
+        ->and(HtmlFragments::collapseWhitespace('<div data-x="a >  <b"> </div>'))->toBe('<div data-x="a >  <b"> </div>');
+});

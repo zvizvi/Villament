@@ -41,9 +41,10 @@ function repeaterRoot(string $html, string $name): string
 
 function livewireRequest(Testable $component): Testable
 {
-    // What Livewire's own update requests carry; the render then only
+    // A Livewire update request (Livewire's test calls are), with the
+    // handshake the Alpine component adds to them; the render then only
     // draws the item shells.
-    request()->headers->set('X-Livewire', '1');
+    ClientRepeater::fakeClient();
 
     return $component->call('$refresh');
 }
@@ -80,6 +81,24 @@ it('renders only the item shells on Livewire requests', function (): void {
 
     // The stock twin still renders its fields.
     expect(preg_match_all('/wire:model="data\.stock_flat\.[0-9a-f-]{36}\.label"/', repeaterRoot($component->html(), 'stock_flat')))->toBe(2);
+});
+
+it('renders items whole on a Livewire request without the browser\'s handshake', function (): void {
+    // No Alpine component announced itself (the asset is not published, did
+    // not load, or is stale): nothing would fill a shell.
+    $root = repeaterRoot(livewire(RepeaterFormPage::class)->call('$refresh')->html(), 'client_flat');
+
+    expect(preg_match_all('/wire:model="data\.client_flat\.[0-9a-f-]{36}\.label"/', $root))->toBe(2)
+        ->and($root)->not->toContain('data-villament-repeater-pending');
+});
+
+it('accepts the handshake only for the module version it serves', function (): void {
+    expect(ClientRepeater::clientAssetVersion())->toMatch('/^[0-9a-f]{32}$/')
+        ->and(ClientRepeater::CLIENT_HEADER)->toBe('X-Villament-Client-Repeater');
+
+    // The module sends its own `?v=`, the one the server serves it with.
+    expect(templateMeta(livewire(RepeaterFormPage::class)->html(), 'client_flat'))->not->toBeNull()
+        ->and(livewire(RepeaterFormPage::class)->html())->toContain('client-repeater.js?v='.ClientRepeater::clientAssetVersion());
 });
 
 it('does not grow its response with the number of items like stock does', function (): void {
@@ -233,6 +252,19 @@ it('keeps a table() with a Hidden field on the server: Filament renders it outsi
 
     expect(templateMeta($html, 'hidden_table')['rendering'])->toBeNull()
         ->and(templateMeta($html, 'hidden_table')['layout'])->toBe('table');
+});
+
+it('renders a mixed item on the server unless clientRendering() is explicit', function (): void {
+    // Measured, an item with server units costs more server time than stock
+    // (DECISIONS.md): automatic client rendering is for fully
+    // client-renderable items only.
+    $html = livewireRequest(livewire(ClientRepeaterVariantsPage::class))->html();
+
+    expect(templateMeta($html, 'mixed_auto')['rendering'])->toBeNull()
+        ->and(templateMeta($html, 'mixed_auto')['actions']['add'])->toBeTrue()
+        // `client_items` opts in explicitly, `client_flat` has no server units.
+        ->and(renderingMeta(livewireRequest(livewire(RepeaterFormPage::class))->html(), 'client_items'))->not->toBeNull()
+        ->and(renderingMeta(livewire(RepeaterFormPage::class)->html(), 'client_flat')['server'])->toBe([]);
 });
 
 it('turns client rendering off with clientRendering(false), keeping the client structure', function (): void {

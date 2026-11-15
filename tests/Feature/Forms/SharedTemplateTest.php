@@ -79,8 +79,9 @@ it('keeps a template of its own where the outer copy would not be exact', functi
     $html = livewire(ClientRepeaterVariantsPage::class)->html();
     $ancestors = array_column(templateReferences($html), 'ancestor');
 
-    // `shared`: referenced. `closured` (a closure may differ per row) and
-    // `inner` (its outer is a stock Repeater, which has no template): not.
+    // `shared`: referenced. `closured` (a closure may differ per row),
+    // `row_default` (so may its field's default, which reads the outer row)
+    // and `inner` (its outer is a stock Repeater, which has no template): not.
     expect($ancestors)->toContain('form.outer')
         ->and(collect(templateReferences($html))->where('ancestor', 'form.outer')->count())->toBe(1)
         ->and($ancestors)->not->toContain('form.stock_outer');
@@ -88,6 +89,9 @@ it('keeps a template of its own where the outer copy would not be exact', functi
     preg_match_all('/id="form\.outer\.[0-9a-f-]{36}\.closured"[^>]*data-reorder-owner[^>]*><template data-villament-repeater-template wire:key/', $html, $closured);
     preg_match_all('/id="form\.stock_outer\.[0-9a-f-]{36}\.inner"[^>]*data-reorder-owner[^>]*><template data-villament-repeater-template wire:key/', $html, $inner);
 
+    preg_match_all('/id="form\.outer\.[0-9a-f-]{36}\.row_default"[^>]*data-reorder-owner[^>]*><template data-villament-repeater-template wire:key/', $html, $rowDefault);
+
     expect($closured[0])->toHaveCount(1)
+        ->and($rowDefault[0])->toHaveCount(1)
         ->and($inner[0])->toHaveCount(1);
 });

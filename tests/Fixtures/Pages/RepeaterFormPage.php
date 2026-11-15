@@ -4,14 +4,25 @@ declare(strict_types=1);
 
 namespace Zvizvi\Villament\Tests\Fixtures\Pages;
 
+use Filament\Forms\Components\Checkbox;
+use Filament\Forms\Components\CheckboxList;
+use Filament\Forms\Components\ColorPicker;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\Hidden;
+use Filament\Forms\Components\KeyValue;
+use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Repeater\TableColumn;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Slider;
+use Filament\Forms\Components\TagsInput;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\TimePicker;
 use Filament\Forms\Components\Toggle;
+use Filament\Forms\Components\ToggleButtons;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Utilities\Get;
@@ -53,6 +64,8 @@ class RepeaterFormPage extends Page
                 static::flatRepeater(Repeater::class, 'stock_flat'),
                 static::simpleRepeater(ClientRepeater::class, 'client_simple'),
                 static::simpleRepeater(Repeater::class, 'stock_simple'),
+                static::fieldsRepeater(ClientRepeater::class, 'client_fields'),
+                static::fieldsRepeater(Repeater::class, 'stock_fields'),
                 static::tableRepeater(ClientRepeater::class, 'client_table'),
                 static::tableRepeater(Repeater::class, 'stock_table'),
             ]);
@@ -61,6 +74,40 @@ class RepeaterFormPage extends Page
     public function save(): void
     {
         $this->saved = $this->form->getState();
+    }
+
+    /**
+     * One of every field class `Renderability` lets the browser render, each
+     * holding a non-empty value: cloning a row in the browser must show what
+     * stock's clone shows, field type by field type.
+     *
+     * @param  class-string<Repeater>  $class
+     */
+    public static function fieldsRepeater(string $class, string $name): Repeater
+    {
+        $options = ['a' => 'Alpha', 'b' => 'Beta'];
+
+        return $class::make($name)
+            ->defaultItems(1)
+            ->cloneable()
+            ->schema([
+                Checkbox::make('checkbox')->default(true),
+                CheckboxList::make('checkbox_list')->options($options)->default(['b']),
+                ColorPicker::make('color')->default('#ff0000'),
+                DatePicker::make('date')->default('2026-01-02'),
+                DateTimePicker::make('date_time')->default('2026-01-02 03:04:05'),
+                Hidden::make('hidden')->default('secret'),
+                KeyValue::make('key_value')->default(['k' => 'v']),
+                Radio::make('radio')->options($options)->default('b'),
+                Slider::make('slider')->range(minValue: 0, maxValue: 10)->default(7),
+                TagsInput::make('tags')->default(['one', 'two']),
+                Textarea::make('textarea')->default('Some text'),
+                TextInput::make('text')->default('Value'),
+                TimePicker::make('time')->default('03:04:05'),
+                Toggle::make('toggle')->default(true),
+                ToggleButtons::make('toggle_buttons')->options($options)->default('b'),
+                Select::make('select')->native()->options($options)->default('b'),
+            ]);
     }
 
     /**
@@ -134,7 +181,16 @@ class RepeaterFormPage extends Page
     {
         $nested = $class === ClientRepeater::class ? ClientRepeater::class : Repeater::class;
 
-        return $class::make($name)
+        $repeater = $class::make($name);
+
+        if ($repeater instanceof ClientRepeater) {
+            // Both explicit: the item has an `afterStateHydrated()` of the
+            // app's own (see `note`), and server units (searchable select,
+            // file upload, nested repeater).
+            $repeater->clientStructure()->clientRendering();
+        }
+
+        return $repeater
             ->defaultItems(1)
             ->cloneable()
             ->collapsible()

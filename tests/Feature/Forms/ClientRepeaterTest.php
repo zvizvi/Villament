@@ -252,6 +252,30 @@ it('runs the table() layout in the browser, from a template it can parse', funct
         ->toMatch('/<template data-villament-repeater-add><div\s+class="fi-fo-table-repeater-add/');
 });
 
+it('sends a move action with a disabled() condition back to Livewire', function (): void {
+    // The browser recomputes first / last and would overwrite the app's
+    // condition.
+    expect(templateMeta(livewire(ClientRepeaterVariantsPage::class)->html(), 'disabled_moves')['actions'])
+        ->toMatchArray(['moveUp' => false, 'moveDown' => true, 'add' => true]);
+});
+
+it('keeps an item with an app afterStateHydrated() on stock unless clientStructure() is explicit', function (): void {
+    $html = livewire(ClientRepeaterVariantsPage::class)->html();
+
+    // The template is filled on every render: the hook would run on every
+    // request, not only on an add.
+    expect(templateMeta($html, 'hydrating'))->toBeNull()
+        ->and(templateMeta($html, 'hydrating_opted_in'))->not->toBeNull();
+});
+
+it('renames nested item keys in the template, and leaves UUID-shaped keys in data alone', function (): void {
+    $meta = templateMeta(livewire(ClientRepeaterVariantsPage::class)->html(), 'uuid_data');
+
+    expect($meta['state']['meta'])->toBe(['0a8d7c1e-1111-4a2b-8c3d-000000000001' => 'kept'])
+        ->and(array_keys($meta['state']['nested']))->each->toStartWith('villament-')
+        ->and(array_column($meta['tokens'], 'token'))->toHaveCount(2);
+});
+
 it('falls back to the stock Repeater wholesale when the browser cannot keep up', function (string $name): void {
     $html = livewire(ClientRepeaterVariantsPage::class)->html();
 

@@ -568,6 +568,80 @@ test('table() client rendering: cells come from the browser, errors from $wire.$
     assert.deepEqual(saved.client_table, saved.stock_table)
 })
 
+test('a browser clone shows what stock\'s clone shows, for every field type the browser renders', async (page) => {
+    for (const name of ['client_fields', 'stock_fields']) {
+        await press(control(items(page, name).first(), 'Clone'))
+        await settle(page)
+    }
+
+    // The clone's live DOM, field by field: sorted attributes, form control
+    // values as the browser holds them, keys and ids factored out.
+    const fieldsOf = (name) => items(page, name).nth(1).evaluate((row) => {
+        const walk = (node) => {
+            if (node.nodeType === Node.TEXT_NODE) {
+                return node.textContent.replace(/\s+/g, ' ')
+            }
+
+            if (node.nodeType !== Node.ELEMENT_NODE || node.localName === 'template') {
+                return ''
+            }
+
+            const attributes = [...node.attributes]
+                .filter((attribute) => ! ['data-has-alpine-state', 'style'].includes(attribute.name))
+                .map((attribute) => `${attribute.name}="${attribute.value}"`)
+                .sort()
+            const value = ['input', 'select', 'textarea'].includes(node.localName) ? ` value=${JSON.stringify(node.value)} checked=${node.checked}` : ''
+
+            return `<${node.localName} ${attributes.join(' ')}${value}>${[...node.childNodes].map(walk).join('')}</${node.localName}>`
+        }
+
+        return Object.fromEntries([...row.querySelectorAll('[wire\\:partial]')].map((unit) => [unit.getAttribute('wire:partial').split('.').pop(), walk(unit)]))
+    })
+    const normalize = (html) => html
+        .replace(/(client|stock)_fields/g, 'X')
+        .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g, 'KEY')
+        .replace(/[0-9a-f]{32}/g, 'MD5')
+        .replace(/ wire:key="[^"]*"/g, '')
+        .replace(/\s+/g, ' ')
+
+    const client = await fieldsOf('client_fields')
+    const stock = await fieldsOf('stock_fields')
+
+    assert.deepEqual(Object.keys(client), Object.keys(stock))
+    assert.equal(Object.keys(client).length, 16)
+
+    const differing = Object.keys(stock).filter((field) => normalize(client[field]) !== normalize(stock[field]))
+
+    assert.deepEqual(differing, [], `fields whose clone differs from stock's: ${differing.join(', ')}`)
+
+    const saved = await save(page)
+
+    assert.deepEqual(saved.client_fields, saved.stock_fields)
+})
+
+test('without the browser module (not published, failed), a Livewire response still renders every row', async (page) => {
+    // The page again, with the client-repeater module unable to load: no
+    // Alpine component, hence no handshake header.
+    const fresh = page
+
+    await fresh.route(/client-repeater\.js/, (route) => route.abort())
+    await fresh.reload()
+    await settle(fresh)
+
+    // Without its Alpine component the repeater stays `x-ignore`d — its
+    // fields unbound, as a stock repeater whose `repeater.js` failed — so
+    // the form itself cannot be submitted. What must not happen is the next
+    // Livewire response emptying the rows.
+    await fresh.evaluate(() => window.Livewire.all()[0].$wire.$refresh())
+    await settle(fresh)
+
+    const rows = fresh.locator('[id="form.client_flat"] > ul > li[x-sortable-item]')
+
+    assert.equal(await rows.count(), 2)
+    assert.equal(await fresh.locator('[id="form.client_flat"] [data-villament-repeater-pending]').count(), 0, 'no shell left for nobody to fill')
+    assert.equal(await rows.first().locator('input[wire\\:model$=".label"]').count(), 1, 'the row still has its fields')
+})
+
 const browser = await chromium.launch()
 let failures = 0
 
@@ -595,7 +669,10 @@ try {
 
         try {
             await run(page, requests)
-            assert.deepEqual(errors, [], `no page errors: ${errors.join(' | ')}`)
+            // The missing-module scenario aborts that module on purpose.
+            const unexpected = errors.filter((message) => ! message.startsWith('Failed to fetch dynamically imported module'))
+
+            assert.deepEqual(unexpected, [], `no page errors: ${unexpected.join(' | ')}`)
             console.log(`  ✓ ${name}`)
         } catch (error) {
             failures++
