@@ -25,13 +25,6 @@ row. Rendering the shell client-side too would cut that, but the header holds
 server state (`itemLabel()` closures, per-item action visibility, the
 reordering descriptions). Measure first: `client_flat` is at ~5 KB per row.
 
-## `ClientRepeater`: the `table()` layout
-
-`toTableEmbeddedHtml()` renders `<tr>` rows with the actions in a trailing
-cell and no item header. The client operations carry over unchanged; the DOM
-side needs a row-shaped template, its own separators (none), and the
-first/last button logic on cells. Until then `table()` falls back to stock.
-
 ---
 
 ## Shrink the `cells` payload
