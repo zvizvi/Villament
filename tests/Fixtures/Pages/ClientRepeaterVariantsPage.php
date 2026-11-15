@@ -81,7 +81,7 @@ class ClientRepeaterVariantsPage extends Page
                 // Server units and nothing else said: client rendering stays off.
                 ClientRepeater::make('mixed_auto')->schema([
                     TextInput::make('name'),
-                    Select::make('owner')->searchable()->getSearchResultsUsing(fn (): array => []),
+                    Select::make('owner')->searchable()->getSearchResultsUsing(fn (): array => [])->getOptionLabelUsing(fn (): ?string => null),
                 ]),
                 // An app `afterStateHydrated()` would run on every render.
                 ClientRepeater::make('hydrating')->schema([

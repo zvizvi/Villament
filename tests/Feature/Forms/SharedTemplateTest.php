@@ -95,3 +95,27 @@ it('keeps a template of its own where the outer copy would not be exact', functi
         ->and($rowDefault[0])->toHaveCount(1)
         ->and($inner[0])->toHaveCount(1);
 });
+
+it('fills a nested row\'s default from ITS enclosing row, not the shared blank one', function (): void {
+    // Invisible in the DOM, visible only in what gets saved: the nested
+    // `row_default.copy` defaults to the enclosing row's `label`. With a
+    // shared template it would come from the ancestor's blank row.
+    $component = livewire(ClientRepeaterVariantsPage::class);
+    $outerKey = array_key_first($component->get('data.outer'));
+
+    $component->set("data.outer.{$outerKey}.label", 'Ada');
+
+    $html = $component->html();
+    $start = strpos($html, 'id="form.outer.'.$outerKey.'.row_default"');
+    preg_match('/<script type="application\/json" data-villament-repeater-meta>(.*?)<\/script>/s', substr($html, $start), $script);
+    $meta = json_decode($script[1], true, flags: JSON_THROW_ON_ERROR);
+
+    expect($meta['state']['copy'])->toBe('Ada');
+
+    // And it is what a browser add saves.
+    [$items] = clientAdd($component->get("data.outer.{$outerKey}.row_default"), $meta);
+
+    $component->set("data.outer.{$outerKey}.row_default", $items)->call('save');
+
+    expect(array_column($component->get('saved.outer.0.row_default'), 'copy'))->toContain('Ada');
+});
