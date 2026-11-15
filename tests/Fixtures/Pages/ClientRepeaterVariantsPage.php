@@ -57,6 +57,7 @@ class ClientRepeaterVariantsPage extends Page
                 ClientRepeater::make('hooked')->schema($field())->afterStateUpdated(fn () => null),
                 ClientRepeater::make('simple')->simple(TextInput::make('name')),
                 ClientRepeater::make('integer_keys')->schema($field())->generateUuidUsing(false),
+                ClientRepeater::make('server_rendered')->schema($field())->clientRendering(false),
                 ClientRepeater::make('opted_out')->schema($field())->clientStructure(false),
                 ClientRepeater::make('empty')->schema($field())->defaultItems(0),
                 ClientRepeater::make('full')->schema($field())->defaultItems(2)->maxItems(2)->cloneable()->labelBetweenItems('or'),

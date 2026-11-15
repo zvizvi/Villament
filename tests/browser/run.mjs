@@ -55,10 +55,79 @@ const items = (page, name) => repeater(page, name).locator(':scope > ul > li[x-s
 const control = (item, label) => item.locator(':scope > .fi-fo-repeater-item-header, :scope > .fi-fo-simple-repeater-item-actions').first().getByRole('button', { name: label, exact: true })
 const addButton = (page, name) => repeater(page, name).locator(':scope > .fi-fo-repeater-add button, :scope > .fi-fo-simple-repeater-add button')
 
-/** Waits for in-flight Livewire work (stock's actions) to settle. */
+/**
+ * Clicks once the control is out of Livewire's loading state: Filament's
+ * action buttons carry `wire:loading.attr="aria-disabled"`, so in stock AND
+ * here a click during any in-flight request (a FileUpload loading its files)
+ * is ignored.
+ */
+async function press(locator, { dispatch = false } = {}) {
+    await locator.page().waitForFunction((element) => element.getAttribute('aria-disabled') !== 'true', await locator.elementHandle())
+
+    await (dispatch ? locator.dispatchEvent('click') : locator.click())
+}
+
+/**
+ * Polls `count` until it equals `expected`: a live field's request and the
+ * page's own background requests (a FileUpload loading its files) can land
+ * in either order, so the final DOM is what is asserted, not the first one.
+ */
+async function eventually(count, expected, message) {
+    let actual
+
+    for (let attempt = 0; attempt < 50; attempt++) {
+        actual = await count()
+
+        if (actual === expected) {
+            return
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 100))
+    }
+
+    assert.equal(actual, expected, message)
+}
+
+/**
+ * Waits until no Livewire request is in flight, and none started for a
+ * moment. (`waitForLoadState('networkidle')` cannot do this: it resolves at
+ * once on a page that already reached that load state.)
+ */
 async function settle(page) {
-    await page.waitForLoadState('networkidle')
-    await page.waitForTimeout(150)
+    await page.waitForTimeout(50)
+
+    let quietSince = Date.now()
+
+    for (let attempt = 0; attempt < 200; attempt++) {
+        if ((page.villamentInFlight ?? 0) > 0) {
+            quietSince = Date.now()
+        } else if (Date.now() - quietSince >= 200) {
+            return
+        }
+
+        await page.waitForTimeout(25)
+    }
+}
+
+/** Counts this page's in-flight Livewire requests, for `settle()`. */
+function trackLivewire(page) {
+    page.villamentInFlight = 0
+
+    const isLivewire = (request) => request.method() === 'POST' && /\/livewire[^/]*\/update/.test(request.url())
+
+    page.on('request', (request) => {
+        if (isLivewire(request)) {
+            page.villamentInFlight++
+        }
+    })
+
+    for (const event of ['requestfinished', 'requestfailed']) {
+        page.on(event, (request) => {
+            if (isLivewire(request)) {
+                page.villamentInFlight--
+            }
+        })
+    }
 }
 
 async function save(page) {
@@ -147,19 +216,19 @@ test('the same operations on the client and the stock repeater save the same sta
         await settle(page)
 
         await items(page, name).nth(1).locator('input[type="text"]').first().fill(`Second of ${name}`)
-        await repeater(page, name).locator(':scope > ul > li.fi-fo-repeater-add-between-items-ctn button').first().click()
+        await press(repeater(page, name).locator(':scope > ul > li.fi-fo-repeater-add-between-items-ctn button').first())
         await settle(page)
         // Without `reorderableWithButtons()` the move buttons are stock's
         // visually hidden keyboard controls: press them, don't aim at them.
-        await control(items(page, name).nth(2), 'Move up').dispatchEvent('click')
+        await press(control(items(page, name).nth(2), 'Move up'), { dispatch: true })
         await settle(page)
-        await control(items(page, name).first(), 'Delete').click()
+        await press(control(items(page, name).first(), 'Delete'))
         await settle(page)
 
         // A nested repeater inside a row the browser added.
         const nested = items(page, name).first().locator('[id$=".tasks"]').first()
 
-        await nested.locator(':scope > .fi-fo-repeater-add button').click()
+        await press(nested.locator(':scope > .fi-fo-repeater-add button'))
         await settle(page)
         await nested.locator(':scope > ul > li[x-sortable-item]').nth(1).locator('input[type="text"]').fill(`Task of ${name}`)
     }
@@ -168,7 +237,7 @@ test('the same operations on the client and the stock repeater save the same sta
     const normalize = (state) => JSON.parse(JSON.stringify(state).replaceAll('client_items', 'X').replaceAll('stock_items', 'X'))
 
     assert.equal(saved.client_items.length, 3)
-    assert.deepEqual(normalize(saved.client_items), normalize(saved.stock_items))
+    assert.deepEqual(normalize(saved.client_items), normalize(saved.stock_items), JSON.stringify({ client: saved.client_items, stock: saved.stock_items }))
 })
 
 test('simple(): add, clone, move and delete in the browser save like stock', async (page, requests) => {
@@ -216,6 +285,96 @@ test('a searchable select in a browser-added row searches the server for the new
     assert.equal(saved.client_items[1].owner, 'u1')
 })
 
+test('client rendering: Livewire responses carry no row content, and the rows keep theirs', async (page) => {
+    const responses = []
+
+    page.on('response', async (response) => {
+        if (response.request().method() === 'POST' && /\/livewire[^/]*\/update/.test(response.url())) {
+            responses.push(await response.text())
+        }
+    })
+
+    await items(page, 'client_flat').first().locator('input[type="text"]').fill('Kept across morphs')
+    await addButton(page, 'client_flat').click()
+    await save(page)
+
+    const html = JSON.parse(responses.at(-1)).components[0].effects.html
+    const root = html.slice(html.indexOf('id="form.client_flat"'), html.indexOf('id="form.stock_flat"'))
+    const stockRoot = html.slice(html.indexOf('id="form.stock_flat"'), html.indexOf('id="form.client_simple"'))
+
+    assert.equal((root.match(/data-villament-repeater-pending/g) ?? []).length, 3, 'every row is a shell')
+    // (The one `label` field in there is the template's, under its placeholder key.)
+    assert.equal((root.match(/wire:model="data\.client_flat\.[0-9a-f]{8}-[0-9a-f-]{27}\.label"/g) ?? []).length, 0, 'no row content in the response')
+    assert.equal((stockRoot.match(/wire:model="data\.stock_flat\.[^"]+\.label"/g) ?? []).length, 2, 'the stock twin renders its fields')
+
+    assert.equal(await items(page, 'client_flat').first().locator('input[type="text"]').inputValue(), 'Kept across morphs')
+    assert.equal(await items(page, 'client_flat').count(), 3)
+    assert.equal(await items(page, 'client_flat').nth(2).locator('input[type="text"]').inputValue(), 'Row')
+})
+
+test('client rendering: validation errors come from $wire.$errors, in stock markup', async (page) => {
+    for (const name of ['client_flat', 'stock_flat']) {
+        await items(page, name).nth(1).locator('input[type="text"]').fill('bad')
+    }
+
+    await page.click('#save-form')
+    await settle(page)
+
+    const fieldOf = (name) => items(page, name).nth(1).locator('[data-field-wrapper]').first()
+    const normalize = (html) => html
+        .replace(/(client|stock)_flat/g, 'X')
+        .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g, 'KEY')
+        .replace(/\s+/g, ' ')
+
+    const clientError = fieldOf('client_flat').locator('[data-validation-error]')
+
+    assert.equal(await clientError.count(), 1, 'the client row shows the error')
+    assert.match(await clientError.textContent(), /invalid/i)
+    assert.equal(await fieldOf('client_flat').locator('input').getAttribute('aria-invalid'), 'true')
+    assert.equal(normalize(await clientError.evaluate((element) => element.outerHTML)), normalize(await fieldOf('stock_flat').locator('[data-validation-error]').evaluate((element) => element.outerHTML)))
+    assert.equal(
+        await fieldOf('client_flat').locator('.fi-input-wrp').getAttribute('class'),
+        await fieldOf('stock_flat').locator('.fi-input-wrp').getAttribute('class'),
+    )
+
+    for (const name of ['client_flat', 'stock_flat']) {
+        await items(page, name).nth(1).locator('input[type="text"]').fill('Fixed')
+    }
+
+    const saved = await save(page)
+
+    assert.equal(await fieldOf('client_flat').locator('[data-validation-error]').count(), 0, 'the error goes once the field is valid')
+    assert.equal(await fieldOf('client_flat').locator('input').getAttribute('aria-invalid'), null)
+    assert.equal(saved.client_flat[1].label, 'Fixed')
+})
+
+test('client rendering: a server unit (visible(fn) on the row) follows the row from its slot', async (page) => {
+    for (const name of ['client_items', 'stock_items']) {
+        const row = items(page, name).first()
+
+        assert.equal(await row.locator('[id$=".vip_note"]').count(), 1, `${name}: visible while active`)
+
+        await row.locator('button[role="switch"]').first().click()
+        await settle(page)
+
+        await eventually(() => row.locator('[id$=".vip_note"]').count(), 0, `${name}: hidden once inactive`)
+    }
+
+    // And in a row the browser added: the template's provisional unit, then
+    // the server's from the row's slot.
+    await addButton(page, 'client_items').click()
+    await settle(page)
+
+    const added = items(page, 'client_items').last()
+
+    assert.equal(await added.locator('[id$=".vip_note"]').count(), 1)
+
+    await added.locator('button[role="switch"]').first().click()
+    await settle(page)
+
+    await eventually(() => added.locator('[id$=".vip_note"]').count(), 0, 'the added row: hidden once inactive')
+})
+
 const browser = await chromium.launch()
 let failures = 0
 
@@ -228,6 +387,7 @@ try {
         const errors = []
 
         page.on('pageerror', (error) => errors.push(error.message))
+        trackLivewire(page)
 
         await page.goto(`${baseUrl}/__browser/login`)
         await settle(page)
@@ -242,7 +402,7 @@ try {
 
         try {
             await run(page, requests)
-            assert.deepEqual(errors, [], 'no page errors')
+            assert.deepEqual(errors, [], `no page errors: ${errors.join(' | ')}`)
             console.log(`  ✓ ${name}`)
         } catch (error) {
             failures++

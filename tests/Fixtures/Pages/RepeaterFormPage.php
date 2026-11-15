@@ -13,6 +13,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Zvizvi\Villament\Forms\ClientRepeater;
 
@@ -91,7 +92,9 @@ class RepeaterFormPage extends Page
             ->minItems(1)
             ->maxItems(5)
             ->schema([
-                TextInput::make('label')->default('Row'),
+                // `not_in` is server-only: `required` alone would be stopped by
+                // the browser's own validation before the request.
+                TextInput::make('label')->default('Row')->required()->rule('not_in:bad'),
                 Select::make('size')->native()->options(['s' => 'S', 'm' => 'M'])->default('m'),
                 Toggle::make('enabled')->default(false),
             ]);
@@ -112,12 +115,15 @@ class RepeaterFormPage extends Page
             ->addBetweenAction(fn ($action) => $action->visible())
             ->schema([
                 Grid::make(2)->schema([
-                    TextInput::make('name')->default('New'),
+                    TextInput::make('name')->default('New')->required(),
                     Select::make('role')
                         ->native()
                         ->options(['admin' => 'Admin', 'editor' => 'Editor'])
                         ->default('editor'),
-                    Toggle::make('active')->default(true),
+                    Toggle::make('active')->default(true)->live(),
+                    // Shown per row from the server: a client-rendered row
+                    // places it from its slot after every request.
+                    TextInput::make('vip_note')->visible(fn (Get $get): bool => (bool) $get('active')),
                     DatePicker::make('due'),
                     Select::make('owner')
                         ->searchable()

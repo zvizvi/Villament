@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
+use Filament\Forms\Components\Field;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Panel;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Resources\Pages\PageRegistration;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Component as SchemaComponent;
 use Filament\Schemas\Schema;
 use Filament\Support\Assets\AlpineComponent;
 use Filament\Support\Assets\AssetManager;
@@ -303,6 +305,18 @@ $methodContract = [
     [Select::class, 'isHtmlAllowed'],
     [Select::class, 'getRelationshipName'],
     [AssetManager::class, 'getAlpineComponentSrc'],
+    // Client rendering: the shells, the per-row slot and the error variants.
+    [Repeater::class, 'getItems'],
+    [Schema::class, 'getClone'],
+    [Schema::class, 'components'],
+    [Schema::class, 'getComponents'],
+    [SchemaComponent::class, 'toSchemaHtml'],
+    [SchemaComponent::class, 'getChildSchemas'],
+    [SchemaComponent::class, 'getKey'],
+    [Field::class, 'areHtmlValidationMessagesAllowed'],
+    [Field::class, 'shouldShowAllValidationMessages'],
+    [Field::class, 'hasErrorForPath'],
+    [LivewireManager::class, 'isLivewireRequest'],
 ];
 
 $propertyContract = [
@@ -379,7 +393,16 @@ it('still declares every stock structural repeater action inline in Repeater.php
 it('still renders the repeater markup ClientRepeater cuts its template from', function (): void {
     $source = file_get_contents((new ReflectionClass(Repeater::class))->getFileName());
 
-    foreach (['data-reorder-owner', 'x-ref\' => \'reorderItems', 'fi-fo-repeater-add', 'fi-fo-simple-repeater-add', 'data-reorder-description', 'fi-fo-repeater-add-between-items-ctn', 'repeaterFormComponent('] as $marker) {
+    foreach (['class="fi-fo-repeater-item-content"', 'class="fi-fo-simple-repeater-item-content"', 'data-reorder-owner', 'x-ref\' => \'reorderItems', 'fi-fo-repeater-add', 'fi-fo-simple-repeater-add', 'data-reorder-description', 'fi-fo-repeater-add-between-items-ctn', 'repeaterFormComponent('] as $marker) {
         expect(str_contains($source, $marker))->toBeTrue("Filament internal API drift: Repeater markup no longer contains [{$marker}].");
     }
+});
+
+it('still renders each schema component in the wrapper client rendering places units by', function (): void {
+    $source = file_get_contents((new ReflectionClass(SchemaComponent::class))->getFileName());
+    $wrapper = file_get_contents((new ReflectionClass(Repeater::class))->getFileName());
+
+    expect(str_contains($source, 'wire:partial="schema-component::'))->toBeTrue('Filament internal API drift: schema components no longer render a [wire:partial="schema-component::{key}"] wrapper.')
+        ->and(str_contains(file_get_contents(dirname((new ReflectionClass(Repeater::class))->getFileName(), 3).'/resources/views/components/field-wrapper.blade.php'), 'data-validation-error'))->toBeTrue('Filament internal API drift: the field wrapper no longer marks its error with [data-validation-error].')
+        ->and(str_contains($wrapper, '$item->toHtml()'))->toBeTrue('Filament internal API drift: Repeater no longer renders an item through [$item->toHtml()].');
 });
