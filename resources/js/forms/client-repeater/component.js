@@ -104,7 +104,11 @@ export function createClientRepeaterFormComponent(baseFactory, environment = def
                 // `x-on:click.stop`, so a bubbling listener would never fire.
                 this.$root.addEventListener('click', this.villamentClickListener, true)
 
-                this.villamentSyncRows()
+                // After Alpine has finished initializing this tree: the sync
+                // may remove a row (see `villamentReconcileMembership()`),
+                // and removing one while Alpine still walks it would evaluate
+                // the row's `x-data` detached from this component's scope.
+                ;(this.$nextTick ?? ((callback) => callback()))(() => this.villamentSyncRows())
 
                 // After every morph of our component: the rows go back to the
                 // state's order, and — when the content renders here — rows
@@ -876,6 +880,7 @@ export function createClientRepeaterFormComponent(baseFactory, environment = def
             villamentSyncRows() {
                 const meta = this.villamentMeta()
 
+                this.villamentReconcileMembership(meta)
                 this.villamentReconcileOrder()
 
                 if (! meta?.rendering) {
@@ -886,6 +891,58 @@ export function createClientRepeaterFormComponent(baseFactory, environment = def
 
                 for (const item of this.villamentItemElements()) {
                     this.villamentSyncRow(item, meta, errors)
+                }
+            },
+
+            /**
+             * The rows must be the state's items, no more and no fewer. They
+             * drift apart when the DOM and the state are restored from
+             * different moments: Livewire's back button (`wire:navigate`)
+             * puts back the DOM as it was left, rows the browser added
+             * included, but the component's state from the last server
+             * snapshot, where a deferred add never arrived. A row with no
+             * item goes; an item with no row gets one from the template.
+             *
+             * @param {?TemplateMeta} meta
+             */
+            villamentReconcileMembership(meta) {
+                const state = this.villamentRead()
+                const keys = Object.keys(state)
+                let changed = false
+
+                for (const item of this.villamentItemElements()) {
+                    if (! keys.includes(item.getAttribute('x-sortable-item') ?? '')) {
+                        item.remove()
+                        changed = true
+                    }
+                }
+
+                const present = new Set(this.villamentItemElements().map((item) => item.getAttribute('x-sortable-item')))
+
+                for (const [index, key] of keys.entries()) {
+                    if (present.has(key) || ! meta) {
+                        continue
+                    }
+
+                    const { replacements } = mapTokens(meta.tokens, environment.generateKey, environment.hash, key)
+                    const element = this.villamentItemFromTemplate(replacements)
+
+                    if (! element) {
+                        continue
+                    }
+
+                    this.villamentMarkRendered(element, key, meta)
+                    this.villamentInsert(element, index === 0 ? null : keys[index - 1])
+
+                    if (index === 0) {
+                        this.villamentList()?.insertBefore(element, this.villamentList()?.firstElementChild ?? null)
+                    }
+
+                    changed = true
+                }
+
+                if (changed) {
+                    this.villamentRefresh()
                 }
             },
 
