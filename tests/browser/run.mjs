@@ -770,6 +770,11 @@ try {
         // repeater's deferred state along, as it is meant to) and the save.
         // A `mountAction`, a `$set`, a bare commit all count. (Checked: with
         // `villamentWrite()` made live, the no-request scenarios fail.)
+        // The exclusion is by method name, so a `callSchemaComponentMethod()`
+        // the repeater itself drove would be skipped too. That is safe today
+        // because no structural operation uses it: stock's add, delete,
+        // clone, move and reorder all go through `mountAction`. If one ever
+        // does, filter that method by the component key it names instead.
         page.on('request', (request) => {
             if (request.method() !== 'POST' || ! /\/livewire[^/]*\/update/.test(request.url())) {
                 return
