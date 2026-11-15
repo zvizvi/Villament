@@ -964,10 +964,10 @@ class ClientRepeater extends Repeater
             $relative = fn (string $value, string $prefix): string => str_starts_with($value, $prefix) ? substr($value, strlen($prefix)) : $value;
 
             return [
-                'server' => array_values(array_map(
+                'server' => array_map(
                     fn (Component $component): string => $relative((string) $component->getKey(), $prefix),
                     $plan['server'],
-                )),
+                ),
                 'fields' => array_values(array_map(
                     fn (Field $field): array => [
                         'key' => $relative((string) $field->getKey(), $prefix),
@@ -1022,10 +1022,6 @@ class ClientRepeater extends Repeater
     protected function memo(string $what, Closure $compute): mixed
     {
         $livewire = $this->getLivewire();
-
-        if (! is_object($livewire)) {
-            return $compute();
-        }
 
         self::$memos ??= new WeakMap;
 

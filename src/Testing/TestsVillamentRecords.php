@@ -6,6 +6,7 @@ namespace Zvizvi\Villament\Testing;
 
 use Closure;
 use Illuminate\Support\Collection;
+use Livewire\Component;
 use Livewire\Features\SupportTesting\Testable;
 use PHPUnit\Framework\Assert;
 
@@ -20,14 +21,13 @@ use PHPUnit\Framework\Assert;
  * which is exactly what `getVillamentTableConfig()` inlines. Any other
  * component keeps Filament's own HTML-based behaviour, unchanged.
  *
- * @mixin Testable
+ * @mixin Testable<Component>
  */
 final class TestsVillamentRecords
 {
     public function assertCanSeeTableRecords(): Closure
     {
         return function (array|Collection $records, bool $inOrder = false): static {
-            /** @var Testable $this */
             $component = $this->instance();
 
             if (! VillamentRecordKeys::isVillament($component)) {
@@ -63,7 +63,6 @@ final class TestsVillamentRecords
     public function assertCanNotSeeTableRecords(): Closure
     {
         return function (array|Collection $records): static {
-            /** @var Testable $this */
             $component = $this->instance();
 
             if (! VillamentRecordKeys::isVillament($component)) {
@@ -88,23 +87,18 @@ final class TestsVillamentRecords
     public function assertCanRenderTableColumn(): Closure
     {
         return function (string $name): static {
-            /** @var Testable $this */
             $component = $this->instance();
 
-            /** @phpstan-ignore-next-line */
             $this->assertTableColumnVisible($name);
 
             if (! VillamentRecordKeys::isVillament($component)) {
-                $this->assertSeeHtml(array_map(
-                    fn (mixed $record): string => "wire:key=\"{$component->getId()}.table.record.{$component->getTableRecordKey($record)}.column.{$name}\"",
-                    $component->getTableRecords()->all(),
-                ));
+                $this->assertSeeHtml(VillamentRecordKeys::cellKeys($component, $name));
 
                 return $this;
             }
 
             // Each row the island paints carries a cell per VISIBLE column.
-            Assert::assertArrayHasKey($name, $component->getTable()->getVisibleColumns(), "Failed asserting that the Villament table renders the column [{$name}].");
+            Assert::assertArrayHasKey($name, VillamentRecordKeys::visibleColumns($component), "Failed asserting that the Villament table renders the column [{$name}].");
 
             return $this;
         };
@@ -113,23 +107,18 @@ final class TestsVillamentRecords
     public function assertCanNotRenderTableColumn(): Closure
     {
         return function (string $name): static {
-            /** @var Testable $this */
             $component = $this->instance();
 
-            /** @phpstan-ignore-next-line */
             $this->assertTableColumnExists($name);
 
             if (! VillamentRecordKeys::isVillament($component)) {
-                $this->assertDontSeeHtml(array_map(
-                    fn (mixed $record): string => "wire:key=\"{$component->getId()}.table.record.{$component->getTableRecordKey($record)}.column.{$name}\"",
-                    $component->getTableRecords()->all(),
-                ));
+                $this->assertDontSeeHtml(VillamentRecordKeys::cellKeys($component, $name));
 
                 return $this;
             }
 
             if (VillamentRecordKeys::shownKeys($component) !== []) {
-                Assert::assertArrayNotHasKey($name, $component->getTable()->getVisibleColumns(), "Failed asserting that the Villament table does not render the column [{$name}].");
+                Assert::assertArrayNotHasKey($name, VillamentRecordKeys::visibleColumns($component), "Failed asserting that the Villament table does not render the column [{$name}].");
             }
 
             return $this;
@@ -143,14 +132,12 @@ final class TestsVillamentRecords
      * behaves as in `assertSee()`: by default a value is also found in its
      * HTML-escaped form, which is how text sits inside an HTML cell.
      *
-     * On a page without the island it is plain `assertSee()`.
-     *
-     * @param  string|array<int, string>  $values
+     * On a page without the island it is plain `assertSee()`. `$values` is
+     * a string or a list of strings.
      */
     public function assertSeeInTable(): Closure
     {
         return function (string|array $values, bool $escape = true): static {
-            /** @var Testable $this */
             $component = $this->instance();
 
             if (! VillamentRecordKeys::isVillament($component)) {
@@ -173,12 +160,11 @@ final class TestsVillamentRecords
     }
 
     /**
-     * @param  string|array<int, string>  $values
+     * The counterpart of `assertSeeInTable()`, for strings the rows must not say.
      */
     public function assertDontSeeInTable(): Closure
     {
         return function (string|array $values, bool $escape = true): static {
-            /** @var Testable $this */
             $component = $this->instance();
 
             if (! VillamentRecordKeys::isVillament($component)) {
@@ -208,7 +194,6 @@ final class TestsVillamentRecords
     public function getTableText(): Closure
     {
         return function (): string {
-            /** @var Testable $this */
             $component = $this->instance();
 
             return VillamentRecordKeys::isVillament($component)
