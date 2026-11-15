@@ -375,6 +375,44 @@ test('client rendering: a server unit (visible(fn) on the row) follows the row f
     await eventually(() => added.locator('[id$=".vip_note"]').count(), 0, 'the added row: hidden once inactive')
 })
 
+test('a nested repeater in a server-rendered row works from the reference to its ancestor\'s template', async (page, requests) => {
+    const nestedOf = (name) => items(page, name).first().locator('[id$=".tasks"]').first()
+    const nestedItems = (name) => nestedOf(name).locator(':scope > ul > li[x-sortable-item]')
+
+    // Rendered on the page load: the nested repeater ships a reference, not
+    // a template of its own.
+    assert.equal(await nestedOf('client_items').locator(':scope > template[data-villament-repeater-template-ref]').count(), 1)
+    assert.equal(await nestedOf('client_items').locator(':scope > template[data-villament-repeater-template]:not([data-villament-repeater-template-ref])').count(), 0)
+
+    for (const name of ['client_items', 'stock_items']) {
+        const before = requests.count
+
+        await press(nestedOf(name).locator(':scope > .fi-fo-repeater-add button'))
+        await settle(page)
+        await nestedItems(name).nth(1).locator('input[type="text"]').fill(`From the page load (${name})`)
+
+        if (name === 'client_items') {
+            assert.equal(requests.count - before, 0, 'the nested add stays in the browser')
+        }
+    }
+
+    // A Livewire request: the outer row's slot now delivers the nested
+    // repeater, with its reference, and it still adds rows.
+    await save(page)
+
+    for (const name of ['client_items', 'stock_items']) {
+        await press(nestedOf(name).locator(':scope > .fi-fo-repeater-add button'))
+        await settle(page)
+        await nestedItems(name).nth(2).locator('input[type="text"]').fill(`From the slot (${name})`)
+    }
+
+    const saved = await save(page)
+    const titles = (name) => saved[name][0].tasks.map((task) => task.title.replace(/ \((client|stock)_items\)$/, ''))
+
+    assert.deepEqual(titles('client_items'), ['Task', 'From the page load', 'From the slot'])
+    assert.deepEqual(titles('client_items'), titles('stock_items'))
+})
+
 const browser = await chromium.launch()
 let failures = 0
 

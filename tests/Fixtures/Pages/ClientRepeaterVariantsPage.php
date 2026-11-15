@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Zvizvi\Villament\Tests\Fixtures\Pages;
 
 use Filament\Actions\Action;
+use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\TextInput;
 use Filament\Pages\Page;
 use Filament\Schemas\Schema;
@@ -57,6 +58,15 @@ class ClientRepeaterVariantsPage extends Page
                 ClientRepeater::make('hooked')->schema($field())->afterStateUpdated(fn () => null),
                 ClientRepeater::make('simple')->simple(TextInput::make('name')),
                 ClientRepeater::make('integer_keys')->schema($field())->generateUuidUsing(false),
+                // Nested repeaters: the first two can share their template
+                // with the outer one; a closure, or a stock outer, cannot.
+                ClientRepeater::make('outer')->schema([
+                    ClientRepeater::make('shared')->schema($field()),
+                    ClientRepeater::make('closured')->schema($field())->addActionLabel(fn (): string => 'Per row'),
+                ]),
+                Repeater::make('stock_outer')->schema([
+                    ClientRepeater::make('inner')->schema($field()),
+                ]),
                 ClientRepeater::make('server_rendered')->schema($field())->clientRendering(false),
                 ClientRepeater::make('opted_out')->schema($field())->clientStructure(false),
                 ClientRepeater::make('empty')->schema($field())->defaultItems(0),

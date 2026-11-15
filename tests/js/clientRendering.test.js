@@ -16,7 +16,10 @@ const invalidLabel = unit(T, 'label', `<div data-field-wrapper class="fi-fo-fiel
 const ownerUnit = (key, label) => unit(key, 'owner', `<div class="fi-fo-select" data-label="${label}">${key}</div>`)
 
 const content = (key, inner, { pending = false } = {}) => `<div wire:ignore${pending ? ' data-villament-repeater-pending' : ''} class="fi-fo-repeater-item-content">${inner}</div>`
-const slot = (key, label) => `<template data-villament-repeater-slot wire:key="villament-repeater-slot.${key}.h">${ownerUnit(key, label)}</template>`
+// The server hashes each unit with the row key factored out; `h-{label}`
+// stands in for that md5 here.
+const hashes = (key, label) => JSON.stringify({ [`schema-component::form.items.${key}.owner`]: `h-${label}` }).replaceAll('"', '&quot;')
+const slot = (key, label, { withContent = true } = {}) => `<template data-villament-repeater-slot data-villament-repeater-hashes="${hashes(key, label)}" wire:key="villament-repeater-slot.${key}.h">${withContent ? ownerUnit(key, label) : ''}</template>`
 
 function shell(key, inner) {
     return `<li wire:ignore.self x-sortable-item="${key}" class="fi-fo-repeater-item">
@@ -38,6 +41,7 @@ function mount({ rows, errors = {} }) {
         rendering: {
             key: 'form.items',
             server: ['owner'],
+            unitHashes: { owner: 'h-provisional' },
             fields: [{ key: 'label', path: 'label', nested: false, html: false, invalid: invalidLabel }],
             errorSentinel: SENTINEL,
         },
@@ -124,7 +128,8 @@ describe('client rendering', () => {
     })
 
     it('adopts a row the server rendered whole, without re-rendering anything', () => {
-        const repeater = mount({ rows: [shell('a', slot('a', 'Jane') + content('a', labelField('a') + ownerUnit('a', 'Jane')))] })
+        // A page load: the content holds the units, the slot only hashes.
+        const repeater = mount({ rows: [shell('a', slot('a', 'Jane', { withContent: false }) + content('a', labelField('a') + ownerUnit('a', 'Jane')))] })
         const owner = unitIn(repeater.item('a'), 'owner')
         const label = unitIn(repeater.item('a'), 'label')
 
@@ -138,6 +143,12 @@ describe('client rendering', () => {
         const repeater = mount({ rows: [shell('a', slot('a', 'Jane') + content('a', '', { pending: true }))] })
         const first = unitIn(repeater.item('a'), 'owner')
 
+        repeater.respond()
+
+        expect(unitIn(repeater.item('a'), 'owner')).toBe(first)
+
+        // A page-load slot (hashes only) for the same markup changes nothing …
+        repeater.replaceSlot('a', 'Jane')
         repeater.respond()
 
         expect(unitIn(repeater.item('a'), 'owner')).toBe(first)
@@ -204,7 +215,7 @@ describe('client rendering', () => {
         // unit: nothing is replaced.
         const provisional = unitIn(added, 'owner')
 
-        added.insertAdjacentHTML('afterbegin', `<template data-villament-repeater-slot>${ownerUnit('new-1', 'provisional')}</template>`)
+        added.insertAdjacentHTML('afterbegin', slot('new-1', 'provisional'))
         repeater.respond()
 
         expect(unitIn(added, 'owner')).toBe(provisional)

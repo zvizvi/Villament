@@ -151,7 +151,7 @@ it('renders one slot per row with that row\'s server units, and the units as sto
 
     expect(substr_count($root, '<template data-villament-repeater-slot'))->toBe(1);
 
-    preg_match('/<template data-villament-repeater-slot wire:key="villament-repeater-slot\.'.preg_quote($key, '/').'\.[0-9a-f]{32}">(.*?)<\/template>\s*<div wire:ignore data-villament-repeater-pending/s', $root, $slot);
+    preg_match('/<template data-villament-repeater-slot data-villament-repeater-hashes="[^"]+" wire:key="villament-repeater-slot\.'.preg_quote($key, '/').'\.[0-9a-f]{32}">(.*?)<\/template>\s*<div wire:ignore data-villament-repeater-pending/s', $root, $slot);
 
     foreach (['vip_note', 'owner', 'attachment', 'tasks'] as $unit) {
         expect($slot[1])->toContain('wire:partial="schema-component::form.client_items.'.$key.'.'.$unit.'"');
@@ -159,6 +159,25 @@ it('renders one slot per row with that row\'s server units, and the units as sto
 
     // Only the server units: no client field of the row is in it.
     expect($slot[1])->not->toContain('schema-component::form.client_items.'.$key.'.name"');
+});
+
+it('ships a page load\'s server units once: the slot then carries only their hashes', function (): void {
+    $component = livewire(RepeaterFormPage::class);
+    $key = array_key_first($component->get('data.client_items'));
+    $root = repeaterRoot($component->html(), 'client_items');
+
+    // The unit is in the row's content, and nowhere else.
+    expect(substr_count($root, 'wire:partial="schema-component::form.client_items.'.$key.'.owner"'))->toBe(1)
+        ->and($root)->toMatch('/<template data-villament-repeater-slot data-villament-repeater-hashes="[^"]*schema-component::form\.client_items\.'.preg_quote($key, '/').'\.owner[^"]*" wire:key="[^"]+"><\/template>/');
+
+    // The same unit hashes the same on a Livewire request, so the browser
+    // keeps the element it adopted.
+    $hashes = fn (string $html): array => preg_match('/data-villament-repeater-hashes="([^"]+)"/', repeaterRoot($html, 'client_items'), $match) ? json_decode(html_entity_decode($match[1], ENT_QUOTES), true) : [];
+
+    $pageLoad = $hashes($component->html());
+    $update = $hashes(livewireRequest($component)->html());
+
+    expect($update["schema-component::form.client_items.{$key}.owner"])->toBe($pageLoad["schema-component::form.client_items.{$key}.owner"]);
 });
 
 it('re-keys a slot when its server units change, so the morph replaces it', function (): void {
