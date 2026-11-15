@@ -24,6 +24,7 @@ import {
     reorderItems,
     replaceStateTokens,
     replaceTokens,
+    uuid,
 } from './operations.js'
 
 const TEMPLATE_SELECTOR = ':scope > template[data-villament-repeater-template]'
@@ -72,7 +73,7 @@ const SLOT_SELECTOR = ':scope > template[data-villament-repeater-slot]'
 
 /** @type {Environment} */
 export const defaultEnvironment = {
-    generateKey: () => globalThis.crypto.randomUUID(),
+    generateKey: () => uuid(),
     hash: (value) => (typeof globalThis.jsMd5 === 'function' ? globalThis.jsMd5(value) : value),
 }
 

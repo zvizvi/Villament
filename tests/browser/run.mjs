@@ -34,7 +34,11 @@ const env = {
     VILLAMENT_BROWSER_STORAGE: join(scratch, 'storage'),
 }
 const port = 8800 + Math.floor(Math.random() * 100)
-const baseUrl = `http://127.0.0.1:${port}`
+// Not `127.0.0.1` or `localhost`: those are secure contexts, where APIs a
+// plain-HTTP site lacks (`crypto.randomUUID()`) exist. The suite runs as an
+// app on `http://something.test` does; the host maps to the local server.
+const host = 'villament.test'
+const baseUrl = `http://${host}:${port}`
 
 const setup = spawnSync('php', ['tests/browser/setup.php'], { cwd: root, env, encoding: 'utf8' })
 
@@ -746,7 +750,23 @@ test('wire:navigate: a ClientRepeater works after an SPA visit, and after the ba
     assert.deepEqual(errors.filter((message) => ! message.startsWith('Failed to fetch dynamically imported module')), [])
 })
 
-const browser = await chromium.launch()
+test('the page is not a secure context, as on a plain-HTTP site, and adding a row still works', async (page, requests) => {
+    assert.equal(await page.evaluate(() => globalThis.isSecureContext), false, 'the suite must run outside a secure context')
+    assert.equal(await page.evaluate(() => typeof globalThis.crypto.randomUUID), 'undefined')
+
+    const before = requests.count
+
+    await addButton(page, 'client_flat').click()
+    await page.waitForTimeout(300)
+    assert.equal(await items(page, 'client_flat').count(), 3, 'the add ran in the browser')
+    assert.equal(requests.count - before, 0)
+
+    const saved = await save(page)
+
+    assert.equal(saved.client_flat.length, 3)
+})
+
+const browser = await chromium.launch({ args: [`--host-resolver-rules=MAP ${host} 127.0.0.1`] })
 let failures = 0
 
 try {
@@ -826,7 +846,7 @@ process.exit(failures ? 1 : 0)
 async function waitForServer() {
     for (let attempt = 0; attempt < 50; attempt++) {
         try {
-            await fetch(`${baseUrl}/__browser/login`, { redirect: 'manual' })
+            await fetch(`http://127.0.0.1:${port}/__browser/login`, { redirect: 'manual' })
 
             return
         } catch {
