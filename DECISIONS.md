@@ -424,6 +424,31 @@ A page with `getTabs()` showed the right tab on first paint only: the island nev
 - **Livewire stays the owner.** A tab click is Filament's tabs component committing `activeTab`; the bridge reads it after every finished commit (like `tableFilters`) and the island resets to page 1 and refetches, mirroring `updatedActiveTab()`. The island never writes `tab` to the URL — stock's `#[Url(as: 'tab')]` does — and on popstate reads it back, falling to the inlined default when absent.
 - **Double-fetch guard**: a commit that changed the tab skips the action-completed refetch.
 
+## 2026-11-15 — Filament 5.11: no breakage, four markup gaps closed, the ratio holds
+
+Checked per the 2026-07-26 rule. The setup isolates the Filament version. Two copies of the same tree shared one `composer.lock` (Livewire v4.4.8 in both), and only `filament/*` differed: v5.10.3 vs v5.11.3. The full suite (445 tests, parity and `InternalApiContractTest` included) passes on 5.11.3 unchanged.
+
+**`#[Exposed]` / `#[Unexposed]` (new in 5.11).** `Filament\Support\Livewire\MethodAccess` now runs before every Livewire `call` and answers 403 for a method marked `#[Unexposed]`, or one whose return type is a Filament component. Every method the bridge calls is marked `#[Exposed]`: `mountAction`, `removeTableFilter`, `removeTableFilters`, `callTableColumnAction`, `applyTableColumnManager`, `resetTableColumnManager`, `getAllSelectableTableRecordKeys`. The headless harness calls PHP methods directly, which the hook never sees. **Any new bridge call must target an exposed method.**
+
+**Markup changes in `tables::index` and the support components, and what the island did with them:**
+
+- **Loading state on the controls.** While any of the new `Table::LOADING_TARGETS` is loading (no delay), stock now marks the sort buttons and every clickable pagination button `aria-disabled="true"` + `fi-disabled`. It also gives them `data-prevent-disabled-clicks`, so the rewritten `disabled-button.js` capture listener swallows clicks. The island mirrors this with a `busy` prop (`isLoading`) on `TableHeader` and `TablePagination`. The mobile `fi-btn` previous/next buttons get it too, which stock's button component already did. The handlers also return early while busy, so the island never depends on Filament's listener being loaded. The sort keys are now `.self`, as in stock. The per-page select is left enabled, as in stock.
+- **Filter-chip delete buttons.** These target `removeTableFilter` only, not every loading target. The island disables all of them from the click until both the Livewire removal and the refetch it triggers have landed (`isRemovingFilter`). In stock, the re-render rides in that same request. `bridge.removeFilter()` now returns the call's promise, and it never rejects.
+- **Empty group header row** (no title, label, description, collapse toggle or group checkbox) gets `aria-hidden="true"`. While there, two gaps from before 5.11 were closed. The island never added `fi-ta-group-header-row-with-selection`, which carries the mobile grid layout. It also drew the group checkbox under `maxSelectableRecords(1)`, where stock omits it. Both follow stock's `$hasRecordGroupCheckbox` now.
+- **No action needed:** `fi-ta-group-summary` wrappers and the narrowed `fi-ta-record-collapsed` (content/grid layout only); `--loading-skeleton-background-color` → `--loading-skeleton-bg` (the island never names it); `ps-3` → `fi-input-wrp-content-ctn-ps` (the island's search field has no loading indicator); `$recordAction = $recordUrl ? null : …` (`cellInteraction()` already picks `a` whenever there is a record URL and no column action, so the wrapper and click are unchanged); `deferLoading()` → `lazyLoaded()` (BC alias, unused).
+
+**Re-benchmark.** The interleaved `DataChannelBenchmarkTest` ran as before (25 iterations, page 2 @ 50/page, sorted), in A-B-B-A blocks (5.10.3 → 5.11.3 ×2 → 5.10.3). It ran in a cloud container with higher absolute times than earlier runs, so only compare within the table.
+
+| | filament **v5.10.3** | filament **v5.11.3** |
+|---|---|---|
+| A stock, 2k rows (6 runs) | 101.6ms | 101.1ms |
+| B endpoint, 2k rows (6 runs) | 44.2ms | 44.5ms |
+| **time ratio, 2k** | **2.30x** | **2.24x** |
+| time ratio, 500 / 10k (2 runs each) | 2.36x / 2.20x | 2.35x / 2.19x |
+| payload ratio | 7.96x | 7.98x |
+
+Verdict: **5.11 is speed-neutral for both paths.** The 2k ratio moves by −0.06, about the per-run spread (±0.05), and 500/10k do not move at all. The lead stays ~2.2x on server time and ~8x on payload.
+
 ## Verified Filament v5 internal API map (§4.1, §4.8)
 
 Verified against **filament/filament v5.6.8** + **livewire/livewire v4.3.3** by reading installed vendor source on 2026-07-15. Paths relative to `vendor/filament/`.
