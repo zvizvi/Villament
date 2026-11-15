@@ -7,6 +7,7 @@ move out of here into `DECISIONS.md` once implemented.
 ## Order
 
 1. [Interactive columns](#interactive-columns--select-toggle-textinput-checkbox) ← next; the big one, needs a decision before code
+1. [`ClientRepeater`: client-rendered items](#clientrepeater-client-rendered-items-server-fields-as-islands) ← needs a decision before code
 2. [Shrink the `cells` payload](#shrink-the-cells-payload)
 3. [Loading indicators](#loading-indicators-on-the-islands-buttons)
 4. [Action trigger options](#action-trigger-options-the-island-cannot-express-yet)
@@ -14,6 +15,52 @@ move out of here into `DECISIONS.md` once implemented.
 
 Done and moved to `DECISIONS.md`: the empty state, `recordClasses()`, and the
 action-payload compaction (all 2026-07-26).
+
+---
+
+## `ClientRepeater`: client-rendered items, server fields as islands
+
+**Today** (`DECISIONS.md` 2026-11-15) the structure runs in the browser, but
+every Livewire response still renders every item server-side, and the morph
+patches them. A row the browser adds is built from the template, and the
+fields in it that need the server (searchable select, file upload) already
+work natively inside it.
+
+**Wanted.** When an item's schema needs no server (the `CloneSafety`
+whitelist plus no state-dependent closures), the server ships only the
+template + state, and the browser renders ALL items, so the cost of a big
+repeater leaves the server render. A field that does need the server is
+rendered natively and lands inside the client-rendered row, the way filters
+and the column manager land inside the table island.
+
+**Open questions, to decide before code.**
+
+- The morph. If the server stops rendering items, its HTML no longer contains
+  them, and the morph removes the client's rows. The list has to go under
+  `wire:ignore` (or be morph-skipped), which means owning everything the
+  server re-render used to refresh.
+- Validation errors are server-rendered per field
+  (`fi-fo-field-wrp-error-message`, `fi-invalid`). Under `wire:ignore` they
+  would need a client renderer reading Livewire's error bag, with stock's
+  markup exactly.
+- Detecting "needs the server": `visible()`/`disabled()`/`options()`
+  closures that read `$get` are invisible from the class name. That needs a
+  reflection pass over each component's Closure-typed configuration.
+- The island mechanism: one native render per server field per item (N
+  teleports, the cost the record-actions decision rejected), or a per-item
+  native slot that is only rendered for items that have such fields.
+
+**Done means.** For a whitelisted schema, the response HTML for an N-item
+repeater does not grow with N; a non-whitelisted field still renders and
+validates natively inside the client row; parity and browser suites as for
+`ClientRepeater` today.
+
+## `ClientRepeater`: the `table()` layout
+
+`toTableEmbeddedHtml()` renders `<tr>` rows with the actions in a trailing
+cell and no item header. The client operations carry over unchanged; the DOM
+side needs a row-shaped template, its own separators (none), and the
+first/last button logic on cells. Until then `table()` falls back to stock.
 
 ---
 
