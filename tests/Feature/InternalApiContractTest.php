@@ -4,10 +4,15 @@ declare(strict_types=1);
 
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
+use Filament\Forms\Components\Repeater;
+use Filament\Forms\Components\Select;
 use Filament\Panel;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Resources\Pages\PageRegistration;
 use Filament\Resources\Resource;
+use Filament\Schemas\Schema;
+use Filament\Support\Assets\AlpineComponent;
+use Filament\Support\Assets\AssetManager;
 use Filament\Support\View\ComponentAttributeBag;
 use Filament\Support\View\Components\ButtonComponent;
 use Filament\Tables\Columns\Column;
@@ -245,6 +250,59 @@ $methodContract = [
     [Panel::class, 'getResources'],
     [Panel::class, 'hasTenancy'],
     [Panel::class, 'authenticatedTenantRoutes'],
+    // `ClientRepeater` (src/Forms): the structural actions it rewires, the
+    // render it wraps, and the state it fills the template item through.
+    [Repeater::class, 'toEmbeddedHtml'],
+    [Repeater::class, 'getAlpineAttributes'],
+    [Repeater::class, 'getAddAction'],
+    [Repeater::class, 'getAddBetweenAction'],
+    [Repeater::class, 'getCloneAction'],
+    [Repeater::class, 'getDeleteAction'],
+    [Repeater::class, 'getMoveUpAction'],
+    [Repeater::class, 'getMoveDownAction'],
+    [Repeater::class, 'getReorderAction'],
+    [Repeater::class, 'getAddActionName'],
+    [Repeater::class, 'getAddBetweenActionName'],
+    [Repeater::class, 'getCloneActionName'],
+    [Repeater::class, 'getDeleteActionName'],
+    [Repeater::class, 'getMoveUpActionName'],
+    [Repeater::class, 'getMoveDownActionName'],
+    [Repeater::class, 'getReorderActionName'],
+    [Repeater::class, 'getAction'],
+    [Repeater::class, 'getChildSchema'],
+    [Repeater::class, 'clearCachedChildSchemas'],
+    [Repeater::class, 'getRawState'],
+    [Repeater::class, 'rawState'],
+    [Repeater::class, 'getStatePath'],
+    [Repeater::class, 'isAddable'],
+    [Repeater::class, 'isCloneable'],
+    [Repeater::class, 'isDisabled'],
+    [Repeater::class, 'isLive'],
+    [Repeater::class, 'isTable'],
+    [Repeater::class, 'isSimple'],
+    [Repeater::class, 'collapsed'],
+    [Repeater::class, 'getLabelBetweenItems'],
+    [Repeater::class, 'getMinItems'],
+    [Repeater::class, 'getMaxItems'],
+    [Repeater::class, 'hasItemNumbers'],
+    [Schema::class, 'fill'],
+    [Schema::class, 'getFlatComponents'],
+    // `ActionBehavior`: what tells a restyled action from a re-programmed one.
+    [Action::class, 'getActionFunction'],
+    [Action::class, 'isLivewireClickHandlerEnabled'],
+    [Action::class, 'livewireClickHandlerEnabled'],
+    [Action::class, 'extraAttributes'],
+    [Action::class, 'isConfirmationRequired'],
+    [Action::class, 'shouldOpenModal'],
+    [Action::class, 'getLivewireEventClickHandler'],
+    [Action::class, 'getCustomAlpineClickHandler'],
+    // `CloneSafety`: the plain native select is the only clone-safe Select.
+    [Select::class, 'isNative'],
+    [Select::class, 'isSearchable'],
+    [Select::class, 'isMultiple'],
+    [Select::class, 'isHtmlAllowed'],
+    [Select::class, 'getRelationshipName'],
+    [AssetManager::class, 'getAlpineComponentSrc'],
 ];
 
 $propertyContract = [
@@ -259,6 +317,19 @@ $propertyContract = [
     [ListRecords::class, 'selectedTableRecords'],
     [ListRecords::class, 'deselectedTableRecords'],
     [ListRecords::class, 'isTrackingDeselectedTableRecords'],
+    // Read (or overridden around) by `ClientRepeater` / `ActionBehavior`.
+    [Repeater::class, 'isAddable'],
+    [Repeater::class, 'isCloneable'],
+    [Repeater::class, 'isCollapsed'],
+    [Repeater::class, 'generateUuidUsing'],
+    [Repeater::class, 'afterStateUpdated'],
+    [Action::class, 'before'],
+    [Action::class, 'after'],
+    [Action::class, 'beforeFormFilled'],
+    [Action::class, 'afterFormFilled'],
+    [Action::class, 'beforeFormValidated'],
+    [Action::class, 'afterFormValidated'],
+    [Action::class, 'schema'],
 ];
 
 it('still finds every Filament method the package calls', function (string $class, string $method): void {
@@ -285,4 +356,30 @@ it('still finds the component color bag the trigger serializer builds classes wi
     // the very same bag chain Filament's own `generate*Html()` methods use.
     expect(method_exists(ComponentAttributeBag::class, 'color'))->toBeTrue()
         ->and(method_exists(ButtonComponent::class, 'make'))->toBeTrue();
+});
+
+it('still declares every stock structural repeater action inline in Repeater.php', function (): void {
+    // `ActionBehavior` recognises an unmodified action by its callback's
+    // file. If Filament moves those closures, every action would silently
+    // fall back to Livewire — this catches it.
+    $file = (new ReflectionClass(Repeater::class))->getFileName();
+    $source = file_get_contents($file);
+
+    foreach (['getAddAction', 'getAddBetweenAction', 'getCloneAction', 'getDeleteAction', 'getMoveUpAction', 'getMoveDownAction', 'getReorderAction'] as $method) {
+        $body = (new ReflectionMethod(Repeater::class, $method));
+        $lines = implode('', array_slice(file($file), $body->getStartLine() - 1, $body->getEndLine() - $body->getStartLine() + 1));
+
+        expect(str_contains($lines, '->action(function'))->toBeTrue("Filament internal API drift: [Repeater::{$method}()] no longer defines its action() callback inline.");
+    }
+
+    expect($source)->toContain('x-sortable-item=')
+        ->and(class_exists(AlpineComponent::class))->toBeTrue();
+});
+
+it('still renders the repeater markup ClientRepeater cuts its template from', function (): void {
+    $source = file_get_contents((new ReflectionClass(Repeater::class))->getFileName());
+
+    foreach (['data-reorder-owner', 'x-ref\' => \'reorderItems', 'fi-fo-repeater-add', 'fi-fo-simple-repeater-add', 'data-reorder-description', 'fi-fo-repeater-add-between-items-ctn', 'repeaterFormComponent('] as $marker) {
+        expect(str_contains($source, $marker))->toBeTrue("Filament internal API drift: Repeater markup no longer contains [{$marker}].");
+    }
 });

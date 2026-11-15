@@ -1,0 +1,361 @@
+<?php
+
+declare(strict_types=1);
+
+use Filament\Actions\Testing\TestAction;
+use Illuminate\Support\Str;
+use Livewire\Features\SupportTesting\Testable;
+use Zvizvi\Villament\Forms\ClientTemplateTokens;
+use Zvizvi\Villament\Tests\Fixtures\Models\User;
+use Zvizvi\Villament\Tests\Fixtures\Pages\ClientRepeaterVariantsPage;
+use Zvizvi\Villament\Tests\Fixtures\Pages\RepeaterFormPage;
+
+use function Pest\Livewire\livewire;
+
+/*
+ * The server half of `ClientRepeater`: the template it renders, the state it
+ * ships, and what happens when the browser writes the item list back.
+ *
+ * The browser half is emulated here with exactly what the Alpine component
+ * does (`clientAdd()` & co. below mirror `operations.js`), fed from the meta
+ * the page really rendered — so a template that carries the wrong state
+ * fails here, not only in the browser suite.
+ */
+
+beforeEach(function (): void {
+    $this->actingAs(User::factory()->create());
+});
+
+/**
+ * The template meta rendered for the repeater whose id is `form.{$name}`,
+ * or null when that repeater rendered no template.
+ *
+ * @return array<string, mixed>|null
+ */
+function templateMeta(string $html, string $name): ?array
+{
+    $rootTag = '/<div [^>]*id="form\.'.preg_quote($name, '/').'"[^>]*data-reorder-owner[^>]*>/';
+
+    if (! preg_match($rootTag, $html, $match, PREG_OFFSET_CAPTURE)) {
+        throw new RuntimeException("Repeater [{$name}] was not rendered.");
+    }
+
+    $after = substr($html, $match[0][1] + strlen($match[0][0]));
+
+    if (! str_starts_with($after, '<template data-villament-repeater-template')) {
+        return null;
+    }
+
+    preg_match('/<script type="application\/json" data-villament-repeater-meta>(.*?)<\/script>/s', $after, $script);
+
+    return json_decode($script[1], true, flags: JSON_THROW_ON_ERROR);
+}
+
+/**
+ * `mapTokens()` + `replaceStateTokens()` + `insertItem()`.
+ *
+ * @param  array<string, mixed>  $items
+ * @param  array<string, mixed>  $meta
+ * @return array{0: array<string, mixed>, 1: string}
+ */
+function clientAdd(array $items, array $meta, ?string $afterKey = null): array
+{
+    $replacements = [];
+
+    foreach ($meta['tokens'] as $token) {
+        $replacements[$token['token']] = (string) Str::uuid();
+    }
+
+    $key = $replacements[$meta['token']];
+    $state = json_decode(strtr(json_encode($meta['state'], JSON_THROW_ON_ERROR), $replacements), true);
+
+    if ($afterKey === null) {
+        $items[$key] = $state;
+
+        return [$items, $key];
+    }
+
+    $next = [];
+
+    foreach ($items as $itemKey => $item) {
+        $next[$itemKey] = $item;
+
+        if ($itemKey === $afterKey) {
+            $next[$key] = $state;
+        }
+    }
+
+    return [$next, $key];
+}
+
+/**
+ * `moveItem()`: swap with the neighbour.
+ *
+ * @param  array<string, mixed>  $items
+ * @return array<string, mixed>
+ */
+function clientMove(array $items, string $key, string $direction): array
+{
+    $keys = array_keys($items);
+    $index = array_search($key, $keys, strict: true);
+    $target = $direction === 'up' ? $index - 1 : $index + 1;
+
+    [$keys[$index], $keys[$target]] = [$keys[$target], $keys[$index]];
+
+    return array_combine($keys, array_map(fn (string $key): mixed => $items[$key], $keys));
+}
+
+/**
+ * @return array<string, mixed>
+ */
+function items(Testable $component, string $name): array
+{
+    return $component->get("data.{$name}");
+}
+
+function stockAction(Testable $component, string $name, string $action, array $arguments = []): Testable
+{
+    return $component->callAction(TestAction::make($action)->schemaComponent($name)->arguments($arguments));
+}
+
+it('renders the template, and the placeholder never reaches the state or the snapshot', function (): void {
+    $component = livewire(RepeaterFormPage::class);
+    $html = $component->html();
+
+    $meta = templateMeta($html, 'client_items');
+    $token = ClientTemplateTokens::mainToken('data.client_items');
+
+    expect($meta['token'])->toBe($token)
+        // The stock twin renders no template.
+        ->and(templateMeta($html, 'stock_items'))->toBeNull();
+
+    foreach (['client_items', 'client_flat'] as $name) {
+        expect(array_keys(items($component, $name)))->each->toMatch('/^[0-9a-f-]{36}$/');
+    }
+
+    // Not in the Livewire snapshot (what the browser sends back), not in any
+    // state, not in what a save stores.
+    $snapshot = json_encode($component->snapshot, JSON_THROW_ON_ERROR);
+
+    expect($snapshot)->not->toContain('villament-')
+        ->and(json_encode($component->get('data'), JSON_THROW_ON_ERROR))->not->toContain('villament-');
+
+    $component->call('save');
+
+    expect(json_encode($component->get('saved'), JSON_THROW_ON_ERROR))->not->toContain('villament-');
+});
+
+it('keeps the placeholder out of the snapshot after the browser writes the list back', function (): void {
+    $component = livewire(RepeaterFormPage::class);
+    $meta = templateMeta($component->html(), 'client_items');
+
+    [$items] = clientAdd(items($component, 'client_items'), $meta);
+
+    $component->set('data.client_items', $items);
+
+    expect(json_encode($component->snapshot, JSON_THROW_ON_ERROR))->not->toContain('villament-')
+        ->and(templateMeta($component->html(), 'client_items'))->not->toBeNull();
+});
+
+it('fills the template item exactly as stock add fills a new item', function (): void {
+    $component = livewire(RepeaterFormPage::class);
+    $meta = templateMeta($component->html(), 'client_items');
+
+    stockAction($component, 'stock_items', 'add');
+
+    $stockItems = items($component, 'stock_items');
+    $stockNew = end($stockItems);
+
+    // Defaults and `afterStateHydrated()` ran; the nested repeater's own
+    // `defaultItems()` hydrated under a token, not a real UUID.
+    expect($meta['state'])->toMatchArray([
+        'name' => 'New',
+        'role' => 'editor',
+        'active' => true,
+        'note' => 'hydrated',
+    ])
+        ->and(array_keys($meta['state']['tasks']))->each->toStartWith('villament-')
+        ->and(array_values($meta['state']['tasks']))->toBe(array_values($stockNew['tasks']))
+        ->and(array_diff_key($meta['state'], ['tasks' => true]))->toBe(array_diff_key($stockNew, ['tasks' => true]));
+});
+
+it('saves the same state as stock for the same sequence of operations', function (string $client, string $stock, bool $hasAddBetween): void {
+    $component = livewire(RepeaterFormPage::class);
+    $meta = templateMeta($component->html(), $client);
+
+    // add, add, add-between the first two (where enabled), type into each,
+    // move the last up, delete the first.
+    $items = items($component, $client);
+    [$items] = clientAdd($items, $meta);
+    [$items, $third] = clientAdd($items, $meta);
+
+    if ($hasAddBetween) {
+        [$items] = clientAdd($items, $meta, afterKey: array_key_first($items));
+    }
+
+    $field = match ($client) {
+        'client_flat' => 'label',
+        'client_simple' => 'email',
+        default => 'name',
+    };
+
+    foreach (array_keys($items) as $index => $key) {
+        $items[$key][$field] = "Row {$index}";
+    }
+
+    $items = clientMove($items, $third, 'up');
+    unset($items[array_key_first($items)]);
+
+    $component->set("data.{$client}", $items);
+
+    stockAction($component, $stock, 'add');
+    stockAction($component, $stock, 'add');
+
+    if ($hasAddBetween) {
+        stockAction($component, $stock, 'addBetween', ['afterItem' => array_key_first(items($component, $stock))]);
+    }
+
+    foreach (array_keys(items($component, $stock)) as $index => $key) {
+        $component->set("data.{$stock}.{$key}.{$field}", "Row {$index}");
+    }
+
+    $keys = array_keys(items($component, $stock));
+    stockAction($component, $stock, 'moveUp', ['item' => end($keys)]);
+    stockAction($component, $stock, 'delete', ['item' => array_key_first(items($component, $stock))]);
+
+    $component->call('save')->assertHasNoErrors();
+
+    $saved = $component->get('saved');
+
+    expect($saved[$client])->toBe($saved[$stock])
+        ->and($saved[$client])->toHaveCount(3);
+})->with([
+    'every field type, nested repeaters' => ['client_items', 'stock_items', true],
+    'flat, numbered, min/max' => ['client_flat', 'stock_flat', false],
+    'simple()' => ['client_simple', 'stock_simple', false],
+]);
+
+it('clones in the browser only when every field draws its value from the state', function (): void {
+    $html = livewire(RepeaterFormPage::class)->html();
+
+    // A non-native select, a file upload and a nested repeater render
+    // value-dependent markup: stock's clone action keeps the job.
+    expect(templateMeta($html, 'client_items')['actions']['clone'])->toBeFalse()
+        ->and(templateMeta($html, 'client_flat')['actions']['clone'])->toBeTrue();
+});
+
+it('saves a browser clone exactly like a stock clone', function (): void {
+    $component = livewire(RepeaterFormPage::class);
+    $items = items($component, 'client_flat');
+    $source = array_key_first($items);
+
+    $component->set("data.client_flat.{$source}.label", 'Copied');
+    $component->set('data.client_flat', [...items($component, 'client_flat'), (string) Str::uuid() => items($component, 'client_flat')[$source]]);
+
+    $stockSource = array_key_first(items($component, 'stock_flat'));
+    $component->set("data.stock_flat.{$stockSource}.label", 'Copied');
+    stockAction($component, 'stock_flat', 'clone', ['item' => $stockSource]);
+
+    $component->call('save');
+
+    expect($component->get('saved.client_flat'))->toBe($component->get('saved.stock_flat'))
+        ->and($component->get('saved.client_flat.2.label'))->toBe('Copied');
+});
+
+it('keeps server-side clone working on a ClientRepeater', function (): void {
+    $component = livewire(RepeaterFormPage::class);
+    $source = array_key_first(items($component, 'client_items'));
+
+    stockAction($component, 'client_items', 'clone', ['item' => $source]);
+
+    expect(items($component, 'client_items'))->toHaveCount(2);
+});
+
+it('rewires only the actions the browser can replay, and leaves their markup otherwise stock', function (): void {
+    $html = livewire(RepeaterFormPage::class)->html();
+
+    // The client add button: no wire:click, the operation marker instead.
+    preg_match('/<div[^>]*id="form\.client_flat"[\s\S]*?<div\s+class="fi-fo-repeater-add(?: [^"]*)?"\s*>\s*(<button[^>]*>)/', $html, $client);
+    preg_match('/<div[^>]*id="form\.stock_flat"[\s\S]*?<div\s+class="fi-fo-repeater-add(?: [^"]*)?"\s*>\s*(<button[^>]*>)/', $html, $stock);
+
+    expect($client[1])->toContain('data-villament-repeater-action="add"')
+        ->not->toContain('wire:click')
+        ->and($stock[1])->toContain('wire:click');
+
+    $normalize = fn (string $tag): string => preg_replace(['/\s*wire:click="[^"]*"/', '/\s*data-villament-repeater-action="[^"]*"/', '/\s+/'], ['', '', ' '], $tag);
+
+    expect($normalize($client[1]))->toBe($normalize($stock[1]));
+});
+
+it('runs the simple() layout in the browser too, saving a flat list like stock', function (): void {
+    $component = livewire(RepeaterFormPage::class);
+    $html = $component->html();
+    $meta = templateMeta($html, 'client_simple');
+
+    expect($meta['state'])->toBe(['email' => 'new@example.test'])
+        ->and($meta['actions'])->toMatchArray(['add' => true, 'clone' => true, 'delete' => true, 'moveUp' => true])
+        ->and($html)->toMatch('/<template data-villament-repeater-add><div\s+class="fi-fo-simple-repeater-add/');
+
+    [$items] = clientAdd(items($component, 'client_simple'), $meta);
+    $component->set('data.client_simple', $items);
+    stockAction($component, 'stock_simple', 'add');
+
+    $component->call('save');
+
+    expect($component->get('saved.client_simple'))->toHaveCount(3)
+        ->and($component->get('saved.client_simple.2'))->toBe('new@example.test')
+        ->and($component->get('saved.client_simple'))->toBe($component->get('saved.stock_simple'));
+});
+
+it('decides per action which ones run in the browser', function (): void {
+    $html = livewire(ClientRepeaterVariantsPage::class)->html();
+
+    // Label, icon, color, tooltip: presentation, still client-side.
+    expect(templateMeta($html, 'restyled')['actions'])->toMatchArray(['add' => true, 'delete' => true]);
+
+    // A confirmation or a lifecycle hook needs the server.
+    expect(templateMeta($html, 'confirmed')['actions'])->toMatchArray(['add' => false, 'delete' => false, 'moveUp' => true])
+        ->and(templateMeta($html, 'replaced')['actions'])->toMatchArray(['add' => false, 'delete' => true]);
+});
+
+it('falls back to the stock Repeater wholesale when the browser cannot keep up', function (string $name): void {
+    $html = livewire(ClientRepeaterVariantsPage::class)->html();
+
+    expect(templateMeta($html, $name))->toBeNull();
+})->with([
+    'live()' => 'live',
+    'afterStateUpdated()' => 'hooked',
+    'generateUuidUsing(false)' => 'integer_keys',
+    'clientStructure(false)' => 'opted_out',
+]);
+
+it('ships the list shell for an empty repeater and the chrome a full one omits', function (): void {
+    $html = livewire(ClientRepeaterVariantsPage::class)->html();
+
+    expect(templateMeta($html, 'empty'))->not->toBeNull();
+
+    // The full repeater (2 of maxItems 2): stock renders no add button and
+    // no clone buttons, yet the template carries both, and both separators.
+    preg_match('/<div[^>]*id="form\.full"[^>]*>(<template data-villament-repeater-template[\s\S]*?<\/template>)\s*<span wire:ignore x-ref="reorderStatus"/', $html, $template);
+
+    expect($template[1])
+        ->toContain('<template data-villament-repeater-add>')
+        ->toContain('data-villament-repeater-action="clone"')
+        ->toContain('data-villament-repeater-separator="addable"')
+        ->toContain('data-villament-repeater-separator="full"')
+        ->toContain('fi-fo-repeater-label-between-items');
+});
+
+it('runs the client-written list through validation like any other state', function (): void {
+    $component = livewire(RepeaterFormPage::class);
+
+    // maxItems(5) on client_flat: the server still enforces it.
+    $meta = templateMeta($component->html(), 'client_flat');
+    $items = items($component, 'client_flat');
+
+    for ($i = 0; $i < 4; $i++) {
+        [$items] = clientAdd($items, $meta);
+    }
+
+    $component->set('data.client_flat', $items)->call('save')->assertHasErrors(['data.client_flat']);
+});
