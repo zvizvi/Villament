@@ -7,7 +7,6 @@ move out of here into `DECISIONS.md` once implemented.
 ## Order
 
 1. [Interactive columns](#interactive-columns--select-toggle-textinput-checkbox) ← next; the big one, needs a decision before code
-1. [`ClientRepeater`: one template per nested repeater](#clientrepeater-one-template-per-nested-repeater-not-per-row)
 2. [Shrink the `cells` payload](#shrink-the-cells-payload)
 3. [Loading indicators](#loading-indicators-on-the-islands-buttons)
 4. [Action trigger options](#action-trigger-options-the-island-cannot-express-yet)
@@ -17,19 +16,6 @@ Done and moved to `DECISIONS.md`: the empty state, `recordClasses()`, and the
 action-payload compaction (all 2026-07-26).
 
 ---
-
-## `ClientRepeater`: one template per nested repeater, not per row
-
-A nested `ClientRepeater` is a server unit, so each outer row's slot ships the
-nested repeater with **its own template** (item HTML, state, invalid
-variants). In the fixture that is about 12 KB of the ~40 KB a
-`client_items` row costs on a Livewire request (`DECISIONS.md` 2026-11-15).
-
-**Done means.** The nested repeater's template ships once, at the outer
-level, keyed by the nested repeater's path pattern; each nested instance
-reads it with its own outer key substituted. The nested repeater could then
-also be client-rendered when its own item is (no server units), instead of
-being a server unit of the outer row.
 
 ## `ClientRepeater`: the item shell is the floor
 

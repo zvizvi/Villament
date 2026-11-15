@@ -492,6 +492,25 @@ The fixed cost is the template, its invalid variants included. The per-row floor
 
 `Repeater::getItems`, `Schema::{getClone, components, getComponents}`, `Component::{toSchemaHtml, getChildSchemas, getKey}`, `Field::{areHtmlValidationMessagesAllowed, shouldShowAllValidationMessages, hasErrorForPath}`, `LivewireManager::isLivewireRequest`. It also pins that markers are still present in Filament's source: the `wire:partial="schema-component::` wrapper, `data-validation-error` in the field wrapper, `$item->toHtml()` in `Repeater`, and both item-content classes. JS: `Livewire.interceptMessage`, `$wire.$errors.messages()`.
 
+## 2026-11-15 — A nested `ClientRepeater` references its ancestor's template instead of shipping its own
+
+A nested `ClientRepeater` is a server unit of the outer row, so until now each outer row's slot carried the nested repeater with a full template of its own. In the fixture that was about 12 KB of the ~40 KB per `client_items` row.
+
+**The source already exists.** The outer template's item contains the nested repeater, which renders its full template under the outer placeholder token. A nested instance in a real row would render the same template with that token replaced by its row key, provided nothing about it differs per row.
+
+1. **Server.** Every `ClientRepeater` looks up its closest `ClientRepeater` ancestor (`getContainer()->getParentComponent()`, walked up). When the ancestor is rendering its template (`isRenderingClientTemplate`), the nested repeater IS the source: it renders in full and registers its path relative to the ancestor's item. Otherwise, if that path is registered and the repeater has no closure of the app's own (`Renderability::hasAppClosures()`, the same rule as for client rendering), it renders `<template data-villament-repeater-template data-villament-repeater-template-ref='{ancestor, item, meta}'>` with no content. The registry is reliable because a repeater always renders its template before its items. The repeater still fills and classifies its own item, since its shells and slots need the plan; it just skips the three template renders.
+2. **Per-instance meta rides along.** `minItems`, `maxItems`, the client action map and `itemNumbers()` can be closures evaluated per instance, so the reference carries them and the browser lays them over the shared meta.
+3. **Browser** (`resolveTemplate()`). It finds the ancestor root by id among the `[data-reorder-owner]` ancestors and resolves the ancestor's template, recursively, so a third level resolves through the second's resolved template. In that template it finds our root under the ancestor's token (our id with the row key swapped back for the token) and takes its template, with the token swapped for the row key. The result is cached per reference element and rebuilt only when the ancestor's resolved template is a different element (a morph replaced it). Every template read in the component goes through it, so nothing else changed.
+4. **A page load ships each server unit once.** The row's content already holds them, so a page load's slot now carries only their hashes, cut from that same render. Before, every unit went out twice, once in the content and once in the slot, which the variants fixture made visible (`shared` appeared twice per row). Units are therefore compared by hashes the server computes (`ClientRepeater::unitHash()`: whitespace collapsed, trimmed, row key factored out), not by the browser re-serializing `outerHTML`. The template's provisional units are hashed the same way (`rendering.unitHashes`). The trim matters: `toSchemaHtml()` pads its output and a cut element does not, so without it a page load's hash never matched the next request's, and the first request would have replaced every adopted unit. A Pest test pins the equality.
+
+The repeater's part of a Livewire response, now (`client_flat` is unchanged, since it has no nested repeater):
+
+| rows | `client_items` | before | `stock_items` |
+|---:|---:|---:|---:|
+| 1 | 160 KB | 171 KB | 74 KB |
+| 10 | 422 KB | 530 KB | 669 KB |
+| 50 | 1,595 KB | 2,138 KB | 3,332 KB |
+
 ## Verified Filament v5 internal API map (§4.1, §4.8)
 
 Verified against **filament/filament v5.6.8** + **livewire/livewire v4.3.3** by reading installed vendor source on 2026-07-15. Paths relative to `vendor/filament/`.

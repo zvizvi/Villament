@@ -100,7 +100,9 @@ What each request carries:
 
 Validation errors on client-rendered fields are read from `$wire.$errors` after every morph. The template carries each field's **invalid variant**: the server renders it once with a sentinel message, so the exact error markup Filament uses for that field type is shipped (the message element, `fi-invalid`, `aria-invalid`, `aria-describedby`). The browser swaps that variant in with the real, escaped message, and swaps the normal variant back once the field is valid. Server units come with their errors already rendered.
 
-For a repeater of 50 three-field rows (the fixture's `client_flat`), a Livewire response carries about 286 KB for the repeater against stock's 1,053 KB. For 50 rows of the fixture's heavy item (a searchable select, a file upload and a nested repeater as server units), it is 2.1 MB against 3.3 MB. A row's shell (its header and four buttons) is the floor.
+For a repeater of 50 three-field rows (the fixture's `client_flat`), a Livewire response carries about 286 KB for the repeater against stock's 1,053 KB. For 50 rows of the fixture's heavy item (a searchable select, a file upload and a nested repeater as server units), it is 1.6 MB against 3.3 MB. A row's shell (its header and four buttons) is the floor.
+
+**Nested `ClientRepeater`s share one template.** A `ClientRepeater` in a row of another one ships a small reference instead of its own template: the ancestor's root, its row key there, and its own limits and actions. The ancestor's template already carries the nested repeater's full template, rendered under the ancestor's placeholder key. The browser takes that copy and swaps the placeholder for the row key. This works at any depth, and a reference can resolve through its parent's reference. A nested repeater keeps its own template when it has a closure of the app's own (it might render differently per row), or when its parent is a stock `Repeater`.
 
 `->clientRendering(false)` keeps the structure in the browser and lets the server render every item, as in stock.
 
@@ -129,7 +131,7 @@ A browser clone is exact only when the whole item is client-rendered (see above)
 - `afterStateHydrated()` on fields inside the item runs during template rendering, under the placeholder key. A hook that writes *outside* its own item leaves that write in place.
 - **While a Livewire request is in flight,** Filament's buttons carry `wire:loading.attr="aria-disabled"`, and a click on one is ignored, just as in stock. A drag that lands during a request keeps its new order: after the response's morph the rows are put back in the state's order.
 - **Errors under a field that lists every message** (`showAllValidationMessages()`) need two variants, so such a field is a server unit.
-- A **nested repeater** is a server unit and is re-rendered into its row's slot when its markup changes. If a request lands while you are typing inside a nested row, that row is replaced and focus is lost.
+- A **nested repeater** is a server unit (with a shared template when it is a `ClientRepeater`) and is re-rendered into its row's slot when its markup changes. If a request lands while you are typing inside a nested row, that row is replaced and focus is lost.
 
 ## Development
 
