@@ -78,6 +78,16 @@ class ClientRepeater extends Repeater
     protected ?array $renderPlan = null;
 
     /**
+     * Paths (relative to this repeater's item) of the nested
+     * `ClientRepeater`s whose full template this repeater's own template
+     * carries. A nested instance in a real row then ships a reference to it
+     * instead of its own copy.
+     *
+     * @var array<string, true>
+     */
+    protected array $templateSources = [];
+
+    /**
      * The error message the template's invalid variants are rendered with;
      * the browser swaps in the real one.
      */
@@ -275,7 +285,9 @@ class ClientRepeater extends Repeater
                 continue;
             }
 
-            $html = HtmlFragments::decorateTag($html, $itemStart, $contentClass, $attributes, before: $this->renderRowSlot($key));
+            $slot = $this->renderRowSlot($key, renderedHtml: $isLight ? null : (HtmlFragments::element($html, 'x-sortable-item="'.e($key).'"', 'li') ?? ''));
+
+            $html = HtmlFragments::decorateTag($html, $itemStart, $contentClass, $attributes, before: $slot);
         }
 
         return $html;
@@ -284,33 +296,63 @@ class ClientRepeater extends Repeater
     /**
      * The row's ONE slot: every server unit of the item, rendered for this
      * row through Filament's own `toSchemaHtml()` (the component with its
-     * `wire:partial` wrapper — exactly what the item's own render emits).
-     * Keyed by its content, so the morph replaces it when it changes.
+     * `wire:partial` wrapper, exactly what the item's own render emits),
+     * and a hash per unit. The browser replaces a unit only when its hash
+     * changed. Keyed by the hashes, so the morph replaces the slot then.
+     *
+     * On a page load the content already holds the units (`$renderedHtml`):
+     * the slot then ships only their hashes, cut from that render.
      */
-    protected function renderRowSlot(string $key): string
+    protected function renderRowSlot(string $key, ?string $renderedHtml = null): string
     {
         $units = $this->renderPlan['server'] ?? [];
-        $schema = $units === [] ? null : $this->getChildSchema($key);
+        $schema = ($units === [] || $renderedHtml !== null) ? null : $this->getChildSchema($key);
 
-        if ($schema === null) {
+        if (($units === []) || (($renderedHtml === null) && ($schema === null))) {
             return '';
         }
 
-        $html = '';
+        $hashes = [];
+        $content = '';
 
         foreach ($units as $unit) {
-            $html .= Renderability::findByKey($schema, "{$this->getKey()}.{$key}.{$unit}")?->toSchemaHtml() ?? '';
+            $partial = "schema-component::{$this->getKey()}.{$key}.{$unit}";
+
+            $html = ($renderedHtml !== null)
+                ? HtmlFragments::elementOpenedBy($renderedHtml, 'wire:partial="'.$partial.'"')
+                : Renderability::findByKey($schema, "{$this->getKey()}.{$key}.{$unit}")?->toSchemaHtml();
+
+            if (blank($html)) {
+                continue;
+            }
+
+            // The browser owns what it inserts, like the template's content.
+            $html = HtmlFragments::collapseWhitespace($html);
+            $hashes[$partial] = self::unitHash($html, $key);
+
+            if ($renderedHtml === null) {
+                $content .= $html;
+            }
         }
 
-        if ($html === '') {
+        if ($hashes === []) {
             return '';
         }
 
-        // The browser owns what it inserts, like the template's content.
-        $html = HtmlFragments::collapseWhitespace($html);
-        $hash = md5(str_replace($key, '{key}', $html));
+        $json = json_encode($hashes, JSON_THROW_ON_ERROR);
 
-        return '<template data-villament-repeater-slot wire:key="villament-repeater-slot.'.e($key).'.'.$hash.'">'.$html.'</template>';
+        return '<template data-villament-repeater-slot data-villament-repeater-hashes="'.e($json).'" wire:key="villament-repeater-slot.'.e($key).'.'.md5($json).'">'.$content.'</template>';
+    }
+
+    /**
+     * A server unit's identity across renders: its markup with the row key
+     * factored out, so the template's provisional unit (under the
+     * placeholder) and a row's real one compare equal when they are.
+     */
+    public static function unitHash(string $html, string $key): string
+    {
+        // Trimmed: `toSchemaHtml()` pads its output, a cut element is exact.
+        return md5(str_replace($key, '{key}', trim(HtmlFragments::collapseWhitespace($html))));
     }
 
     /**
@@ -383,6 +425,7 @@ class ClientRepeater extends Repeater
     protected function renderClientTemplate(): string
     {
         $token = ClientTemplateTokens::mainToken($this->getStatePath());
+        $reference = $this->getTemplateReference();
 
         $originalState = $this->getRawState();
         $originalIsCollapsed = $this->isCollapsed;
@@ -395,6 +438,14 @@ class ClientRepeater extends Repeater
             // which runs defaults and `afterStateHydrated()`.
             $this->rawState([$token => []]);
             $this->getChildSchema($token)->fill();
+
+            if ($reference !== null) {
+                // The ancestor's template carries ours: classify the item
+                // (the shells and slots below need it), render nothing.
+                $this->renderPlan = $this->planClientRendering($token);
+
+                return $this->renderTemplateReference($reference);
+            }
 
             $itemState = $this->getRawState()[$token] ?? [];
 
@@ -465,6 +516,15 @@ class ClientRepeater extends Repeater
             'rendering' => $this->isClientRendered() ? [
                 'key' => $this->getKey(),
                 'server' => $this->renderPlan['server'],
+                // The template's provisional server units, hashed like a
+                // row's slot hashes them.
+                'unitHashes' => array_filter(array_combine(
+                    $this->renderPlan['server'],
+                    array_map(
+                        fn (string $unit): ?string => (($unitHtml = HtmlFragments::elementOpenedBy((string) $item, 'wire:partial="schema-component::'.$this->getKey().'.'.$token.'.'.$unit.'"')) === null) ? null : self::unitHash($unitHtml, $token),
+                        $this->renderPlan['server'],
+                    ),
+                )),
                 'fields' => array_map(
                     fn (array $field): array => [
                         ...$field,
@@ -490,6 +550,89 @@ class ClientRepeater extends Repeater
         // morph replaces the whole element instead of patching attributes
         // around stale, inert content.
         return '<template '.self::TEMPLATE_ATTRIBUTE.' wire:key="villament-repeater-template.'.md5($content).'">'.$content.'</template>';
+    }
+
+    /**
+     * When this repeater sits in a row of an ancestor `ClientRepeater`
+     * whose template already carries this repeater's full template, the
+     * reference that replaces our own copy: the ancestor's root id, our row
+     * key in it, and our own meta (which may differ per instance).
+     *
+     * Inside the ancestor's template render, this repeater IS that copy:
+     * it registers itself with the ancestor and renders in full.
+     *
+     * @return array{ancestor: string, item: string}|null
+     */
+    protected function getTemplateReference(): ?array
+    {
+        $ancestor = $this->getTemplateAncestor();
+
+        if ($ancestor === null) {
+            return null;
+        }
+
+        $prefix = $ancestor->getStatePath().'.';
+        $statePath = $this->getStatePath();
+
+        if (! str_starts_with($statePath, $prefix)) {
+            return null;
+        }
+
+        [$item, $relative] = array_pad(explode('.', substr($statePath, strlen($prefix)), 2), 2, null);
+
+        if (blank($item) || blank($relative)) {
+            return null;
+        }
+
+        if ($ancestor->isRenderingClientTemplate) {
+            $ancestor->templateSources[$relative] = true;
+
+            return null;
+        }
+
+        // A closure on this repeater may evaluate differently per row, so
+        // the ancestor's copy (rendered for a blank row) would not do.
+        if (! isset($ancestor->templateSources[$relative]) || Renderability::hasAppClosures($this)) {
+            return null;
+        }
+
+        return ['ancestor' => $ancestor->getId(), 'item' => $item];
+    }
+
+    /**
+     * The closest `ClientRepeater` this one is nested in, if any.
+     */
+    protected function getTemplateAncestor(): ?self
+    {
+        $component = $this->getContainer()->getParentComponent();
+
+        while ($component !== null) {
+            if ($component instanceof self) {
+                return $component;
+            }
+
+            $component = $component->getContainer()->getParentComponent();
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array{ancestor: string, item: string}  $reference
+     */
+    protected function renderTemplateReference(array $reference): string
+    {
+        $json = json_encode([
+            ...$reference,
+            'meta' => [
+                'minItems' => $this->getMinItems(),
+                'maxItems' => $this->getMaxItems(),
+                'actions' => $this->clientActions,
+                'hasItemNumbers' => $this->hasItemNumbers(),
+            ],
+        ], JSON_THROW_ON_ERROR);
+
+        return '<template '.self::TEMPLATE_ATTRIBUTE.' data-villament-repeater-template-ref="'.e($json).'" wire:key="villament-repeater-template-ref.'.md5($json).'"></template>';
     }
 
     /**

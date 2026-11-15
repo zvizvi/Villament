@@ -55,6 +55,7 @@ const SLOT_SELECTOR = ':scope > template[data-villament-repeater-slot]'
  * @typedef {object} RenderingMeta
  * @property {string} key The repeater's schema key (`form.items`).
  * @property {string[]} server The server units' keys, relative to the item.
+ * @property {Record<string, string>} [unitHashes] The template's provisional units, hashed as a row's slot hashes them.
  * @property {Array<{ key: string, path: string, nested: boolean, html: boolean, invalid: ?string }>} fields
  *   The client-rendered fields, each with its invalid variant (rendered with `errorSentinel`).
  * @property {string} errorSentinel
@@ -321,9 +322,15 @@ export function createClientRepeaterFormComponent(baseFactory, environment = def
 
             // ---- template ------------------------------------------------
 
-            /** @returns {?HTMLTemplateElement} */
+            /**
+             * This repeater's template: its own, or — for a repeater nested in
+             * a row of another `ClientRepeater` — the copy the ancestor's
+             * template carries, re-keyed for this row.
+             *
+             * @returns {?HTMLTemplateElement}
+             */
             villamentTemplate() {
-                return this.$root.querySelector(TEMPLATE_SELECTOR)
+                return resolveTemplate(this.$root)
             },
 
             /** @returns {?TemplateMeta} */
@@ -912,11 +919,11 @@ export function createClientRepeaterFormComponent(baseFactory, environment = def
             villamentAdopt(item, content, key, meta, errors) {
                 content.__villamentAdopted = true
 
-                for (const unit of this.villamentSlotUnits(item)) {
-                    const target = this.villamentUnit(content, unit.getAttribute('wire:partial'))
+                for (const [partial, hash] of Object.entries(this.villamentSlotHashes(item))) {
+                    const target = this.villamentUnit(content, partial)
 
                     if (target) {
-                        target.__villamentHtml = this.villamentNormalize(unit.outerHTML, key)
+                        target.__villamentHash = hash
                     }
                 }
 
@@ -939,35 +946,54 @@ export function createClientRepeaterFormComponent(baseFactory, environment = def
                     const target = this.villamentUnit(content, this.villamentUnitKey(meta, key, unit))
 
                     if (target) {
-                        target.__villamentHtml = this.villamentNormalize(target.outerHTML, key)
+                        target.__villamentHash = meta.rendering?.unitHashes?.[unit] ?? null
                     }
                 }
             },
 
             /**
              * Replaces each server unit whose server markup changed. Units
-             * are compared as server HTML (with the row key factored out),
-             * never against the live DOM, which Alpine has since changed.
+             * are compared by the hash the server computed from its own
+             * markup (row key factored out), never against the live DOM,
+             * which Alpine has since changed.
              *
              * @param {HTMLElement} item
              * @param {HTMLElement} content
              * @param {string} key
              */
             villamentApplySlot(item, content, key) {
-                for (const unit of this.villamentSlotUnits(item)) {
-                    const target = this.villamentUnit(content, unit.getAttribute('wire:partial'))
-                    const html = this.villamentNormalize(unit.outerHTML, key)
+                const units = this.villamentSlotUnits(item)
 
-                    if (! target || target.__villamentHtml === html) {
+                for (const [partial, hash] of Object.entries(this.villamentSlotHashes(item))) {
+                    const target = this.villamentUnit(content, partial)
+                    const unit = units.find((element) => element.getAttribute('wire:partial') === partial)
+
+                    // A page load's slot carries hashes only: the content
+                    // already holds those units.
+                    if (! target || ! unit || target.__villamentHash === hash) {
                         continue
                     }
 
                     const fresh = /** @type {?HTMLElement} */ (this.villamentParse(unit.outerHTML))
 
                     if (fresh) {
-                        fresh.__villamentHtml = html
+                        fresh.__villamentHash = hash
                         target.replaceWith(fresh)
                     }
+                }
+            },
+
+            /**
+             * @param {HTMLElement} item
+             * @returns {Record<string, string>}
+             */
+            villamentSlotHashes(item) {
+                const slot = item.querySelector(SLOT_SELECTOR)
+
+                try {
+                    return JSON.parse(slot?.getAttribute('data-villament-repeater-hashes') ?? '{}')
+                } catch {
+                    return {}
                 }
             },
 
@@ -1087,16 +1113,6 @@ export function createClientRepeaterFormComponent(baseFactory, environment = def
                     .find((element) => element.getAttribute('wire:partial') === partial) ?? null)
             },
 
-            /**
-             * @param {string} html
-             * @param {string} key
-             * @returns {string}
-             */
-            villamentNormalize(html, key) {
-                // Whitespace too: the server collapses what it ships for the
-                // browser to insert, and the comparison must not care.
-                return html.split(key).join('{key}').replace(/\s+/g, ' ')
-            },
 
             /**
              * Moving an element out from under the focus drops it; stock's
@@ -1128,4 +1144,118 @@ function escapeHtml(value) {
         .replaceAll('>', '&gt;')
         .replaceAll('"', '&quot;')
         .replaceAll("'", '&#039;')
+}
+
+/**
+ * Resolved shared templates, per reference element: rebuilt only when the
+ * ancestor's (resolved) template is a different element — a morph that
+ * replaced it — so every read in between is a lookup.
+ *
+ * @type {WeakMap<Element, { ancestorTemplate: HTMLTemplateElement, template: HTMLTemplateElement }>}
+ */
+const sharedTemplates = new WeakMap()
+
+/**
+ * The template of the repeater rooted at `root`.
+ *
+ * A repeater in a row of an ancestor `ClientRepeater` ships a REFERENCE
+ * instead of its own copy (`data-villament-repeater-template-ref`): the
+ * ancestor's root id, this repeater's row key in it, and its own meta. The
+ * ancestor's template carries this repeater's full template, rendered under
+ * the ancestor's placeholder token; swapping that token for the row key gives
+ * exactly the template the server would have rendered here. References chain
+ * (a repeater three levels deep resolves through its parent's resolved
+ * template), so this recurses.
+ *
+ * @param {Element} root
+ * @param {number} [depth]
+ * @returns {?HTMLTemplateElement}
+ */
+export function resolveTemplate(root, depth = 0) {
+    const own = /** @type {?HTMLTemplateElement} */ (root.querySelector(TEMPLATE_SELECTOR))
+    const attribute = own?.getAttribute('data-villament-repeater-template-ref')
+
+    if (! own || ! attribute) {
+        return own
+    }
+
+    if (depth > 32) {
+        return null
+    }
+
+    /** @type {{ ancestor: string, item: string, meta: object }} */
+    let reference
+
+    try {
+        reference = JSON.parse(attribute)
+    } catch {
+        return null
+    }
+
+    let ancestor = root.parentElement?.closest('[data-reorder-owner]') ?? null
+
+    while (ancestor && ancestor.id !== reference.ancestor) {
+        ancestor = ancestor.parentElement?.closest('[data-reorder-owner]') ?? null
+    }
+
+    const ancestorTemplate = ancestor ? resolveTemplate(ancestor, depth + 1) : null
+
+    if (! ancestorTemplate) {
+        return null
+    }
+
+    const cached = sharedTemplates.get(own)
+
+    if (cached?.ancestorTemplate === ancestorTemplate) {
+        return cached.template
+    }
+
+    const ancestorMeta = readMeta(ancestorTemplate)
+
+    if (! ancestorMeta) {
+        return null
+    }
+
+    // Our root, as the ancestor's template rendered it: under its token.
+    const sourceId = root.id.split(reference.item).join(ancestorMeta.token)
+    const sourceRoot = [...ancestorTemplate.content.querySelectorAll('[data-reorder-owner]')].find((element) => element.id === sourceId)
+    const source = /** @type {?HTMLTemplateElement} */ (sourceRoot?.querySelector(TEMPLATE_SELECTOR) ?? null)
+
+    if (! source) {
+        return null
+    }
+
+    const template = document.createElement('template')
+
+    template.innerHTML = source.innerHTML.split(ancestorMeta.token).join(reference.item)
+
+    // Limits, actions and numbering may be configured per instance.
+    const script = [...template.content.children].find((child) => child.matches('script[data-villament-repeater-meta]'))
+    const meta = readMeta(template)
+
+    if (script && meta) {
+        script.textContent = JSON.stringify({ ...meta, ...reference.meta })
+    }
+
+    sharedTemplates.set(own, { ancestorTemplate, template })
+
+    return template
+}
+
+/**
+ * @param {?HTMLTemplateElement} template
+ * @returns {?TemplateMeta}
+ */
+function readMeta(template) {
+    const script = [...(template?.content.children ?? [])].find((child) => child.matches('script[data-villament-repeater-meta]'))
+
+    if (! script) {
+        return null
+    }
+
+    try {
+        return JSON.parse(script.textContent ?? '')
+    } catch {
+        return null
+    }
 }

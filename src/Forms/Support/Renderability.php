@@ -220,7 +220,7 @@ final class Renderability
      * A closure the app wrote (anywhere outside Filament's own packages) on a
      * property that can reach the markup.
      */
-    private static function hasAppClosures(Component $component): bool
+    public static function hasAppClosures(Component $component): bool
     {
         $reflection = new ReflectionObject($component);
 
