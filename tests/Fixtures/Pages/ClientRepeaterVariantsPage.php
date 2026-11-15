@@ -13,6 +13,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
+use Illuminate\Support\Str;
 use Zvizvi\Villament\Forms\ClientRepeater;
 
 /**
@@ -55,6 +56,11 @@ class ClientRepeaterVariantsPage extends Page
                     ->schema($field())
                     ->deleteAction(fn (Action $action): Action => $action->requiresConfirmation())
                     ->addAction(fn (Action $action): Action => $action->after(fn () => null)),
+                // A `before()` written here is a change, even when every action
+                // in the panel also carries one from `configureUsing()`.
+                ClientRepeater::make('before_set')
+                    ->schema($field())
+                    ->addAction(fn (Action $action): Action => $action->before(fn () => null)),
                 ClientRepeater::make('replaced')
                     ->schema($field())
                     ->addAction(fn (Action $action): Action => $action->action(fn () => null)),
@@ -86,6 +92,11 @@ class ClientRepeaterVariantsPage extends Page
                 // An app `afterStateHydrated()` would run on every render.
                 ClientRepeater::make('hydrating')->schema([
                     TextInput::make('name')->afterStateHydrated(fn () => null),
+                ]),
+                // A hook of the field's own PACKAGE (any vendor code, here a
+                // Laravel method) is the field's, not the app's.
+                ClientRepeater::make('vendor_hydrating')->schema([
+                    TextInput::make('name')->afterStateHydrated(Str::random(...)),
                 ]),
                 ClientRepeater::make('hydrating_opted_in')->clientStructure()->schema([
                     TextInput::make('name')->afterStateHydrated(fn () => null),

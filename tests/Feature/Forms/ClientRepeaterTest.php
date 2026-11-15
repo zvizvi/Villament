@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use Filament\Actions\Action;
+use Filament\Forms\Components\Field;
 use Illuminate\Support\Str;
 use Zvizvi\Villament\Forms\ClientTemplateTokens;
 use Zvizvi\Villament\Tests\Fixtures\Models\User;
@@ -266,6 +268,36 @@ it('keeps an item with an app afterStateHydrated() on stock unless clientStructu
     // request, not only on an add.
     expect(templateMeta($html, 'hydrating'))->toBeNull()
         ->and(templateMeta($html, 'hydrating_opted_in'))->not->toBeNull();
+});
+
+it('counts a field package\'s own afterStateHydrated() as the field\'s, not the app\'s', function (): void {
+    // A third-party field formatting its state on hydration (a phone input)
+    // is part of the field, like Filament's own hooks.
+    expect(templateMeta(livewire(ClientRepeaterVariantsPage::class)->html(), 'vendor_hydrating'))->not->toBeNull();
+});
+
+it('keeps the actions in the browser when every action in the panel carries a before() from configureUsing()', function (): void {
+    // A plugin setting its context before any action runs (custom-fields'
+    // tenant) hangs this on every action: it is what stock means in that app.
+    $html = Action::configureUsing(
+        fn (Action $action): Action => $action->before(fn () => null),
+        during: fn (): string => livewire(ClientRepeaterVariantsPage::class)->html(),
+    );
+
+    expect(templateMeta($html, 'restyled')['actions'])->toMatchArray(['add' => true, 'delete' => true])
+        // One written on the repeater's own action is still a change.
+        ->and(templateMeta($html, 'before_set')['actions'])->toMatchArray(['add' => false, 'delete' => true]);
+});
+
+it('keeps the structure in the browser when every field carries an afterStateUpdated() from configureUsing()', function (): void {
+    $html = Field::configureUsing(
+        fn (Field $field): Field => $field->afterStateUpdated(fn () => null),
+        during: fn (): string => livewire(ClientRepeaterVariantsPage::class)->html(),
+    );
+
+    expect(templateMeta($html, 'restyled'))->not->toBeNull()
+        // One written on the repeater itself still sends it back to stock.
+        ->and(templateMeta($html, 'hooked'))->toBeNull();
 });
 
 it('renames nested item keys in the template, and leaves UUID-shaped keys in data alone', function (): void {

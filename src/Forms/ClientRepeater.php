@@ -17,6 +17,7 @@ use Filament\Support\Facades\FilamentAsset;
 use Illuminate\Support\MessageBag;
 use Illuminate\Support\ViewErrorBag;
 use Livewire\LivewireManager;
+use ReflectionFunction;
 use WeakMap;
 use Zvizvi\Villament\Forms\Support\ActionBehavior;
 use Zvizvi\Villament\Forms\Support\CloneSafety;
@@ -251,7 +252,7 @@ class ClientRepeater extends Repeater
 
         if ($condition === null) {
             $condition = ! ($this->hasAppHydrationHooks ??= $this->memo('hydration', fn (): bool => (($schema = $this->getChildSchema()) !== null)
-                && Renderability::schemaHasAppClosures($schema, onlyProperties: ['afterStateHydrated'])));
+                && Renderability::schemaHasAppClosures($schema, onlyProperties: ['afterStateHydrated'], packagesAreVendor: true)));
         }
 
         if (! $condition) {
@@ -266,7 +267,7 @@ class ClientRepeater extends Repeater
         // Stock's actions call `callAfterStateUpdated()` and, on a live
         // repeater, other fields react to the new state. The browser can do
         // neither, so these keep the server path for every action.
-        if ($this->isLive() || filled($this->afterStateUpdated)) {
+        if ($this->isLive() || filled($this->getOwnAfterStateUpdated())) {
             return false;
         }
 
@@ -275,6 +276,36 @@ class ClientRepeater extends Repeater
         }
 
         return true;
+    }
+
+    /**
+     * The `afterStateUpdated()` hooks set on THIS repeater: one every repeater
+     * in the app carries (a `Field::configureUsing()` hook) is part of what
+     * stock means here, not a reaction this one asked for. Matched by source,
+     * against a freshly configured repeater, since closures are new objects on
+     * every construction.
+     *
+     * @return array<Closure>
+     */
+    protected function getOwnAfterStateUpdated(): array
+    {
+        /** @var list<string> $global */
+        $global = $this->memo('global-after-state-updated', fn (): array => array_map(
+            self::sourceOf(...),
+            static::make('villament-baseline')->afterStateUpdated,
+        ));
+
+        return array_values(array_filter(
+            $this->afterStateUpdated,
+            fn (Closure $hook): bool => ! in_array(self::sourceOf($hook), $global, strict: true),
+        ));
+    }
+
+    private static function sourceOf(Closure $closure): string
+    {
+        $function = new ReflectionFunction($closure);
+
+        return $function->getFileName().':'.$function->getStartLine();
     }
 
     /**

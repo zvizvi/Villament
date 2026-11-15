@@ -224,9 +224,9 @@ final class Renderability
      *
      * @param  list<string>|null  $onlyProperties
      */
-    public static function hasAppClosuresDeep(Component $component, bool $includeLifecycle = true, ?array $onlyProperties = null): bool
+    public static function hasAppClosuresDeep(Component $component, bool $includeLifecycle = true, ?array $onlyProperties = null, bool $packagesAreVendor = false): bool
     {
-        if (self::hasAppClosures($component, $includeLifecycle, $onlyProperties)) {
+        if (self::hasAppClosures($component, $includeLifecycle, $onlyProperties, $packagesAreVendor)) {
             return true;
         }
 
@@ -237,7 +237,7 @@ final class Renderability
         }
 
         foreach ($schemas as $schema) {
-            if (self::schemaHasAppClosures($schema, $includeLifecycle, $onlyProperties)) {
+            if (self::schemaHasAppClosures($schema, $includeLifecycle, $onlyProperties, $packagesAreVendor)) {
                 return true;
             }
         }
@@ -248,10 +248,10 @@ final class Renderability
     /**
      * @param  list<string>|null  $onlyProperties
      */
-    public static function schemaHasAppClosures(Schema $schema, bool $includeLifecycle = true, ?array $onlyProperties = null): bool
+    public static function schemaHasAppClosures(Schema $schema, bool $includeLifecycle = true, ?array $onlyProperties = null, bool $packagesAreVendor = false): bool
     {
         foreach ($schema->getComponents(withActions: false, withHidden: true) as $component) {
-            if (self::hasAppClosuresDeep($component, $includeLifecycle, $onlyProperties)) {
+            if (self::hasAppClosuresDeep($component, $includeLifecycle, $onlyProperties, $packagesAreVendor)) {
                 return true;
             }
         }
@@ -266,7 +266,7 @@ final class Renderability
      *
      * @param  list<string>|null  $onlyProperties
      */
-    public static function hasAppClosures(Component $component, bool $includeLifecycle = false, ?array $onlyProperties = null): bool
+    public static function hasAppClosures(Component $component, bool $includeLifecycle = false, ?array $onlyProperties = null, bool $packagesAreVendor = false): bool
     {
         $reflection = new ReflectionObject($component);
 
@@ -291,7 +291,7 @@ final class Renderability
                 $value = $property->getValue($component);
 
                 foreach (is_array($value) ? $value : [$value] as $candidate) {
-                    if (($candidate instanceof Closure) && (! self::isFilamentClosure($candidate))) {
+                    if (($candidate instanceof Closure) && (! self::isFilamentClosure($candidate, $packagesAreVendor))) {
                         return true;
                     }
                 }
@@ -301,11 +301,21 @@ final class Renderability
         return false;
     }
 
-    private static function isFilamentClosure(Closure $closure): bool
+    /**
+     * With `$packagesAreVendor`, a closure from ANY installed package counts
+     * as package code, not the app's: a third-party field's own hooks (a
+     * phone input formatting its state) are the field's, not something the
+     * app wrote at this call site.
+     */
+    private static function isFilamentClosure(Closure $closure, bool $packagesAreVendor = false): bool
     {
         $file = (new ReflectionFunction($closure))->getFileName();
 
-        return is_string($file) && str_starts_with($file, self::filamentRoot());
+        if (! is_string($file)) {
+            return false;
+        }
+
+        return str_starts_with($file, $packagesAreVendor ? dirname(self::filamentRoot()).DIRECTORY_SEPARATOR : self::filamentRoot());
     }
 
     /**

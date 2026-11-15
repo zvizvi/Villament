@@ -45,7 +45,9 @@ final class ActionBehavior
         }
 
         foreach (self::HOOK_PROPERTIES as $property) {
-            if (self::readProperty($action, $property) !== null) {
+            $value = self::readProperty($action, $property);
+
+            if (($value !== null) && (! self::isGloballyConfigured($property, $value))) {
                 return false;
             }
         }
@@ -84,6 +86,41 @@ final class ActionBehavior
 
         return (new ReflectionFunction($function))->getFileName()
             === (new ReflectionClass(Repeater::class))->getFileName();
+    }
+
+    /**
+     * A hook every action in the panel carries (another plugin's
+     * `Action::configureUsing()`, e.g. one setting its tenant context) is part
+     * of what "stock" means in this app, not a change made to this repeater's
+     * action: it is matched by the source of a freshly configured action's
+     * hook, since closures are new objects on every construction.
+     */
+    private static function isGloballyConfigured(string $property, mixed $value): bool
+    {
+        if (! $value instanceof Closure) {
+            return false;
+        }
+
+        $baseline = self::readProperty(self::baseline(), $property);
+
+        return ($baseline instanceof Closure) && (self::sourceOf($baseline) === self::sourceOf($value));
+    }
+
+    /**
+     * An action carrying nothing but the global configuration. Made afresh on
+     * every ask, never cached: a panel's plugins register theirs when the panel
+     * boots, and a baseline built before that would miss them.
+     */
+    private static function baseline(): Action
+    {
+        return Action::make('villament-baseline');
+    }
+
+    private static function sourceOf(Closure $closure): string
+    {
+        $function = new ReflectionFunction($closure);
+
+        return $function->getFileName().':'.$function->getStartLine();
     }
 
     private static function readProperty(Action $action, string $property): mixed
