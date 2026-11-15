@@ -122,18 +122,18 @@ A fully client-rendered item is faster than stock from about ten rows, and its r
 
 | Situation | Why | Path |
 |---|---|---|
-| An action whose **behaviour** you changed: `->deleteAction(fn ($a) => $a->requiresConfirmation())`, `->before()`/`->after()`, a modal or form, a replaced `->action()`, `url()`, a dispatched event, `actionJs()` | Has to run on the server, or opens UI the browser cannot replay | That action only, through stock `mountAction()` |
+| An action whose **behaviour** you changed: `->deleteAction(fn ($a) => $a->requiresConfirmation())`, `->before()`/`->after()`, a modal or form, a replaced `->action()`, `url()`, a dispatched event, `actionJs()`. A hook that **every** action in the panel carries (another plugin's `Action::configureUsing()`) is not a change: it is matched against a freshly configured action | Has to run on the server, or opens UI the browser cannot replay | That action only, through stock `mountAction()` |
 | A **presentational** change: `label()`, `icon()`, `color()`, `size()`, `tooltip()`, `visible()`, `extraAttributes()`. This includes `->addBetweenAction(fn ($a) => $a->visible())` | Same markup, nothing to run | Browser |
 | `extraItemActions()` | Custom server code | Livewire, as in stock. The deferred item list rides along, so they work on rows the browser added |
 | **Clone**, when an item holds a field whose server-rendered HTML depends on its value: a non-native, searchable, multiple or relationship `Select`, `FileUpload`, `RichEditor`, a nested `Repeater`/`Builder`, or any component not on the clone-safe list | The browser clone uses the *blank* template's markup, so it is exact only for fields that read their value from the state on the client | Clone only, through stock |
-| `live()` on the repeater, or `afterStateUpdated()` on it | Stock's actions call `callAfterStateUpdated()`, and other fields react to the new state | The whole repeater behaves as stock |
+| `live()` on the repeater, or `afterStateUpdated()` on it. One that every field carries (a `Field::configureUsing()` hook) does not count | Stock's actions call `callAfterStateUpdated()`, and other fields react to the new state | The whole repeater behaves as stock |
 | `generateUuidUsing(false)` | Integer keys would be reordered by a JS object | The whole repeater behaves as stock |
 | A `table()` repeater with a `Hidden` field | Filament renders the field inside the `<tr>` but outside any cell, which the HTML parser moves out of the row, so there is no cell for the browser to own | The structure stays in the browser; the rows render on the server |
 | `live()` fields **inside** a row, searchable selects, file uploads, `itemLabel()` closures re-evaluated on change | They talk to the server anyway | Unchanged. With client rendering, the server units are re-rendered into the row's slot on every request |
 
 A browser clone is exact only when the whole item is client-rendered (see above). An item with any server unit clones through the server.
 
-`->clientStructure(false)` turns a `ClientRepeater` back into a stock `Repeater`. It also accepts a closure. By default the structure is client-side unless the item carries an `afterStateHydrated()` closure of the app's own: the template is filled on every render, so such a hook would run on every request rather than only when an item is added. Call `->clientStructure()` explicitly when the hook is pure.
+`->clientStructure(false)` turns a `ClientRepeater` back into a stock `Repeater`. It also accepts a closure. By default the structure is client-side unless the item carries an `afterStateHydrated()` closure of the app's own (a hook of the field's own package, anything under `vendor/`, is the field's): the template is filled on every render, so such a hook would run on every request rather than only when an item is added. Call `->clientStructure()` explicitly when the hook is pure.
 
 ### Behaviour notes
 

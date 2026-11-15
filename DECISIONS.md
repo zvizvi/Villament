@@ -575,6 +575,16 @@ Up to 0.0.20 the Alpine component keyed a new row with `crypto.randomUUID()` and
 - `uuid()` in `operations.js` uses `randomUUID()` when it exists and builds a v4 UUID from `getRandomValues()` (available in every context) when it does not, setting the version and variant bits as `randomUUID()` does.
 - The browser suite missed it because it ran on `127.0.0.1`, which is a secure context. It now runs on `http://villament.test` (Chromium `--host-resolver-rules` maps it to the local server), so every scenario runs where `randomUUID()` is missing, and one asserts `isSecureContext === false`. Checked: with the old `generateKey`, the suite fails.
 
+## 2026-11-15 — `ClientRepeater`: what the app configures globally is stock
+
+Found in a real app (Filament 5.11.3), where a plain `Repeater::make()` → `ClientRepeater::make()` swap on a phones list left every add on Livewire. Three things the decision read as "changed by the developer" were not changes made to that repeater:
+
+- **A field package's own `afterStateHydrated()`.** `ysfkaya/filament-phone-input` formats its state on hydration. "The app's own" meant anything outside `vendor/filament/`, so a third-party field counted as app code and the automatic mode kept the structure on the server. For this one question (`hasClientStructure()`'s hydration check) every installed package now counts as package code: `Renderability::schemaHasAppClosures(..., packagesAreVendor: true)`. The markup checks keep the narrow root, where a third-party closure may still depend on the row. A package linked through a composer `path` repository resolves outside `vendor/` and still counts as the app's.
+- **A `before()` that every action carries.** `relaticle/custom-fields` (multi-tenancy on) calls `Action::configureUsing(fn ($a) => $a->before(...))` to set its tenant context, so all seven structural actions looked behaviour-changed. `ActionBehavior::isGloballyConfigured()` compares a hook with the same property of a freshly made `Action::make()`, by the closure's file and start line (closures are new objects on each construction). A match is global configuration; anything else, including a `before()` written on the repeater's own action, is still a change. The baseline is made on every ask, never cached: a panel's plugins register theirs when the panel boots.
+- **An `afterStateUpdated()` that every field carries.** The same comparison against a freshly made repeater (`getOwnAfterStateUpdated()`): an app's `Field::configureUsing()` hook (custom-field defaults, here) is not a reaction this repeater asked for. Such a global hook is not called on an add made in the browser, like everything else the browser does there.
+
+Tests: `vendor_hydrating` (a hook from `Str::random(...)`, i.e. vendor code), and `Action::configureUsing()` / `Field::configureUsing()` with `during:` around the render, beside `before_set` and `hooked`, which must still go back to the server. All three fail on the previous code.
+
 ## Verified Filament v5 internal API map (§4.1, §4.8)
 
 Verified against **filament/filament v5.6.8** + **livewire/livewire v4.3.3** by reading installed vendor source on 2026-07-15. Paths relative to `vendor/filament/`.
