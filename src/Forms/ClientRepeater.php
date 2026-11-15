@@ -8,6 +8,7 @@ use Closure;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Contracts\HasNestedRecursiveValidationRules;
 use Filament\Forms\Components\Field;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Repeater;
 use Filament\Schemas\Components\Component;
 use Filament\Schemas\Schema;
@@ -76,6 +77,15 @@ class ClientRepeater extends Repeater
      * @var array{server: list<string>, fields: list<array<string, mixed>>}|null
      */
     protected ?array $renderPlan = null;
+
+    /**
+     * `table()` with client rendering: where the component cells sit among
+     * the template row's cells (after its reorder cell, before its actions
+     * cell), and how many there are.
+     *
+     * @var array{start: int, count: int}|null
+     */
+    protected ?array $tableCells = null;
 
     /**
      * Paths (relative to this repeater's item) of the nested
@@ -166,12 +176,6 @@ class ClientRepeater extends Repeater
     public function hasClientStructure(): bool
     {
         if (! $this->evaluate($this->hasClientStructure)) {
-            return false;
-        }
-
-        // The default (card) and `simple()` layouts are client-side; the
-        // `table()` layout renders rows, not items, and stays stock.
-        if ($this->isTable()) {
             return false;
         }
 
@@ -275,6 +279,10 @@ class ClientRepeater extends Repeater
             $this->isRenderingItemShells = false;
         }
 
+        if ($this->isTable()) {
+            return $this->decorateTableShells($html, $keys, $isLight);
+        }
+
         $contentClass = $this->isSimple() ? 'class="fi-fo-simple-repeater-item-content"' : 'class="fi-fo-repeater-item-content"';
         $attributes = ' wire:ignore'.($isLight ? ' data-villament-repeater-pending' : '');
 
@@ -291,6 +299,102 @@ class ClientRepeater extends Repeater
         }
 
         return $html;
+    }
+
+    /**
+     * `table()`'s shells: a row has no content element, its component cells
+     * are. On a page load each cell gets `wire:ignore`; on Livewire requests
+     * the row has none, and gets one `wire:ignore`d, pending placeholder per
+     * cell, after its reorder cell. The row's slot leads the row (a
+     * `<template>` is allowed in a `<tr>`).
+     *
+     * @param  list<string>  $keys
+     */
+    protected function decorateTableShells(string $html, array $keys, bool $isLight): string
+    {
+        $hasReorderColumn = (count($keys) > 1) && ($this->isReorderableWithButtons() || $this->isReorderableWithDragAndDrop());
+        $count = $this->tableCells['count'] ?? 0;
+
+        foreach ($keys as $key) {
+            $needle = 'x-sortable-item="'.e($key).'"';
+            $row = HtmlFragments::element($html, $needle, 'tr');
+            $position = $row === null ? false : strpos($html, $row);
+
+            if (($row === null) || ($position === false)) {
+                continue;
+            }
+
+            $cells = $this->tableCells($row);
+            $slot = $this->renderRowSlot($key, renderedHtml: $isLight ? null : $row);
+
+            if ($isLight) {
+                $at = $hasReorderColumn && isset($cells[0]) ? $cells[0][1] : (int) HtmlFragments::openingTagEnd($row);
+                $placeholders = implode('', array_map(
+                    fn (int $index): string => '<td '.self::cellAttributes($key, $index).' data-villament-repeater-pending></td>',
+                    range(0, max(0, $count - 1)),
+                ));
+
+                $decorated = substr($row, 0, $at).($count ? $placeholders : '').substr($row, $at);
+            } else {
+                $decorated = self::decorateCells($row, array_slice($cells, $hasReorderColumn ? 1 : 0, $count), $key);
+            }
+
+            $openingEnd = (int) HtmlFragments::openingTagEnd($decorated);
+            $decorated = substr($decorated, 0, $openingEnd).$slot.substr($decorated, $openingEnd);
+
+            $html = substr_replace($html, $decorated, $position, strlen($row));
+        }
+
+        return $html;
+    }
+
+    /**
+     * The `<td>` children of a `table()` row, as offsets into it.
+     *
+     * @return list<array{0: int, 1: int}>
+     */
+    protected function tableCells(string $row): array
+    {
+        return array_values(array_filter(
+            HtmlFragments::children($row),
+            fn (array $child): bool => (bool) preg_match('/\G<td[\s>]/', $row, offset: $child[0]),
+        ));
+    }
+
+    /**
+     * @param  list<array{0: int, 1: int}>  $cells
+     */
+    protected static function decorateCells(string $row, array $cells, string $key): string
+    {
+        // From the last, so earlier offsets stay valid.
+        foreach (array_reverse($cells, preserve_keys: true) as $index => [$start]) {
+            $row = substr($row, 0, $start + 3).' '.self::cellAttributes($key, $index).substr($row, $start + 3);
+        }
+
+        return $row;
+    }
+
+    /**
+     * A component cell is the browser's (`wire:ignore`), and keyed: the
+     * morph must match the row's cells by key, not by position — the
+     * reorder cell before them comes and goes with the row count.
+     */
+    protected static function cellAttributes(string $key, int $index): string
+    {
+        return 'wire:ignore wire:key="villament-repeater-cell.'.e($key).'.'.$index.'"';
+    }
+
+    /**
+     * Stock's `$hasActionsColumn`, optionally as the template renders it
+     * (clone allowed past `maxItems`).
+     */
+    protected function hasTableActionsColumn(bool $ignoringMaxItems = false): bool
+    {
+        $isCloneable = $ignoringMaxItems
+            ? ((! $this->isDisabled()) && (bool) $this->evaluate($this->isCloneable))
+            : $this->isCloneable();
+
+        return count($this->getExtraItemActions()) || $isCloneable || $this->isDeletable();
     }
 
     /**
@@ -457,7 +561,9 @@ class ClientRepeater extends Repeater
 
             $secondToken = ClientTemplateTokens::secondToken($this->getStatePath());
 
-            $this->rawState($needsSeparator ? [$token => $itemState, $secondToken => $itemState] : [$token => $itemState]);
+            // Two rows when a separator has to be cut from between them, and
+            // always for `table()`: its reorder column only renders from two.
+            $this->rawState(($needsSeparator || $this->isTable()) ? [$token => $itemState, $secondToken => $itemState] : [$token => $itemState]);
 
             $html = parent::toEmbeddedHtml();
 
@@ -493,15 +599,33 @@ class ClientRepeater extends Repeater
             [$invalidHtml] = $tokens->normalize($invalidHtml, []);
         }
 
-        $item = HtmlFragments::element($html, 'x-sortable-item="'.e($token).'"', 'li');
+        $item = HtmlFragments::element($html, 'x-sortable-item="'.e($token).'"', $this->isTable() ? 'tr' : 'li');
 
         if (($item !== null) && $this->isClientRendered()) {
             // A row the browser adds keeps its content across morphs too.
-            $item = HtmlFragments::decorateTag($item, 0, $this->isSimple() ? 'class="fi-fo-simple-repeater-item-content"' : 'class="fi-fo-repeater-item-content"', ' wire:ignore');
+            if ($this->isTable()) {
+                $start = $this->isReorderableWithButtons() || $this->isReorderableWithDragAndDrop() ? 1 : 0;
+                $cells = array_slice($this->tableCells($item), $start, null);
+
+                // The template row always has its actions cell when the
+                // table has an actions column at all.
+                if ($this->hasTableActionsColumn(ignoringMaxItems: true)) {
+                    array_pop($cells);
+                }
+
+                $this->tableCells = ['start' => $start, 'count' => count($cells)];
+                $item = self::decorateCells($item, $cells, $token);
+            } else {
+                $item = HtmlFragments::decorateTag($item, 0, $this->isSimple() ? 'class="fi-fo-simple-repeater-item-content"' : 'class="fi-fo-repeater-item-content"', ' wire:ignore');
+            }
         }
         $separator = $needsSeparator ? HtmlFragments::elementAfter($html, 'x-sortable-item="'.e($token).'"', 'li') : null;
-        $list = HtmlFragments::openingTag($html, 'x-ref="reorderItems"');
-        $add = HtmlFragments::elementWithClass($html, $this->isSimple() ? 'fi-fo-simple-repeater-add' : 'fi-fo-repeater-add', 'div');
+        $list = $this->isTable() ? $this->cutTableShell($html) : HtmlFragments::openingTag($html, 'x-ref="reorderItems"');
+        $add = HtmlFragments::elementWithClass($html, match (true) {
+            $this->isTable() => 'fi-fo-table-repeater-add',
+            $this->isSimple() => 'fi-fo-simple-repeater-add',
+            default => 'fi-fo-repeater-add',
+        }, 'div');
         $description = HtmlFragments::element($html, 'data-reorder-description="'.e($token).'"', 'span');
 
         $meta = [
@@ -512,6 +636,14 @@ class ClientRepeater extends Repeater
             'maxItems' => $this->getMaxItems(),
             'actions' => $this->clientActions,
             'hasItemNumbers' => $this->hasItemNumbers(),
+            'layout' => match (true) {
+                $this->isTable() => 'table',
+                $this->isSimple() => 'simple',
+                default => 'card',
+            },
+            // `table()` adds a leading reorder column (header + one cell per
+            // row) only while there are two rows or more.
+            'reorderColumn' => $this->isTable() && ($this->isReorderableWithButtons() || $this->isReorderableWithDragAndDrop()),
             'positionMessage' => __('filament-forms::components.repeater.reordering.position'),
             'rendering' => $this->isClientRendered() ? [
                 'key' => $this->getKey(),
@@ -533,12 +665,15 @@ class ClientRepeater extends Repeater
                     $this->renderPlan['fields'],
                 ),
                 'errorSentinel' => self::ERROR_SENTINEL,
+                'cells' => $this->tableCells,
             ] : null,
         ];
 
         $content = '<script type="application/json" data-villament-repeater-meta>'.json_encode($meta, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_THROW_ON_ERROR).'</script>'
-            .($list !== null ? $list.'</ul>' : '')
-            .($item ?? '')
+            .($list !== null ? ($this->isTable() ? $list : $list.'</ul>') : '')
+            // A `<tr>` outside a table is dropped by the HTML parser; in a
+            // `<template>` of its own it is the first element, and parses.
+            .($item === null ? '' : ($this->isTable() ? '<template data-villament-repeater-row>'.$item.'</template>' : $item))
             .($separator !== null ? '<template data-villament-repeater-separator="addable">'.$separator.'</template>' : '')
             .($labelBetweenHtml !== null ? '<template data-villament-repeater-separator="full">'.$labelBetweenHtml.'</template>' : '')
             .($add !== null ? '<template data-villament-repeater-add>'.$add.'</template>' : '')
@@ -636,6 +771,25 @@ class ClientRepeater extends Repeater
     }
 
     /**
+     * `table()`'s list shell: the whole `<table>` (its `<thead>` rendered
+     * with the reorder column) around an empty `<tbody>`, for the browser to
+     * put back when the first row is added. Stock renders no table at all
+     * for an empty repeater.
+     */
+    protected function cutTableShell(string $html): ?string
+    {
+        $table = HtmlFragments::enclosing($html, 'x-ref="reorderItems"', 'table');
+        $body = $table === null ? null : HtmlFragments::element($table, 'x-ref="reorderItems"', 'tbody');
+        $opening = $table === null ? null : HtmlFragments::openingTag($table, 'x-ref="reorderItems"');
+
+        if (($body === null) || ($opening === null)) {
+            return null;
+        }
+
+        return str_replace($body, $opening.'</tbody>', $table);
+    }
+
+    /**
      * Classifies the template item (rendered under `$token`) into server
      * units and client fields, keyed relative to the item.
      *
@@ -651,6 +805,13 @@ class ClientRepeater extends Repeater
         $plan = $schema === null ? null : Renderability::plan($schema);
 
         if ($plan === null) {
+            return null;
+        }
+
+        // `table()` renders a Hidden field bare inside the `<tr>`, without a
+        // cell: markup the HTML parser moves out of the row, so there is no
+        // cell for the browser to own. Such a table renders on the server.
+        if ($this->isTable() && array_filter($plan['client'], fn (Field $field): bool => $field instanceof Hidden)) {
             return null;
         }
 

@@ -30,10 +30,12 @@ const TEMPLATE_SELECTOR = ':scope > template[data-villament-repeater-template]'
 const ACTION_ATTRIBUTE = 'data-villament-repeater-action'
 
 // The default (card) layout and `simple()` share the structure and differ
-// only in class names.
-const LIST_SELECTOR = ':scope > ul.fi-fo-repeater-items, :scope > ul.fi-fo-simple-repeater-items'
-const ADD_SELECTOR = ':scope > .fi-fo-repeater-add, :scope > .fi-fo-simple-repeater-add'
-const ITEM_ACTIONS_SELECTOR = '.fi-fo-repeater-item-header-end-actions, .fi-fo-simple-repeater-item-actions'
+// only in class names; `table()` has rows (`<tr>`) in the table's `<tbody>`.
+const LIST_SELECTOR = ':scope > ul.fi-fo-repeater-items, :scope > ul.fi-fo-simple-repeater-items, :scope > table > tbody[x-ref="reorderItems"]'
+const ADD_SELECTOR = ':scope > .fi-fo-repeater-add, :scope > .fi-fo-simple-repeater-add, :scope > .fi-fo-table-repeater-add'
+const ITEM_ACTIONS_SELECTOR = '.fi-fo-repeater-item-header-end-actions, .fi-fo-simple-repeater-item-actions, .fi-fo-table-repeater-actions'
+const TEMPLATE_ITEM_SELECTOR = '[x-sortable-item]'
+const REORDER_CONTROL_SELECTOR = '[data-reorder-direction], [x-sortable-handle]'
 const CONTENT_SELECTOR = ':scope > .fi-fo-repeater-item-content, :scope > .fi-fo-simple-repeater-item-content'
 const PENDING_ATTRIBUTE = 'data-villament-repeater-pending'
 const SLOT_SELECTOR = ':scope > template[data-villament-repeater-slot]'
@@ -59,6 +61,7 @@ const SLOT_SELECTOR = ':scope > template[data-villament-repeater-slot]'
  * @property {Array<{ key: string, path: string, nested: boolean, html: boolean, invalid: ?string }>} fields
  *   The client-rendered fields, each with its invalid variant (rendered with `errorSentinel`).
  * @property {string} errorSentinel
+ * @property {?{ start: int, count: int }} cells `table()`: the template row's component cells.
  */
 
 /**
@@ -358,6 +361,16 @@ export function createClientRepeaterFormComponent(baseFactory, environment = def
             },
 
             /**
+             * The template's item: an `<li>`, or — `table()` — the `<tr>` in
+             * its own nested template (where the HTML parser keeps it).
+             *
+             * @returns {?HTMLElement}
+             */
+            villamentTemplateItem() {
+                return templateItem(this.villamentTemplate())
+            },
+
+            /**
              * @param {string} selector
              * @returns {?string}
              */
@@ -372,7 +385,7 @@ export function createClientRepeaterFormComponent(baseFactory, environment = def
              * @returns {?Element}
              */
             villamentItemFromTemplate(replacements) {
-                const item = this.villamentTemplatePart('li[x-sortable-item]')
+                const item = this.villamentTemplateItem()
 
                 return item ? this.villamentParse(replaceTokens(item.outerHTML, replacements)) : null
             },
@@ -494,17 +507,20 @@ export function createClientRepeaterFormComponent(baseFactory, environment = def
                     return existing
                 }
 
-                const shell = this.villamentTemplatePart('ul')
+                // `table()`: the whole table, header included, around an
+                // empty body.
+                const table = this.villamentTemplatePart('table')
+                const shell = table ?? this.villamentTemplatePart('ul')
 
                 if (! shell) {
                     return null
                 }
 
-                const list = /** @type {HTMLElement} */ (shell.cloneNode(false))
+                const container = /** @type {HTMLElement} */ (shell.cloneNode(table !== null))
 
-                this.$root.insertBefore(list, this.villamentChromeAnchor(ADD_SELECTOR))
+                this.$root.insertBefore(container, this.villamentChromeAnchor(ADD_SELECTOR))
 
-                return list
+                return table ? container.querySelector('tbody') : container
             },
 
             /**
@@ -538,11 +554,17 @@ export function createClientRepeaterFormComponent(baseFactory, environment = def
                 const isFull = ! canAdd(count, meta.maxItems)
 
                 if (count === 0) {
-                    this.villamentList()?.remove()
+                    const list = this.villamentList()
+
+                    ;(list?.closest('table') ?? list)?.remove()
                 }
 
                 this.villamentRefreshSeparators(items, isFull)
                 items = this.villamentItemElements()
+
+                if (meta.layout === 'table' && meta.reorderColumn) {
+                    this.villamentRefreshReorderColumn(items, meta)
+                }
 
                 items.forEach((item, index) => {
                     const key = item.getAttribute('x-sortable-item') ?? ''
@@ -666,8 +688,10 @@ export function createClientRepeaterFormComponent(baseFactory, environment = def
             villamentRefreshClone(item, key, meta, isFull) {
                 const control = this.villamentControl(item, 'clone')
 
+                // Every layout wraps each action in one element of its own
+                // (`<li x-on:click.stop>`, or `<div …>` in `table()`).
                 if (isFull) {
-                    control?.closest('li')?.remove()
+                    control?.parentElement?.remove()
 
                     return
                 }
@@ -676,22 +700,87 @@ export function createClientRepeaterFormComponent(baseFactory, environment = def
                     return
                 }
 
-                const templateControl = this.villamentTemplatePart('li[x-sortable-item]')?.querySelector(`[${ACTION_ATTRIBUTE}="clone"]`)
-                const templateWrapper = templateControl?.closest('li')
-                const actions = [...item.querySelectorAll(ITEM_ACTIONS_SELECTOR)].find((element) => this.villamentItemOf(element) === item)
+                const templateControl = this.villamentTemplateItem()?.querySelector(`[${ACTION_ATTRIBUTE}="clone"]`)
+                const templateWrapper = templateControl?.parentElement
+                // The item's end actions: not `table()`'s reorder cell.
+                const actions = [...item.querySelectorAll(ITEM_ACTIONS_SELECTOR)]
+                    .filter((element) => this.villamentItemOf(element) === item && ! element.querySelector(REORDER_CONTROL_SELECTOR))
+                    .at(-1)
 
                 if (! templateWrapper || ! actions) {
                     return
                 }
 
-                const wrapper = this.villamentParse(replaceTokens(templateWrapper.outerHTML, [[meta.token, key]]))
+                const wrapper = this.villamentParse(replaceTokens(templateWrapper.outerHTML, this.villamentRowReplacements(meta, key)))
 
                 // Stock order: extra item actions, clone, delete, collapse.
-                const delete_ = this.villamentControl(item, 'delete')?.closest('li') ?? null
+                const delete_ = this.villamentControl(item, 'delete')?.parentElement ?? null
                 const before = delete_ ?? actions.querySelector(':scope > .fi-fo-repeater-item-header-collapsible-actions')
 
                 if (wrapper) {
                     actions.insertBefore(wrapper, before)
+                }
+            },
+
+            /**
+             * The placeholder key, and the md5 Filament derives a11y ids from,
+             * both swapped for `key`: what a piece of the template needs to
+             * belong to one row.
+             *
+             * @param {TemplateMeta} meta
+             * @param {string} key
+             * @returns {Array<[string, string]>}
+             */
+            villamentRowReplacements(meta, key) {
+                const tokenHash = meta.tokens?.[0]?.hash
+
+                return tokenHash ? [[meta.token, key], [tokenHash, environment.hash(key)]] : [[meta.token, key]]
+            },
+
+            /**
+             * `table()` renders a leading reorder column — a header cell and
+             * one cell per row — only while there are two rows or more
+             * (`$hasReorderColumn`). Adds or drops it as stock's re-render
+             * would, from the template (rendered with two rows).
+             *
+             * @param {HTMLElement[]} items
+             * @param {TemplateMeta} meta
+             */
+            villamentRefreshReorderColumn(items, meta) {
+                const table = this.villamentList()?.closest('table')
+                const templateTable = this.villamentTemplatePart('table')
+                const templateRow = this.villamentTemplateItem()
+                const headRow = table?.querySelector(':scope > thead > tr')
+                const templateHeadRow = templateTable?.querySelector(':scope > thead > tr')
+
+                if (! headRow || ! templateHeadRow || ! templateRow) {
+                    return
+                }
+
+                const isWanted = items.length > 1
+                const hasHeader = headRow.children.length === templateHeadRow.children.length
+
+                if (isWanted && ! hasHeader) {
+                    headRow.insertBefore(templateHeadRow.firstElementChild.cloneNode(true), headRow.firstElementChild)
+                } else if (! isWanted && hasHeader) {
+                    headRow.firstElementChild?.remove()
+                }
+
+                const isReorderCell = (cell) => cell?.tagName === 'TD' && cell.querySelector(`:scope > .fi-fo-table-repeater-actions :is(${REORDER_CONTROL_SELECTOR})`) !== null
+
+                for (const item of items) {
+                    const hasCell = isReorderCell(item.firstElementChild)
+
+                    if (isWanted && ! hasCell) {
+                        const key = item.getAttribute('x-sortable-item') ?? ''
+                        const cell = this.villamentParse(replaceTokens(templateRow.firstElementChild.outerHTML, this.villamentRowReplacements(meta, key)))
+
+                        if (cell) {
+                            item.insertBefore(cell, item.firstElementChild)
+                        }
+                    } else if (! isWanted && hasCell) {
+                        item.firstElementChild.remove()
+                    }
                 }
             },
 
@@ -839,7 +928,7 @@ export function createClientRepeaterFormComponent(baseFactory, environment = def
                     return
                 }
 
-                if (content.hasAttribute(PENDING_ATTRIBUTE)) {
+                if (this.villamentIsPending(content)) {
                     this.villamentFillContent(content, key, meta)
                     content.removeAttribute(PENDING_ATTRIBUTE)
                 } else if (! content.__villamentAdopted) {
@@ -859,7 +948,18 @@ export function createClientRepeaterFormComponent(baseFactory, environment = def
              * @returns {?HTMLElement}
              */
             villamentContentOf(item) {
-                return item.querySelector(CONTENT_SELECTOR)
+                // `table()`: no content element; the row's cells are it.
+                return item.tagName === 'TR' ? item : item.querySelector(CONTENT_SELECTOR)
+            },
+
+            /**
+             * @param {HTMLElement} content
+             * @returns {boolean}
+             */
+            villamentIsPending(content) {
+                return content.tagName === 'TR'
+                    ? content.querySelector(`:scope > td[${PENDING_ATTRIBUTE}]`) !== null
+                    : content.hasAttribute(PENDING_ATTRIBUTE)
             },
 
             /**
@@ -872,7 +972,7 @@ export function createClientRepeaterFormComponent(baseFactory, environment = def
              * @param {TemplateMeta} meta
              */
             villamentFillContent(content, key, meta) {
-                const templateItem = /** @type {?HTMLElement} */ (this.villamentTemplatePart('li[x-sortable-item]'))
+                const templateItem = /** @type {?HTMLElement} */ (this.villamentTemplateItem())
                 const templateContent = templateItem ? this.villamentContentOf(templateItem) : null
 
                 if (! templateContent) {
@@ -881,7 +981,23 @@ export function createClientRepeaterFormComponent(baseFactory, environment = def
 
                 const { replacements } = mapTokens(meta.tokens, environment.generateKey, environment.hash, key)
 
-                content.innerHTML = replaceTokens(templateContent.innerHTML, replacements)
+                if (content.tagName === 'TR') {
+                    // `table()`: one pending placeholder per component cell,
+                    // each replaced by the template row's cell.
+                    const { start, count } = meta.rendering?.cells ?? { start: 0, count: 0 }
+                    const cells = [...templateContent.children].filter((child) => child.tagName === 'TD').slice(start, start + count)
+
+                    ;[...content.querySelectorAll(`:scope > td[${PENDING_ATTRIBUTE}]`)].forEach((placeholder, index) => {
+                        const cell = cells[index] ? this.villamentParse(replaceTokens(cells[index].outerHTML, replacements)) : null
+
+                        if (cell) {
+                            placeholder.replaceWith(cell)
+                        }
+                    })
+                } else {
+                    content.innerHTML = replaceTokens(templateContent.innerHTML, replacements)
+                }
+
                 content.__villamentAdopted = true
 
                 this.villamentRememberUnits(content, key, meta)
@@ -1011,7 +1127,7 @@ export function createClientRepeaterFormComponent(baseFactory, environment = def
              */
             villamentApplyErrors(content, key, meta, errors) {
                 const rendering = meta.rendering
-                const templateItem = this.villamentTemplatePart('li[x-sortable-item]')
+                const templateItem = this.villamentTemplateItem()
 
                 for (const field of rendering?.fields ?? []) {
                     const target = this.villamentUnit(content, this.villamentUnitKey(meta, key, field.key))
@@ -1218,7 +1334,7 @@ export function resolveTemplate(root, depth = 0) {
 
     // Our root, as the ancestor's template rendered it: under its token.
     const sourceId = root.id.split(reference.item).join(ancestorMeta.token)
-    const sourceRoot = [...ancestorTemplate.content.querySelectorAll('[data-reorder-owner]')].find((element) => element.id === sourceId)
+    const sourceRoot = [...(templateItem(ancestorTemplate)?.querySelectorAll('[data-reorder-owner]') ?? [])].find((element) => element.id === sourceId)
     const source = /** @type {?HTMLTemplateElement} */ (sourceRoot?.querySelector(TEMPLATE_SELECTOR) ?? null)
 
     if (! source) {
@@ -1258,4 +1374,25 @@ function readMeta(template) {
     } catch {
         return null
     }
+}
+
+/**
+ * A template's item: a direct child `[x-sortable-item]`, or the first
+ * element of a nested `<template data-villament-repeater-row>` (`table()`).
+ *
+ * @param {?HTMLTemplateElement} template
+ * @returns {?HTMLElement}
+ */
+function templateItem(template) {
+    for (const child of template?.content.children ?? []) {
+        if (child.matches('[x-sortable-item]')) {
+            return /** @type {HTMLElement} */ (child)
+        }
+
+        if (child.matches('template[data-villament-repeater-row]')) {
+            return /** @type {?HTMLElement} */ (/** @type {HTMLTemplateElement} */ (child).content.firstElementChild)
+        }
+    }
+
+    return null
 }

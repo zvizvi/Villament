@@ -43,6 +43,85 @@ final class HtmlFragments
     }
 
     /**
+     * The offset just past the opening tag `$html` starts with.
+     */
+    public static function openingTagEnd(string $html): ?int
+    {
+        return self::tagEnd($html, 0);
+    }
+
+    /**
+     * Elements that have no closing tag.
+     */
+    private const VOID_ELEMENTS = ['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'source', 'track', 'wbr'];
+
+    /**
+     * The direct child elements of the element `$html` starts with, as
+     * `[start, end]` offsets into `$html`. Text between them is skipped.
+     *
+     * @return list<array{0: int, 1: int}>
+     */
+    public static function children(string $html): array
+    {
+        $offset = self::tagEnd($html, 0);
+        $children = [];
+
+        while (($offset !== null) && (($start = strpos($html, '<', $offset)) !== false)) {
+            if (($html[$start + 1] ?? '') === '/') {
+                break;
+            }
+
+            if (! preg_match('/\G<([a-zA-Z][a-zA-Z0-9-]*)/', $html, $match, offset: $start)) {
+                $offset = $start + 1;
+
+                continue;
+            }
+
+            $end = in_array(strtolower($match[1]), self::VOID_ELEMENTS, strict: true)
+                ? self::tagEnd($html, $start)
+                : self::closingOffset($html, $start, $match[1]);
+
+            if ($end === null) {
+                break;
+            }
+
+            $children[] = [$start, $end];
+            $offset = $end;
+        }
+
+        return $children;
+    }
+
+    /**
+     * The closest `<$tag>` element that opens before `$needle` and encloses
+     * it.
+     */
+    public static function enclosing(string $html, string $needle, string $tag): ?string
+    {
+        $position = strpos($html, $needle);
+
+        if ($position === false) {
+            return null;
+        }
+
+        $before = substr($html, 0, $position);
+
+        if (! preg_match_all('/<'.preg_quote($tag, '/').'[\s>\/]/', $before, $matches, PREG_OFFSET_CAPTURE)) {
+            return null;
+        }
+
+        foreach (array_reverse($matches[0]) as [, $start]) {
+            $end = self::closingOffset($html, $start, $tag);
+
+            if (($end !== null) && ($end > $position)) {
+                return substr($html, $start, $end - $start);
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * The `<$tag>` sibling directly following the element that `$needle`
      * opens, or null when the next thing is not a `<$tag>`.
      */
