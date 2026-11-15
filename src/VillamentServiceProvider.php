@@ -68,6 +68,9 @@ final class VillamentServiceProvider extends PackageServiceProvider
             // cache automatically (the default `?v=` is the composer package
             // version, stable for dev-main installs — see ContentHashedJs).
             Support\Assets\ContentHashedJs::make('villament', __DIR__.'/../dist/villament.js'),
+            // `ClientRepeater`'s Alpine component, loaded on demand by `x-load`
+            // exactly like Filament's own `repeater` component.
+            Support\Assets\ContentHashedAlpineComponent::make('client-repeater', __DIR__.'/../dist/components/client-repeater.js'),
         ], package: 'zvizvi/villament');
     }
 }

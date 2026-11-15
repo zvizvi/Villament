@@ -9,6 +9,7 @@ use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
 use Filament\Panel;
 use Filament\PanelProvider;
+use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 use Zvizvi\Villament\Tests\Fixtures\Resources\CursorUsers\CursorUserResource;
@@ -28,6 +29,11 @@ class AdminPanelProvider extends PanelProvider
             ->id('admin')
             ->path('admin')
             ->login()
+            ->pages([
+                Pages\RepeaterFormPage::class,
+                Pages\ClientRepeaterVariantsPage::class,
+                Pages\RelationshipRepeaterPage::class,
+            ])
             ->resources([
                 TeamResource::class,
                 // Before UserResource on purpose: same slug, nested.
@@ -38,6 +44,10 @@ class AdminPanelProvider extends PanelProvider
                 HookedUserResource::class,
             ])
             ->middleware([
+                // As in every real panel: Livewire's update route runs the
+                // `web` group, which decrypts cookies, so the panel has to
+                // encrypt them too or the browser suite's session splits.
+                EncryptCookies::class,
                 StartSession::class,
                 ShareErrorsFromSession::class,
                 DisableBladeIconComponents::class,

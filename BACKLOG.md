@@ -17,6 +17,16 @@ action-payload compaction (all 2026-07-26).
 
 ---
 
+## `ClientRepeater`: the item shell is the floor
+
+On Livewire requests a row costs its stock shell, mostly the header's icon
+buttons (move up/down, clone, delete, collapse/expand), one SVG each, per
+row. Rendering the shell client-side too would cut that, but the header holds
+server state (`itemLabel()` closures, per-item action visibility, the
+reordering descriptions). Measure first: `client_flat` is at ~5 KB per row.
+
+---
+
 ## Shrink the `cells` payload
 
 The action half of the per-record payload now ships as one copy plus deltas
