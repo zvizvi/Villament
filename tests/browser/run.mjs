@@ -154,7 +154,8 @@ test('adding three rows sends no Livewire request, and one save stores all three
 
     const saved = await save(page)
 
-    assert.equal(requests.count - before, 1, 'exactly one request: the save')
+    assert.equal(requests.count - before, 0, 'still nothing structural reached the server')
+    assert.equal(requests.saves, 1, 'one save stored them')
     assert.equal(saved.client_flat.length, 5)
     assert.equal(saved.client_flat[4].label, 'Typed into a new row')
     assert.deepEqual(saved.client_flat[2], { label: 'Row', size: 'm', enabled: false }, 'new rows carry the field defaults')
@@ -650,7 +651,7 @@ try {
 
     for (const { name, run } of scenarios) {
         const page = await browser.newPage()
-        const requests = { count: 0 }
+        const requests = { count: 0, saves: 0 }
         const errors = []
 
         page.on('pageerror', (error) => errors.push(error.message))
@@ -659,10 +660,26 @@ try {
         await page.goto(`${baseUrl}/__browser/login`)
         await settle(page)
 
-        // Counted from here: the page's own load-time requests (stock
-        // FileUpload / Select initialization) are not ours.
+        // What the assertions mean by "reached the server": any request
+        // except the two kinds that are not structural — a field's own
+        // `callSchemaComponentMethod()` (a FileUpload loading its files once
+        // its `x-load` module arrives, whenever that is; it carries the
+        // repeater's deferred state along, as it is meant to) and the save.
+        // A `mountAction`, a `$set`, a bare commit all count. (Checked: with
+        // `villamentWrite()` made live, the no-request scenarios fail.)
         page.on('request', (request) => {
-            if (request.method() === 'POST' && /\/livewire[^/]*\/update/.test(request.url())) {
+            if (request.method() !== 'POST' || ! /\/livewire[^/]*\/update/.test(request.url())) {
+                return
+            }
+
+            const components = JSON.parse(request.postData() ?? '{}').components ?? []
+            const calls = components.flatMap((component) => component.calls ?? [])
+
+            if (calls.some((call) => call.method === 'save')) {
+                requests.saves++
+            }
+
+            if ((calls.length === 0) || calls.some((call) => ! ['callSchemaComponentMethod', 'save'].includes(call.method))) {
                 requests.count++
             }
         })
