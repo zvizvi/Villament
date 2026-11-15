@@ -22,7 +22,7 @@ After the initial page load, all table interactions — sorting, pagination, glo
 - [x] **Phase 2 — Filters**: serializer chain (`select` incl. multiple + enum options, `ternary`, anything else → `livewire-fallback`), Vue filter dropdown, server-computed indicator chips (`indicateUsing` closures included) with per-chip remove + remove-all, localized UI strings via Filament's own translations (the island follows the panel locale, RTL included), and the fallback mechanism: the page's original Livewire filter form stays mounted (hidden) and a JS bridge pushes its state changes into the Vue store, so one exotic filter never blocks adoption. Per-filter parity tests against the stock table.
 - [x] **Phase 3 — Actions bridge + column manager**: row actions (buttons, links, ActionGroup dropdowns) evaluated per record server-side (visibility = Filament authorization; hidden actions never reach the client) and mounted through the page component's unified `mountAction()` — Filament's modals, confirmation and forms work unchanged; record selection with select-page and select-all-matching (Filament's inversion semantics) feeding bulk actions with exactly the selected keys; automatic island refresh after any action completes; the column manager applies through `applyTableColumnManager()` so visibility persists in the session and the data endpoint follows automatically; clickable rows (`recordUrl`/`recordAction`) and striped tables.
 - [ ] **Phase 4 — Polish** (cursor pagination, column toggling, summaries, export, config). In progress: cursor pagination, column toggling, extension API, config, server-computed **summaries** (page + all) and **grouping** all shipped — grouping covers Vue-native group/direction settings, server-evaluated group-header rows (with per-group select-all, collapsible groups, per-group summary subheadings, and `groupsOnly()` summary rows), URL sync, and is parity-tested against the stock table. Summaries cover the page/all/header rows with their `summaries()` toggles; column headers carry Filament's full modifier set (`wrapHeader()`, `grow()`, `width()`, responsive visibility) and `ColumnGroup` header rows. The column manager is Filament-native (teleported like the filters), so `columnManagerLayout()`, reset position, grid columns, a customized trigger and drag reordering all work as they do in stock. Per-column options from the Columns overview are carried through: `$rowLoop` injection, cell click actions (`action()`, `disabledClick()`, `url()` on every column type), `tooltip()`/`emptyTooltip()`/`headerTooltip()`, `placeholder()`, `description(position:)`, the `extra*Attributes()` bags, and the table's own `searchDebounce()`/`searchOnBlur()`/`searchPlaceholder()` plus session persistence of sort and searches. From the Actions docs: every trigger variant (`button()`, `iconButton()`, `badge()`, `size()`, `tooltip()`, `hiddenLabel()`, counter badges, `extraAttributes()`, and `modifyUngroupedRecordActionsUsing()`) with its class list computed by Filament itself; `headerActions()` alongside the table's `heading()`/`description()` (and `header()`, the custom-view escape hatch, teleported in natively so its own Livewire/Alpine bindings stay live); `recordActions(position:)` with `recordActionsAlignment()`/`recordActionsColumnLabel()`; and the complete selection API — `selectable()`, `checkIfRecordIsSelectableUsing()`, `maxSelectableRecords()`, `selectCurrentPageOnly()`, `selectGroupsOnly()`, `disabledSelection()`, shift-click ranges and indeterminate checkboxes. The **empty state** is Filament-native too (icon, heading, description and `emptyStateActions()` with their full action surface, or a custom `emptyState()` view), and `recordClasses()` reaches the row.
-- [ ] **Forms** (beyond the table): `ClientRepeater` shipped. It is a drop-in `Repeater` whose structural actions (add, add-between, delete, clone, move, drag reorder) run in the browser, with parity, Vitest and Playwright suites. See [Forms: `ClientRepeater`](#forms-clientrepeater).
+- [ ] **Forms** (beyond the table): `ClientRepeater` shipped. It is a drop-in `Repeater` whose structural actions (add, add-between, delete, clone, move, drag reorder) run in the browser, and whose rows render there too: server-only fields arrive per row as native islands, and validation errors come from `$wire.$errors`. It has parity, Vitest and Playwright suites. See [Forms: `ClientRepeater`](#forms-clientrepeater).
 
 ## Usage
 
@@ -56,7 +56,10 @@ After the initial paint (schema + first page inlined, no extra requests), sortin
 
 ## Forms: `ClientRepeater`
 
-A drop-in `Repeater` whose **structure changes run in the browser**. Adding, inserting between items, deleting, cloning, moving up and down and drag reordering send no Livewire request. The new item list reaches the server with the next request the form makes anyway: the save, a `live()` field, or a searchable select looking up options.
+A drop-in `Repeater` that **renders and restructures its items in the browser**:
+
+- **Structure.** Adding, inserting between items, deleting, cloning, moving up and down and drag reordering send no Livewire request. The new item list reaches the server with the next request the form makes anyway: the save, a `live()` field, or a searchable select looking up options.
+- **Rendering.** On Livewire's requests the server renders only each item's *shell* (header, label, buttons), and the browser renders the item's fields from a template and the row's state. A field the browser cannot render (a searchable select, a file upload, a field with a `visible(fn)` closure) is rendered by the server, per row, into that row's one slot. The browser then places it into its spot in the row as an island. Validation errors on the browser-rendered fields come from `$wire.$errors`.
 
 ```php
 use Zvizvi\Villament\Forms\ClientRepeater;
@@ -81,6 +84,26 @@ The rest of the `Repeater` API stays the same: labels, `itemLabel()`, `itemNumbe
 
 The component *is* Filament's own `repeaterFormComponent`, imported at runtime from the installed Filament version, with the structural actions taken over. Collapsing (already client-side in stock) and the reordering accessibility code are Filament's own.
 
+### Client rendering: shells, slots and islands
+
+The item is classified once per render:
+
+- **Client-rendered:** state-driven fields whose markup follows the row's state on the client (`TextInput`, `Textarea`, `Toggle`, `Checkbox`, `CheckboxList`, `Radio`, `ToggleButtons`, `Hidden`, `ColorPicker`, `DatePicker`/`DateTimePicker`/`TimePicker`, `TagsInput`, `KeyValue`, `Slider`, a plain native `Select`), and the layouts that hold them (`Grid`, `Section`, `Fieldset`, `Group`, `Flex`, `Tabs`). A component only counts as client-rendered if none of its configuration is a closure written by the app, because `visible(fn (Get $get) => …)`, `label(fn)`, `options(fn)` and `disabled(fn)` may read the row. Lifecycle hooks (`afterStateHydrated()`, `dehydrateStateUsing()`, validation, option search) never reach the markup and are allowed.
+- **Server units:** everything else, such as a searchable/multiple/relationship `Select`, `FileUpload`, `RichEditor`, a nested `Repeater`/`Builder`/`ClientRepeater`, a field with a markup closure, a custom component, or a subclass of a listed field (classes are matched exactly).
+
+What each request carries:
+
+| Request | Server renders | Browser does |
+|---|---|---|
+| Page load / `wire:navigate` | Every item in full: stock markup, nothing missing on first paint | Adopts the rows as they are |
+| Livewire update | Each item's shell (stock header and buttons) with an empty, `wire:ignore`d content element, plus **one slot per row** with that row's server units (Filament's own `toSchemaHtml()` for each). Whitespace between tags is collapsed | Fills each empty row from the template and the row's state, then places each server unit from the row's slot into its spot. A unit is replaced only when its server markup changed |
+
+Validation errors on client-rendered fields are read from `$wire.$errors` after every morph. The template carries each field's **invalid variant**: the server renders it once with a sentinel message, so the exact error markup Filament uses for that field type is shipped (the message element, `fi-invalid`, `aria-invalid`, `aria-describedby`). The browser swaps that variant in with the real, escaped message, and swaps the normal variant back once the field is valid. Server units come with their errors already rendered.
+
+For a repeater of 50 three-field rows (the fixture's `client_flat`), a Livewire response carries about 286 KB for the repeater against stock's 1,053 KB. For 50 rows of the fixture's heavy item (a searchable select, a file upload and a nested repeater as server units), it is 2.1 MB against 3.3 MB. A row's shell (its header and four buttons) is the floor.
+
+`->clientRendering(false)` keeps the structure in the browser and lets the server render every item, as in stock.
+
 ### What stays on the server
 
 | Situation | Why | Path |
@@ -91,9 +114,9 @@ The component *is* Filament's own `repeaterFormComponent`, imported at runtime f
 | **Clone**, when an item holds a field whose server-rendered HTML depends on its value: a non-native, searchable, multiple or relationship `Select`, `FileUpload`, `RichEditor`, a nested `Repeater`/`Builder`, or any component not on the clone-safe list | The browser clone uses the *blank* template's markup, so it is exact only for fields that read their value from the state on the client | Clone only, through stock |
 | `live()` on the repeater, or `afterStateUpdated()` on it | Stock's actions call `callAfterStateUpdated()`, and other fields react to the new state | The whole repeater behaves as stock |
 | The `table()` layout, `generateUuidUsing(false)` | Different markup (rows); integer keys would be reordered by a JS object | The whole repeater behaves as stock |
-| `live()` fields **inside** a row, searchable selects, file uploads, `itemLabel()` closures re-evaluated on change | They talk to the server anyway | Unchanged |
+| `live()` fields **inside** a row, searchable selects, file uploads, `itemLabel()` closures re-evaluated on change | They talk to the server anyway | Unchanged. With client rendering, the server units are re-rendered into the row's slot on every request |
 
-Clone-safe fields: `TextInput`, `Textarea`, `Toggle`, `Checkbox`, `CheckboxList`, `Radio`, `ToggleButtons`, `Hidden`, `ColorPicker`, `DatePicker`/`DateTimePicker`/`TimePicker`, `TagsInput`, `KeyValue`, `Slider`, and a plain native `Select`, in `Grid`/`Section`/`Fieldset`/`Group`/`Flex`/`Tabs` layouts. Classes are matched exactly, so a subclass falls back to the server clone.
+A browser clone is exact only when the whole item is client-rendered (see above). An item with any server unit clones through the server.
 
 `->clientStructure(false)` turns a `ClientRepeater` back into a stock `Repeater`. It also accepts a closure.
 
@@ -104,6 +127,9 @@ Clone-safe fields: `TextInput`, `Textarea`, `Toggle`, `Checkbox`, `CheckboxList`
 - **Defaults are computed when the page renders.** A default that depends on the clock (`now()`) or on another field of the form is baked into the template. Stock would compute it at the moment of the click. Use `clientStructure(false)` where that matters.
 - A field that calls the server when it initializes (a `FileUpload` loading its files) does so in a browser-added row too, just as it does in stock.
 - `afterStateHydrated()` on fields inside the item runs during template rendering, under the placeholder key. A hook that writes *outside* its own item leaves that write in place.
+- **While a Livewire request is in flight,** Filament's buttons carry `wire:loading.attr="aria-disabled"`, and a click on one is ignored, just as in stock. A drag that lands during a request keeps its new order: after the response's morph the rows are put back in the state's order.
+- **Errors under a field that lists every message** (`showAllValidationMessages()`) need two variants, so such a field is a server unit.
+- A **nested repeater** is a server unit and is re-rendered into its row's slot when its markup changes. If a request lands while you are typing inside a nested row, that row is replaced and focus is lost.
 
 ## Development
 
