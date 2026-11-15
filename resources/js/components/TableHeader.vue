@@ -7,6 +7,15 @@ import { filamentTooltip } from '../support/tooltip.js'
 
 const props = defineProps({
     /**
+     * A table fetch is in flight. Stock (5.11+) marks every sort button
+     * `aria-disabled` + `fi-disabled` while any of `Table::LOADING_TARGETS`
+     * is loading (no delay), and swallows the click.
+     */
+    busy: {
+        type: Boolean,
+        default: false,
+    },
+    /**
      * Visible column schemas:
      * `{ key, label, type, sortable, individuallySearchable, toggleable, hiddenByDefault, alignment }`.
      */
@@ -295,7 +304,7 @@ function headerCellStyle(column) {
  * @returns {void}
  */
 function onSortClick(column) {
-    if (column.sortable) {
+    if (column.sortable && ! props.busy) {
         emit('sort', column.key)
     }
 }
@@ -390,11 +399,14 @@ function onSortClick(column) {
                     v-if="column.sortable"
                     role="button"
                     tabindex="0"
+                    data-prevent-disabled-clicks
                     class="fi-ta-header-cell-sort-btn"
+                    :class="{ 'fi-disabled': busy }"
+                    :aria-disabled="busy ? 'true' : undefined"
                     :aria-label="sortButtonLabelFor(column)"
                     @click="onSortClick(column)"
-                    @keydown.enter.prevent.stop="onSortClick(column)"
-                    @keydown.space.prevent.stop="onSortClick(column)"
+                    @keydown.enter.self.prevent.stop="onSortClick(column)"
+                    @keydown.space.self.prevent.stop="onSortClick(column)"
                 >
                     <!-- `headerTooltip()` wraps the label in both branches (stock). -->
                     <span

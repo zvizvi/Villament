@@ -53,6 +53,15 @@ const props = defineProps({
         type: Object,
         default: () => ({}),
     },
+    /**
+     * A table fetch is in flight. Stock (5.11+) marks every clickable
+     * pagination button `aria-disabled` + `fi-disabled` meanwhile (no delay)
+     * and swallows the click; the ellipsis stays natively `disabled`.
+     */
+    busy: {
+        type: Boolean,
+        default: false,
+    },
 })
 
 const emit = defineEmits(['update:page', 'update:perPage', 'update:cursor'])
@@ -129,8 +138,22 @@ function range(start, end) {
  * @returns {void}
  */
 function goToPage(page) {
+    if (props.busy) {
+        return
+    }
+
     if (page >= 1 && page !== props.page && (lastPage.value === null || page <= lastPage.value)) {
         emit('update:page', page)
+    }
+}
+
+/**
+ * @param {?string} cursor
+ * @returns {void}
+ */
+function goToCursor(cursor) {
+    if (! props.busy) {
+        emit('update:cursor', cursor)
     }
 }
 
@@ -171,7 +194,9 @@ const overview = computed(() => formatPaginationOverview(props.strings.paginatio
             type="button"
             rel="prev"
             class="fi-btn fi-size-md fi-pagination-previous-btn"
-            @click="isCursor ? emit('update:cursor', meta.previousCursor) : goToPage(page - 1)"
+            :class="{ 'fi-disabled': busy }"
+            :aria-disabled="busy ? 'true' : undefined"
+            @click="isCursor ? goToCursor(meta.previousCursor) : goToPage(page - 1)"
         >
             {{ strings.previousLabel }}
         </button>
@@ -239,7 +264,9 @@ const overview = computed(() => formatPaginationOverview(props.strings.paginatio
             type="button"
             rel="next"
             class="fi-btn fi-size-md fi-pagination-next-btn"
-            @click="isCursor ? emit('update:cursor', meta.nextCursor) : goToPage(page + 1)"
+            :class="{ 'fi-disabled': busy }"
+            :aria-disabled="busy ? 'true' : undefined"
+            @click="isCursor ? goToCursor(meta.nextCursor) : goToPage(page + 1)"
         >
             {{ strings.nextLabel }}
         </button>
@@ -256,7 +283,10 @@ const overview = computed(() => formatPaginationOverview(props.strings.paginatio
                     type="button"
                     rel="prev"
                     :aria-label="strings.previousLabel"
+                    data-prevent-disabled-clicks
                     class="fi-pagination-item-btn"
+                    :class="{ 'fi-disabled': busy }"
+                    :aria-disabled="busy ? 'true' : undefined"
                     @click="goToPage(page - 1)"
                 >
                     <TrustedIcon :html="icons.previous" />
@@ -276,7 +306,10 @@ const overview = computed(() => formatPaginationOverview(props.strings.paginatio
                     type="button"
                     :disabled="element === '...'"
                     :aria-label="element === '...' ? undefined : `Go to page ${element}`"
+                    data-prevent-disabled-clicks
                     class="fi-pagination-item-btn"
+                    :class="{ 'fi-disabled': busy && element !== '...' }"
+                    :aria-disabled="busy && element !== '...' ? 'true' : undefined"
                     @click="element !== '...' && goToPage(element)"
                 >
                     <span class="fi-pagination-item-label">{{ element }}</span>
@@ -291,7 +324,10 @@ const overview = computed(() => formatPaginationOverview(props.strings.paginatio
                     type="button"
                     rel="next"
                     :aria-label="strings.nextLabel"
+                    data-prevent-disabled-clicks
                     class="fi-pagination-item-btn"
+                    :class="{ 'fi-disabled': busy }"
+                    :aria-disabled="busy ? 'true' : undefined"
                     @click="goToPage(page + 1)"
                 >
                     <TrustedIcon :html="icons.next" />

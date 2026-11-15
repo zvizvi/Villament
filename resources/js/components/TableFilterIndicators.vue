@@ -28,6 +28,15 @@ const props = defineProps({
         type: Object,
         default: () => ({}),
     },
+    /**
+     * A filter removal is in flight. Stock (5.11+) targets the delete buttons
+     * at `removeTableFilter`: while it runs, every chip's delete button gets
+     * `aria-disabled` + `fi-disabled`, and clicks are swallowed.
+     */
+    removing: {
+        type: Boolean,
+        default: false,
+    },
 })
 
 const emit = defineEmits(['remove', 'removeAll'])
@@ -62,9 +71,12 @@ const hasRemovableIndicators = computed(
 
                     <button
                         v-if="indicator.removable"
+                        data-prevent-disabled-clicks
                         type="button"
                         class="fi-badge-delete-btn"
-                        @click="emit('remove', indicator)"
+                        :class="{ 'fi-disabled': removing }"
+                        :aria-disabled="removing ? 'true' : undefined"
+                        @click="! removing && emit('remove', indicator)"
                     >
                         <TrustedIcon :html="icons.badgeDelete || icons.removeFilters" />
 
