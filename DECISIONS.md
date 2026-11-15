@@ -568,6 +568,13 @@ The fix makes membership a reconciliation, like the order already was. On init a
 
 **The request counter, once more.** On a `wire:navigate` visit, Filament's notifications component makes its own `pullNotifications` request. The counter now looks only at the fixture page's component (by the snapshot's `memo.name`), not at every component on the page.
 
+## 2026-11-15 — `ClientRepeater`: item keys on a plain-HTTP page
+
+Up to 0.0.20 the Alpine component keyed a new row with `crypto.randomUUID()` and nothing else. Browsers only expose it in a secure context (HTTPS, `localhost`, `127.0.0.1`). On a plain-HTTP dev host (`http://app.test`) it is `undefined`, so every add threw before touching the state, and the button looked dead (its `wire:click` is disabled, so nothing fell back to Livewire).
+
+- `uuid()` in `operations.js` uses `randomUUID()` when it exists and builds a v4 UUID from `getRandomValues()` (available in every context) when it does not, setting the version and variant bits as `randomUUID()` does.
+- The browser suite missed it because it ran on `127.0.0.1`, which is a secure context. It now runs on `http://villament.test` (Chromium `--host-resolver-rules` maps it to the local server), so every scenario runs where `randomUUID()` is missing, and one asserts `isSecureContext === false`. Checked: with the old `generateKey`, the suite fails.
+
 ## Verified Filament v5 internal API map (§4.1, §4.8)
 
 Verified against **filament/filament v5.6.8** + **livewire/livewire v4.3.3** by reading installed vendor source on 2026-07-15. Paths relative to `vendor/filament/`.
