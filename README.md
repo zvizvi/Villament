@@ -100,13 +100,23 @@ What each request carries:
 
 Validation errors on client-rendered fields are read from `$wire.$errors` after every morph. The template carries each field's **invalid variant**: the server renders it once with a sentinel message, so the exact error markup Filament uses for that field type is shipped (the message element, `fi-invalid`, `aria-invalid`, `aria-describedby`). The browser swaps that variant in with the real, escaped message, and swaps the normal variant back once the field is valid. Server units come with their errors already rendered.
 
-For a repeater of 50 three-field rows (the fixture's `client_flat`), a Livewire response carries about 286 KB for the repeater against stock's 1,053 KB. For 50 rows of the fixture's heavy item (a searchable select, a file upload and a nested repeater as server units), it is 1.6 MB against 3.3 MB. A row's shell (its header and four buttons) is the floor.
+Measured on the fixture, the repeater's part of a Livewire response (server render time / bytes; `stock` is a `Repeater` with the same definition):
+
+| rows | 3-field card, all client-rendered | stock | 3-column `table()` | stock | mixed item, `clientRendering()` opted in | mixed, automatic (server-rendered rows) | stock |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 4.7 ms / 31 KB | 1.1 ms / 27 KB | 3.9 ms / 29 KB | 0.9 ms / 22 KB | 18.5 ms / 114 KB | 19.2 ms / 121 KB | 3.5 ms / 74 KB |
+| 10 | 6.9 ms / 77 KB | 7.9 ms / 212 KB | 7.0 ms / 71 KB | 8.0 ms / 224 KB | 43.4 ms / 376 KB | 55.1 ms / 582 KB | 37.5 ms / 669 KB |
+| 50 | 26.1 ms / 285 KB | 45.7 ms / 1,052 KB | 25.4 ms / 250 KB | 44.9 ms / 1,106 KB | 174.8 ms / 1,549 KB | 223.9 ms / 2,641 KB | 155.8 ms / 3,332 KB |
+
+A fully client-rendered item is faster than stock from about ten rows, and its response grows a few KB per row instead of ~20. The fixed cost is the template, a few milliseconds. A **mixed** item (the fixture's: a searchable select, a file upload, a field with a `visible(fn)` closure and a nested repeater as server units) stays somewhat slower than stock in server time, while carrying half the bytes. That is why client rendering is automatic only for items without server units; `->clientRendering()` turns it on for a mixed item when the bytes matter more.
 
 **All three layouts.** The card layout, `simple()` and `table()` all work this way. In `table()` a row has no single content element: its component cells are client-owned instead. Each cell is `wire:ignore`d and keyed by row and position (`villament-repeater-cell.{key}.{n}`), because the morph has to match them by key: the reorder column in front of them only exists while there are two rows or more. On Livewire requests the server sends one empty, keyed placeholder per cell, and the browser fills it from the template row. The browser adds and drops the reorder column (its header cell and one cell per row) as the row count crosses two, and puts the whole table back from the template for the first row, exactly as stock's re-render would. For 50 rows of the fixture's three-column table, a Livewire response carries 252 KB for the repeater against stock's 1,105 KB.
 
 **Nested `ClientRepeater`s share one template.** A `ClientRepeater` in a row of another one ships a small reference instead of its own template: the ancestor's root, its row key there, and its own limits and actions. The ancestor's template already carries the nested repeater's full template, rendered under the ancestor's placeholder key. The browser takes that copy and swaps the placeholder for the row key. This works at any depth, and a reference can resolve through its parent's reference. A nested repeater keeps its own template when it has a closure of the app's own (it might render differently per row), or when its parent is a stock `Repeater`.
 
-`->clientRendering(false)` keeps the structure in the browser and lets the server render every item, as in stock.
+`->clientRendering(false)` keeps the structure in the browser and lets the server render every item, as in stock. `->clientRendering()` turns it on for an item with server units, which the automatic mode leaves on the server.
+
+**The handshake.** The server sends empty shells only when the browser proves it will fill them. The Alpine component adds `X-Villament-Client-Repeater: <module version>` to every Livewire request (through `Livewire.hook('request')`, as Livewire's own Echo support adds its socket id). A request without the header, or with a stale version, gets the items rendered whole. That covers an asset that was not published (deploy with `php artisan filament:assets`), failed to load, or is cached from an older build: such a page keeps working as a server-rendered repeater instead of emptying its rows. In tests, Livewire's test requests cannot carry custom headers; `ClientRepeater::fakeClient()` assumes the handshake.
 
 ### What stays on the server
 
@@ -123,13 +133,16 @@ For a repeater of 50 three-field rows (the fixture's `client_flat`), a Livewire 
 
 A browser clone is exact only when the whole item is client-rendered (see above). An item with any server unit clones through the server.
 
-`->clientStructure(false)` turns a `ClientRepeater` back into a stock `Repeater`. It also accepts a closure.
+`->clientStructure(false)` turns a `ClientRepeater` back into a stock `Repeater`. It also accepts a closure. By default the structure is client-side unless the item carries an `afterStateHydrated()` closure of the app's own: the template is filled on every render, so such a hook would run on every request rather than only when an item is added. Call `->clientStructure()` explicitly when the hook is pure.
 
 ### Behaviour notes
 
 - **`maxItems()`** hides the add, add-between and clone buttons in the browser exactly when stock's re-render would, and brings them back after a delete. **`minItems()`** is not enforced by hiding delete, because stock does not hide it either. Both limits are validated on save, as in stock.
 - **`itemNumbers()`** renumbers in the browser. An **`itemLabel()` closure** is evaluated for a new item against its default state, which is what stock shows right after an add. It updates on the next request, as in stock.
-- **Defaults are computed when the page renders.** A default that depends on the clock (`now()`) or on another field of the form is baked into the template. Stock would compute it at the moment of the click. Use `clientStructure(false)` where that matters.
+- **Defaults are computed when the page renders, on every render.** The template is filled through `fill()` on each request, so a `default()` closure runs then, not only when an item is added. It must be pure: one that writes (`Model::firstOrCreate()`, a counter) would write on every request. A default that depends on the clock (`now()`) or on another field is baked into the template, where stock would compute it at the moment of the click. Use `clientStructure(false)` where that matters.
+- **Structural actions you made conditional stay on the server.** A move, delete or clone action with a `disabled()` of your own goes through Livewire: the browser recomputes the first/last move buttons and would overwrite it.
+- **UUID-shaped keys in your data are left alone.** Only the item keys of nested repeaters and builders, found by walking the schema, are re-keyed per added row.
+- **Whitespace between tags is collapsed** in what the browser inserts and, on Livewire requests, in the whole repeater. Attribute values and `<pre>`/`<textarea>`/`<script>` are never touched, but an element styled `white-space: pre` from CSS is not detected: inside a server unit it would lose its inter-tag whitespace after the first request.
 - A field that calls the server when it initializes (a `FileUpload` loading its files) does so in a browser-added row too, just as it does in stock.
 - `afterStateHydrated()` on fields inside the item runs during template rendering, under the placeholder key. A hook that writes *outside* its own item leaves that write in place.
 - **While a Livewire request is in flight,** Filament's buttons carry `wire:loading.attr="aria-disabled"`, and a click on one is ignored, just as in stock. A drag that lands during a request keeps its new order: after the response's morph the rows are put back in the state's order.
