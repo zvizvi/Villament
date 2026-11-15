@@ -1,64 +1,64 @@
-function q(a, o, u, m = null) {
+function U(s, o, u, m = null) {
   if (m === null)
-    return { ...a, [o]: u };
-  if (!Object.hasOwn(a, m))
-    return a;
+    return { ...s, [o]: u };
+  if (!Object.hasOwn(s, m))
+    return s;
   const d = {};
-  for (const [p, g] of Object.entries(a))
-    d[p] = g, p === m && (d[o] = u);
+  for (const [v, g] of Object.entries(s))
+    d[v] = g, v === m && (d[o] = u);
   return d;
 }
-function U(a, o) {
-  const u = { ...a };
+function P(s, o) {
+  const u = { ...s };
   return delete u[o], u;
 }
-function P(a, o, u) {
-  return Object.hasOwn(a, o) ? { ...a, [u]: T(a[o]) } : a;
+function j(s, o, u) {
+  return Object.hasOwn(s, o) ? { ...s, [u]: y(s[o]) } : s;
 }
-function j(a, o, u) {
-  const m = Object.keys(a), d = m.indexOf(o), p = u === "up" ? d - 1 : d + 1;
-  return d === -1 || p < 0 || p >= m.length ? a : ([m[d], m[p]] = [m[p], m[d]], x(a, m));
+function D(s, o, u) {
+  const m = Object.keys(s), d = m.indexOf(o), v = u === "up" ? d - 1 : d + 1;
+  return d === -1 || v < 0 || v >= m.length ? s : ([m[d], m[v]] = [m[v], m[d]], x(s, m));
 }
-function x(a, o) {
-  if (o.some((m) => !Object.hasOwn(a, m)))
-    return a;
+function x(s, o) {
+  if (o.some((m) => !Object.hasOwn(s, m)))
+    return s;
   const u = {};
   for (const m of o)
-    u[m] = a[m];
-  for (const [m, d] of Object.entries(a))
+    u[m] = s[m];
+  for (const [m, d] of Object.entries(s))
     Object.hasOwn(u, m) || (u[m] = d);
   return u;
 }
-function R(a, o, u, m = null) {
+function S(s, o, u, m = null) {
   const d = [];
-  let p = "";
-  return a.forEach(({ token: g, hash: e }, t) => {
+  let v = "";
+  return s.forEach(({ token: g, hash: e }, t) => {
     const l = t === 0 && m !== null ? m : o();
-    t === 0 && (p = l), d.push([g, l], [e, u(l)]);
-  }), { key: p, replacements: d };
+    t === 0 && (v = l), d.push([g, l], [e, u(l)]);
+  }), { key: v, replacements: d };
 }
-function A(a, o) {
-  return o.reduce((u, [m, d]) => u.split(m).join(d), a);
+function A(s, o) {
+  return o.reduce((u, [m, d]) => u.split(m).join(d), s);
 }
-function D(a, o) {
-  return JSON.parse(A(JSON.stringify(a), o));
+function F(s, o) {
+  return JSON.parse(A(JSON.stringify(s), o));
 }
-function y(a, o) {
-  return o == null || a < o;
+function T(s, o) {
+  return o == null || s < o;
 }
-function T(a) {
-  return a === void 0 ? void 0 : JSON.parse(JSON.stringify(a));
+function y(s) {
+  return s === void 0 ? void 0 : JSON.parse(JSON.stringify(s));
 }
-function F(a) {
-  return !a || Array.isArray(a) ? Array.isArray(a) ? { ...T(a) } : {} : T(a);
+function B(s) {
+  return !s || Array.isArray(s) ? Array.isArray(s) ? { ...y(s) } : {} : y(s);
 }
-const O = ":scope > template[data-villament-repeater-template]", S = "data-villament-repeater-action", B = ':scope > ul.fi-fo-repeater-items, :scope > ul.fi-fo-simple-repeater-items, :scope > table > tbody[x-ref="reorderItems"]', I = ":scope > .fi-fo-repeater-add, :scope > .fi-fo-simple-repeater-add, :scope > .fi-fo-table-repeater-add", W = ".fi-fo-repeater-item-header-end-actions, .fi-fo-simple-repeater-item-actions, .fi-fo-table-repeater-actions", w = "[data-reorder-direction], [x-sortable-handle]", J = ":scope > .fi-fo-repeater-item-content, :scope > .fi-fo-simple-repeater-item-content", E = "data-villament-repeater-pending", L = ":scope > template[data-villament-repeater-slot]", K = {
+const O = ":scope > template[data-villament-repeater-template]", R = "data-villament-repeater-action", W = ':scope > ul.fi-fo-repeater-items, :scope > ul.fi-fo-simple-repeater-items, :scope > table > tbody[x-ref="reorderItems"]', w = ":scope > .fi-fo-repeater-add, :scope > .fi-fo-simple-repeater-add, :scope > .fi-fo-table-repeater-add", J = ".fi-fo-repeater-item-header-end-actions, .fi-fo-simple-repeater-item-actions, .fi-fo-table-repeater-actions", I = "[data-reorder-direction], [x-sortable-handle]", K = ":scope > .fi-fo-repeater-item-content, :scope > .fi-fo-simple-repeater-item-content", E = "data-villament-repeater-pending", L = ":scope > template[data-villament-repeater-slot]", z = {
   generateKey: () => globalThis.crypto.randomUUID(),
-  hash: (a) => typeof globalThis.jsMd5 == "function" ? globalThis.jsMd5(a) : a
+  hash: (s) => typeof globalThis.jsMd5 == "function" ? globalThis.jsMd5(s) : s
 };
-function z(a, o = K) {
+function G(s, o = z) {
   return function(m) {
-    const d = a(m), { statePath: p, message: g } = m;
+    const d = s(m), { statePath: v, message: g } = m;
     return {
       ...d,
       /** @type {?(event: MouseEvent) => void} */
@@ -95,9 +95,9 @@ function z(a, o = K) {
       villamentHandleClick(e) {
         const t = (
           /** @type {?HTMLElement} */
-          e.target instanceof Element ? e.target.closest(`[${S}]`) : null
+          e.target instanceof Element ? e.target.closest(`[${R}]`) : null
         );
-        !t || !this.villamentOwns(t) || (e.preventDefault(), e.stopPropagation(), !(t.hasAttribute("disabled") || t.getAttribute("aria-disabled") === "true") && this.villamentRun(t.getAttribute(S), t));
+        !t || !this.villamentOwns(t) || (e.preventDefault(), e.stopPropagation(), !(t.hasAttribute("disabled") || t.getAttribute("aria-disabled") === "true") && this.villamentRun(t.getAttribute(R), t));
       },
       /**
        * @param {?string} operation
@@ -126,28 +126,28 @@ function z(a, o = K) {
        */
       villamentAdd(e, t = !1) {
         const l = this.villamentMeta(), n = this.villamentRead();
-        if (!l || t && e === null || !y(Object.keys(n).length, l.maxItems))
+        if (!l || t && e === null || !T(Object.keys(n).length, l.maxItems))
           return;
-        const { key: i, replacements: r } = R(l.tokens, o.generateKey, o.hash);
-        this.villamentWrite(q(n, i, D(l.state, r), e));
-        const s = this.villamentItemFromTemplate(r);
-        return s && (this.villamentMarkRendered(s, i, l), this.villamentInsert(s, e)), this.villamentRefresh(), i;
+        const { key: i, replacements: r } = S(l.tokens, o.generateKey, o.hash);
+        this.villamentWrite(U(n, i, F(l.state, r), e));
+        const a = this.villamentItemFromTemplate(r);
+        return a && (this.villamentMarkRendered(a, i, l), this.villamentInsert(a, e)), this.villamentRefresh(), i;
       },
       /**
        * @param {string} key
        */
       villamentDelete(e) {
-        this.villamentWrite(U(this.villamentRead(), e)), this.villamentItemElement(e)?.remove(), this.villamentRefresh();
+        this.villamentWrite(P(this.villamentRead(), e)), this.villamentItemElement(e)?.remove(), this.villamentRefresh();
       },
       /**
        * @param {string} key
        */
       villamentClone(e) {
         const t = this.villamentMeta(), l = this.villamentRead();
-        if (!t || !Object.hasOwn(l, e) || !y(Object.keys(l).length, t.maxItems))
+        if (!t || !Object.hasOwn(l, e) || !T(Object.keys(l).length, t.maxItems))
           return;
-        const { key: n, replacements: i } = R(t.tokens, o.generateKey, o.hash);
-        this.villamentWrite(P(l, e, n));
+        const { key: n, replacements: i } = S(t.tokens, o.generateKey, o.hash);
+        this.villamentWrite(j(l, e, n));
         const r = this.villamentItemFromTemplate(i);
         return r && (this.villamentMarkRendered(r, n, t), this.villamentInsert(r, null)), this.villamentRefresh(), n;
       },
@@ -157,22 +157,22 @@ function z(a, o = K) {
        * @param {?HTMLElement} [control]
        */
       villamentMove(e, t, l = null) {
-        const n = this.villamentRead(), i = j(n, e, t);
+        const n = this.villamentRead(), i = D(n, e, t);
         if (i === n)
           return;
         const r = l !== null && document.activeElement === l;
         this.villamentWrite(i);
-        const s = this.villamentItemElement(e), c = this.villamentList();
-        if (s && c) {
-          const h = this.villamentItemElements(), v = h.indexOf(s);
-          t === "up" ? c.insertBefore(s, h[v - 1]) : c.insertBefore(s, h[v + 1].nextSibling);
+        const a = this.villamentItemElement(e), c = this.villamentList();
+        if (a && c) {
+          const h = this.villamentItemElements(), p = h.indexOf(a);
+          t === "up" ? c.insertBefore(a, h[p - 1]) : c.insertBefore(a, h[p + 1].nextSibling);
         }
-        this.villamentRefresh(), this.villamentAnnounceMove(e), r && s && this.villamentRestoreFocus(s, t);
+        this.villamentRefresh(), this.villamentAnnounceMove(e), r && a && this.villamentRestoreFocus(a, t);
       },
       // ---- state ---------------------------------------------------
       /** @returns {Record<string, any>} */
       villamentRead() {
-        return F(this.$wire.get(p));
+        return B(this.$wire.get(v));
       },
       /**
        * Deferred: no request now. The next commit — a save, a live
@@ -182,7 +182,7 @@ function z(a, o = K) {
        * @param {Record<string, any>} items
        */
       villamentWrite(e) {
-        this.$wire.set(p, e, !1);
+        this.$wire.set(v, e, !1);
       },
       // ---- template ------------------------------------------------
       /**
@@ -264,7 +264,7 @@ function z(a, o = K) {
       },
       /** @returns {?HTMLElement} */
       villamentList() {
-        return this.$root.querySelector(B);
+        return this.$root.querySelector(W);
       },
       /** @returns {HTMLElement[]} */
       villamentItemElements() {
@@ -338,7 +338,7 @@ function z(a, o = K) {
           /** @type {HTMLElement} */
           l.cloneNode(t !== null)
         );
-        return this.$root.insertBefore(n, this.villamentChromeAnchor(I)), t ? n.querySelector("tbody") : n;
+        return this.$root.insertBefore(n, this.villamentChromeAnchor(w)), t ? n.querySelector("tbody") : n;
       },
       /**
        * Where stock's chrome after the list starts: the add button,
@@ -362,14 +362,14 @@ function z(a, o = K) {
         if (!e)
           return;
         let t = this.villamentItemElements();
-        const l = t.length, n = !y(l, e.maxItems);
+        const l = t.length, n = !T(l, e.maxItems);
         if (l === 0) {
           const i = this.villamentList();
           (i?.closest("table") ?? i)?.remove();
         }
         this.villamentRefreshSeparators(t, n), t = this.villamentItemElements(), e.layout === "table" && e.reorderColumn && this.villamentRefreshReorderColumn(t, e), t.forEach((i, r) => {
-          const s = i.getAttribute("x-sortable-item") ?? "";
-          this.villamentSetDisabled(this.villamentControl(i, "moveUp"), r === 0), this.villamentSetDisabled(this.villamentControl(i, "moveDown"), r === l - 1), e.hasItemNumbers && this.villamentNumber(i, r + 1), e.actions.clone && this.villamentRefreshClone(i, s, e, n);
+          const a = i.getAttribute("x-sortable-item") ?? "";
+          this.villamentSetDisabled(this.villamentControl(i, "moveUp"), r === 0), this.villamentSetDisabled(this.villamentControl(i, "moveDown"), r === l - 1), e.hasItemNumbers && this.villamentNumber(i, r + 1), e.actions.clone && this.villamentRefreshClone(i, a, e, n);
         }), e.actions.add && this.villamentRefreshAdd(n), this.$root.querySelector(":scope > .fi-fo-repeater-actions")?.classList.toggle("fi-hidden", l < 2), this.villamentRefreshDescriptions(t, e), this.$root.dataset.reorderItems = JSON.stringify(t.map((i) => i.getAttribute("x-sortable-item"))), this.updateHandles?.();
       },
       /**
@@ -384,8 +384,8 @@ function z(a, o = K) {
           r.hasAttribute("x-sortable-item") || r.remove();
         const n = this.villamentNestedTemplateHtml(`template[data-villament-repeater-separator="${t ? "full" : "addable"}"]`), i = this.villamentMeta()?.token ?? "";
         n && e.slice(0, -1).forEach((r) => {
-          const s = this.villamentParse(A(n, [[i, r.getAttribute("x-sortable-item") ?? ""]]));
-          s && l.insertBefore(s, r.nextSibling);
+          const a = this.villamentParse(A(n, [[i, r.getAttribute("x-sortable-item") ?? ""]]));
+          a && l.insertBefore(a, r.nextSibling);
         });
       },
       /**
@@ -394,7 +394,7 @@ function z(a, o = K) {
        * @returns {?HTMLElement}
        */
       villamentControl(e, t) {
-        return [...e.querySelectorAll(`[${S}="${t}"]`)].find((l) => this.villamentItemOf(l) === e) ?? null;
+        return [...e.querySelectorAll(`[${R}="${t}"]`)].find((l) => this.villamentItemOf(l) === e) ?? null;
       },
       /**
        * Stock's disabled icon button: `disabled`, `aria-disabled` and
@@ -435,10 +435,10 @@ function z(a, o = K) {
         }
         if (i)
           return;
-        const s = this.villamentTemplateItem()?.querySelector(`[${S}="clone"]`)?.parentElement, c = [...e.querySelectorAll(W)].filter((b) => this.villamentItemOf(b) === e && !b.querySelector(w)).at(-1);
-        if (!s || !c)
+        const a = this.villamentTemplateItem()?.querySelector(`[${R}="clone"]`)?.parentElement, c = [...e.querySelectorAll(J)].filter((b) => this.villamentItemOf(b) === e && !b.querySelector(I)).at(-1);
+        if (!a || !c)
           return;
-        const h = this.villamentParse(A(s.outerHTML, this.villamentRowReplacements(l, t))), f = this.villamentControl(e, "delete")?.parentElement ?? null ?? c.querySelector(":scope > .fi-fo-repeater-item-header-collapsible-actions");
+        const h = this.villamentParse(A(a.outerHTML, this.villamentRowReplacements(l, t))), f = this.villamentControl(e, "delete")?.parentElement ?? null ?? c.querySelector(":scope > .fi-fo-repeater-item-header-collapsible-actions");
         h && c.insertBefore(h, f);
       },
       /**
@@ -464,16 +464,16 @@ function z(a, o = K) {
        * @param {TemplateMeta} meta
        */
       villamentRefreshReorderColumn(e, t) {
-        const l = this.villamentList()?.closest("table"), n = this.villamentTemplatePart("table"), i = this.villamentTemplateItem(), r = l?.querySelector(":scope > thead > tr"), s = n?.querySelector(":scope > thead > tr");
-        if (!r || !s || !i)
+        const l = this.villamentList()?.closest("table"), n = this.villamentTemplatePart("table"), i = this.villamentTemplateItem(), r = l?.querySelector(":scope > thead > tr"), a = n?.querySelector(":scope > thead > tr");
+        if (!r || !a || !i)
           return;
-        const c = e.length > 1, h = r.children.length === s.children.length;
-        c && !h ? r.insertBefore(s.firstElementChild.cloneNode(!0), r.firstElementChild) : !c && h && r.firstElementChild?.remove();
-        const v = (f) => f?.tagName === "TD" && f.querySelector(`:scope > .fi-fo-table-repeater-actions :is(${w})`) !== null;
+        const c = e.length > 1, h = r.children.length === a.children.length;
+        c && !h ? r.insertBefore(a.firstElementChild.cloneNode(!0), r.firstElementChild) : !c && h && r.firstElementChild?.remove();
+        const p = (f) => f?.tagName === "TD" && f.querySelector(`:scope > .fi-fo-table-repeater-actions :is(${I})`) !== null;
         for (const f of e) {
-          const b = v(f.firstElementChild);
+          const b = p(f.firstElementChild);
           if (c && !b) {
-            const N = f.getAttribute("x-sortable-item") ?? "", C = this.villamentParse(A(i.firstElementChild.outerHTML, this.villamentRowReplacements(t, N)));
+            const q = f.getAttribute("x-sortable-item") ?? "", C = this.villamentParse(A(i.firstElementChild.outerHTML, this.villamentRowReplacements(t, q)));
             C && f.insertBefore(C, f.firstElementChild);
           } else !c && b && f.firstElementChild.remove();
         }
@@ -484,7 +484,7 @@ function z(a, o = K) {
        * @param {boolean} isFull
        */
       villamentRefreshAdd(e) {
-        const t = this.$root.querySelector(I);
+        const t = this.$root.querySelector(w);
         if (e) {
           t?.remove();
           return;
@@ -502,11 +502,11 @@ function z(a, o = K) {
        * @param {TemplateMeta} meta
        */
       villamentRefreshDescriptions(e, t) {
-        const l = [...this.$root.querySelectorAll(":scope > span[data-reorder-description]")], n = new Map(l.map((s) => [s.getAttribute("data-reorder-description"), s.getAttribute("data-reorder-label")])), r = this.villamentTemplatePart("span[data-reorder-description]")?.getAttribute("data-reorder-label") ?? "";
-        l.forEach((s) => s.remove()), e.forEach((s, c) => {
-          const h = s.getAttribute("x-sortable-item") ?? "", v = n.get(h) ?? r, f = document.createElement("span");
-          f.className = "fi-sr-only", f.setAttribute("data-reorder-description", h), f.setAttribute("data-reorder-label", v), f.id = `${this.$root.id}-item-${o.hash(h)}`, f.textContent = t.positionMessage.replace(/:label|:position|:count/g, (b) => ({
-            ":label": v,
+        const l = [...this.$root.querySelectorAll(":scope > span[data-reorder-description]")], n = new Map(l.map((a) => [a.getAttribute("data-reorder-description"), a.getAttribute("data-reorder-label")])), r = this.villamentTemplatePart("span[data-reorder-description]")?.getAttribute("data-reorder-label") ?? "";
+        l.forEach((a) => a.remove()), e.forEach((a, c) => {
+          const h = a.getAttribute("x-sortable-item") ?? "", p = n.get(h) ?? r, f = document.createElement("span");
+          f.className = "fi-sr-only", f.setAttribute("data-reorder-description", h), f.setAttribute("data-reorder-label", p), f.id = `${this.$root.id}-item-${o.hash(h)}`, f.textContent = t.positionMessage.replace(/:label|:position|:count/g, (b) => ({
+            ":label": p,
             ":position": String(c + 1),
             ":count": String(e.length)
           })[b] ?? b), this.$root.appendChild(f);
@@ -548,7 +548,7 @@ function z(a, o = K) {
        */
       villamentReconcileOrder() {
         const e = this.villamentList(), t = this.villamentItemElements(), l = t.map((r) => r.getAttribute("x-sortable-item")), n = Object.keys(this.villamentRead()), i = l.length === n.length && n.every((r) => l.includes(r));
-        if (!(!e || !i || l.every((r, s) => r === n[s]))) {
+        if (!(!e || !i || l.every((r, a) => r === n[a]))) {
           for (const r of n)
             e.appendChild(t[l.indexOf(r)]);
           this.villamentRefresh();
@@ -576,7 +576,7 @@ function z(a, o = K) {
        * @returns {?HTMLElement}
        */
       villamentContentOf(e) {
-        return e.tagName === "TR" ? e : e.querySelector(J);
+        return e.tagName === "TR" ? e : e.querySelector(K);
       },
       /**
        * @param {HTMLElement} content
@@ -601,12 +601,12 @@ function z(a, o = K) {
         ), i = n ? this.villamentContentOf(n) : null;
         if (!i)
           return;
-        const { replacements: r } = R(l.tokens, o.generateKey, o.hash, t);
+        const { replacements: r } = S(l.tokens, o.generateKey, o.hash, t);
         if (e.tagName === "TR") {
-          const { start: s, count: c } = l.rendering?.cells ?? { start: 0, count: 0 }, h = [...i.children].filter((v) => v.tagName === "TD").slice(s, s + c);
-          [...e.querySelectorAll(`:scope > td[${E}]`)].forEach((v, f) => {
+          const { start: a, count: c } = l.rendering?.cells ?? { start: 0, count: 0 }, h = [...i.children].filter((p) => p.tagName === "TD").slice(a, a + c);
+          [...e.querySelectorAll(`:scope > td[${E}]`)].forEach((p, f) => {
             const b = h[f] ? this.villamentParse(A(h[f].outerHTML, r)) : null;
-            b && v.replaceWith(b);
+            b && p.replaceWith(b);
           });
         } else
           e.innerHTML = A(i.innerHTML, r);
@@ -634,13 +634,13 @@ function z(a, o = K) {
        */
       villamentAdopt(e, t, l, n, i) {
         t.__villamentAdopted = !0;
-        for (const [r, s] of Object.entries(this.villamentSlotHashes(e))) {
+        for (const [r, a] of Object.entries(this.villamentSlotHashes(e))) {
           const c = this.villamentUnit(t, r);
-          c && (c.__villamentHash = s);
+          c && (c.__villamentHash = a);
         }
         for (const r of n.rendering?.fields ?? []) {
-          const s = this.villamentUnit(t, this.villamentUnitKey(n, l, r.key));
-          s && (s.__villamentError = this.villamentFirstError(i, `${p}.${l}.${r.path}`, r.nested) ?? "");
+          const a = this.villamentUnit(t, this.villamentUnitKey(n, l, r.key));
+          a && (a.__villamentError = this.villamentFirstError(i, `${v}.${l}.${r.path}`, r.nested) ?? "");
         }
       },
       /**
@@ -667,14 +667,14 @@ function z(a, o = K) {
       villamentApplySlot(e, t, l) {
         const n = this.villamentSlotUnits(e);
         for (const [i, r] of Object.entries(this.villamentSlotHashes(e))) {
-          const s = this.villamentUnit(t, i), c = n.find((v) => v.getAttribute("wire:partial") === i);
-          if (!s || !c || s.__villamentHash === r)
+          const a = this.villamentUnit(t, i), c = n.find((p) => p.getAttribute("wire:partial") === i);
+          if (!a || !c || a.__villamentHash === r)
             continue;
           const h = (
             /** @type {?HTMLElement} */
             this.villamentParse(c.outerHTML)
           );
-          h && (h.__villamentHash = r, s.replaceWith(h));
+          h && (h.__villamentHash = r, a.replaceWith(h));
         }
       },
       /**
@@ -703,11 +703,11 @@ function z(a, o = K) {
        */
       villamentApplyErrors(e, t, l, n) {
         const i = l.rendering, r = this.villamentTemplateItem();
-        for (const s of i?.fields ?? []) {
-          const c = this.villamentUnit(e, this.villamentUnitKey(l, t, s.key)), h = this.villamentFirstError(n, `${p}.${t}.${s.path}`, s.nested), v = h ?? "";
-          if (!c || (c.__villamentError ?? "") === v)
+        for (const a of i?.fields ?? []) {
+          const c = this.villamentUnit(e, this.villamentUnitKey(l, t, a.key)), h = this.villamentFirstError(n, `${v}.${t}.${a.path}`, a.nested), p = h ?? "";
+          if (!c || (c.__villamentError ?? "") === p)
             continue;
-          let f = h === null ? r ? this.villamentUnit(r, this.villamentUnitKey(l, l.token, s.key))?.outerHTML : null : s.invalid?.split(i.errorSentinel).join(s.html ? h : G(h));
+          let f = h === null ? r ? this.villamentUnit(r, this.villamentUnitKey(l, l.token, a.key))?.outerHTML : null : a.invalid?.split(i.errorSentinel).join(a.html ? h : V(h));
           if (!f)
             continue;
           f = A(f, [[l.token, t]]);
@@ -715,7 +715,7 @@ function z(a, o = K) {
             /** @type {?HTMLElement} */
             this.villamentParse(f)
           );
-          b && (b.__villamentError = v, c.replaceWith(b));
+          b && (b.__villamentError = p, c.replaceWith(b));
         }
       },
       /** @returns {Record<string, string[]>} */
@@ -794,14 +794,14 @@ function z(a, o = K) {
     };
   };
 }
-function G(a) {
-  return a.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
+function V(s) {
+  return s.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
 }
 const $ = /* @__PURE__ */ new WeakMap();
-function M(a, o = 0) {
+function M(s, o = 0) {
   const u = (
     /** @type {?HTMLTemplateElement} */
-    a.querySelector(O)
+    s.querySelector(O)
   ), m = u?.getAttribute("data-villament-repeater-template-ref");
   if (!u || !m)
     return u;
@@ -813,10 +813,10 @@ function M(a, o = 0) {
   } catch {
     return null;
   }
-  let p = a.parentElement?.closest("[data-reorder-owner]") ?? null;
-  for (; p && p.id !== d.ancestor; )
-    p = p.parentElement?.closest("[data-reorder-owner]") ?? null;
-  const g = p ? M(p, o + 1) : null;
+  let v = s.parentElement?.closest("[data-reorder-owner]") ?? null;
+  for (; v && v.id !== d.ancestor; )
+    v = v.parentElement?.closest("[data-reorder-owner]") ?? null;
+  const g = v ? M(v, o + 1) : null;
   if (!g)
     return null;
   const e = $.get(u);
@@ -825,7 +825,7 @@ function M(a, o = 0) {
   const t = k(g);
   if (!t)
     return null;
-  const l = a.id.split(d.item).join(t.token), i = (
+  const l = s.id.split(d.item).join(t.token), i = (
     /** @type {?HTMLTemplateElement} */
     [..._(g)?.querySelectorAll("[data-reorder-owner]") ?? []].find((h) => h.id === l)?.querySelector(O) ?? null
   );
@@ -833,11 +833,11 @@ function M(a, o = 0) {
     return null;
   const r = document.createElement("template");
   r.innerHTML = i.innerHTML.split(t.token).join(d.item);
-  const s = [...r.content.children].find((h) => h.matches("script[data-villament-repeater-meta]")), c = k(r);
-  return s && c && (s.textContent = JSON.stringify({ ...c, ...d.meta })), $.set(u, { ancestorTemplate: g, template: r }), r;
+  const a = [...r.content.children].find((h) => h.matches("script[data-villament-repeater-meta]")), c = k(r);
+  return a && c && (a.textContent = JSON.stringify({ ...c, ...d.meta })), $.set(u, { ancestorTemplate: g, template: r }), r;
 }
-function k(a) {
-  const o = [...a?.content.children ?? []].find((u) => u.matches("script[data-villament-repeater-meta]"));
+function k(s) {
+  const o = [...s?.content.children ?? []].find((u) => u.matches("script[data-villament-repeater-meta]"));
   if (!o)
     return null;
   try {
@@ -846,8 +846,8 @@ function k(a) {
     return null;
   }
 }
-function _(a) {
-  for (const o of a?.content.children ?? []) {
+function _(s) {
+  for (const o of s?.content.children ?? []) {
     if (o.matches("[x-sortable-item]"))
       return (
         /** @type {HTMLElement} */
@@ -862,14 +862,22 @@ function _(a) {
   }
   return null;
 }
-const H = new URL(import.meta.url).searchParams.get("base");
-if (!H)
+const H = new URL(import.meta.url), N = H.searchParams.get("base");
+if (!N)
   throw new Error("[villament] client-repeater was loaded without its ?base= Filament repeater URL.");
-const { default: Q } = await import(
+const { default: X } = await import(
   /* @vite-ignore */
-  H
-), V = z(Q);
+  N
+);
+if (!globalThis.__villamentClientRepeaterHandshake) {
+  globalThis.__villamentClientRepeaterHandshake = !0;
+  const s = H.searchParams.get("v") ?? "";
+  globalThis.Livewire?.hook?.("request", ({ options: o }) => {
+    o.headers["X-Villament-Client-Repeater"] = s;
+  });
+}
+const Q = G(X);
 export {
-  V as clientRepeaterFormComponent,
-  V as default
+  Q as clientRepeaterFormComponent,
+  Q as default
 };

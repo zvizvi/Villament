@@ -217,16 +217,70 @@ final class Renderability
     }
 
     /**
-     * A closure the app wrote (anywhere outside Filament's own packages) on a
-     * property that can reach the markup.
+     * Whether `$component` or anything under it — its child schemas, and a
+     * repeater's item schema — carries a closure the app wrote. With
+     * `$includeLifecycle`, hydration and default closures count too: they
+     * still evaluate per row (e.g. a default read from the enclosing row).
+     *
+     * @param  list<string>|null  $onlyProperties
      */
-    public static function hasAppClosures(Component $component): bool
+    public static function hasAppClosuresDeep(Component $component, bool $includeLifecycle = true, ?array $onlyProperties = null): bool
+    {
+        if (self::hasAppClosures($component, $includeLifecycle, $onlyProperties)) {
+            return true;
+        }
+
+        $schemas = $component->getChildSchemas(withHidden: true);
+
+        if (($component instanceof Repeater) && ($definition = $component->getChildSchema())) {
+            $schemas[] = $definition;
+        }
+
+        foreach ($schemas as $schema) {
+            if (self::schemaHasAppClosures($schema, $includeLifecycle, $onlyProperties)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param  list<string>|null  $onlyProperties
+     */
+    public static function schemaHasAppClosures(Schema $schema, bool $includeLifecycle = true, ?array $onlyProperties = null): bool
+    {
+        foreach ($schema->getComponents(withActions: false, withHidden: true) as $component) {
+            if (self::hasAppClosuresDeep($component, $includeLifecycle, $onlyProperties)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * A closure the app wrote (anywhere outside Filament's own packages) on a
+     * property that can reach the markup (or, with `$includeLifecycle`, on
+     * any property at all).
+     *
+     * @param  list<string>|null  $onlyProperties
+     */
+    public static function hasAppClosures(Component $component, bool $includeLifecycle = false, ?array $onlyProperties = null): bool
     {
         $reflection = new ReflectionObject($component);
 
         do {
             foreach ($reflection->getProperties() as $property) {
-                if ($property->isStatic() || in_array($property->getName(), self::LIFECYCLE_PROPERTIES, strict: true)) {
+                if ($property->isStatic()) {
+                    continue;
+                }
+
+                if (($onlyProperties !== null) && (! in_array($property->getName(), $onlyProperties, strict: true))) {
+                    continue;
+                }
+
+                if ((! $includeLifecycle) && in_array($property->getName(), self::LIFECYCLE_PROPERTIES, strict: true)) {
                     continue;
                 }
 

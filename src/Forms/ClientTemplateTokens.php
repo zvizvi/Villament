@@ -7,10 +7,11 @@ namespace Zvizvi\Villament\Forms;
 /**
  * The placeholder keys a `ClientRepeater` template is rendered under.
  *
- * The main token stands for the new item's own key. Every UUID found among
- * the keys of the template item's state (the items a nested repeater's
- * `defaultItems()` hydrated) is renamed to a token too, so that each copy the
- * browser makes gets fresh keys at every level, not just the outer one.
+ * The main token stands for the new item's own key. Every nested item key
+ * in the template item's state (the items a nested repeater's
+ * `defaultItems()` hydrated, found by walking the schema) is renamed to a
+ * token too, so that each copy the browser makes gets fresh keys at every
+ * level, not just the outer one.
  *
  * Tokens are deterministic per state path: an unchanged template renders
  * byte-identically on every request, which keeps its `wire:key` stable.
@@ -23,9 +24,16 @@ final class ClientTemplateTokens
     /** @var array<string, string> original UUID => token */
     private array $nested = [];
 
+    /**
+     * @param  list<string>  $itemKeys  The keys that ARE nested repeater /
+     *                                  builder items (found by walking the item's schema). Only those
+     *                                  are renamed: a UUID-shaped key in DATA (a KeyValue field, an
+     *                                  array default) is the app's and stays as it is.
+     */
     public function __construct(
         private readonly string $mainToken,
         private readonly string $statePath,
+        private readonly array $itemKeys = [],
     ) {}
 
     public static function mainToken(string $statePath): string
@@ -90,7 +98,7 @@ final class ClientTemplateTokens
         $renamed = [];
 
         foreach ($state as $key => $value) {
-            if (is_string($key) && preg_match(self::UUID_PATTERN, $key)) {
+            if (is_string($key) && preg_match(self::UUID_PATTERN, $key) && in_array($key, $this->itemKeys, strict: true)) {
                 $key = $this->nested[$key] ??= self::token($this->statePath, count($this->nested) + 1);
             }
 

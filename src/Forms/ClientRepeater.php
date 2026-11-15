@@ -6,6 +6,7 @@ namespace Zvizvi\Villament\Forms;
 
 use Closure;
 use Filament\Actions\Action;
+use Filament\Forms\Components\Builder;
 use Filament\Forms\Components\Contracts\HasNestedRecursiveValidationRules;
 use Filament\Forms\Components\Field;
 use Filament\Forms\Components\Hidden;
@@ -16,6 +17,7 @@ use Filament\Support\Facades\FilamentAsset;
 use Illuminate\Support\MessageBag;
 use Illuminate\Support\ViewErrorBag;
 use Livewire\LivewireManager;
+use WeakMap;
 use Zvizvi\Villament\Forms\Support\ActionBehavior;
 use Zvizvi\Villament\Forms\Support\CloneSafety;
 use Zvizvi\Villament\Forms\Support\HtmlFragments;
@@ -68,7 +70,12 @@ class ClientRepeater extends Repeater
      */
     protected bool $isRenderingItemShells = false;
 
-    protected bool|Closure $hasClientRendering = true;
+    /**
+     * `null`: automatic — on when the whole item renders in the browser
+     * (no server units), off otherwise. Measured, a mixed item costs more
+     * server time than stock (DECISIONS.md), so that is an explicit opt-in.
+     */
+    protected bool|Closure|null $hasClientRendering = null;
 
     /**
      * What the template render found about the item, for this render: the
@@ -111,9 +118,15 @@ class ClientRepeater extends Repeater
     protected array $clientActions = [];
 
     /**
-     * The client-side structure is opt-out per component.
+     * `null`: automatic — on, unless the item carries an `afterStateHydrated()`
+     * closure of the app's own. The template is filled on every render, so
+     * such a hook would run on every request instead of only on an add
+     * (stock); with side effects that is a behaviour change, so it needs an
+     * explicit `clientStructure()`.
      */
-    protected bool|Closure $hasClientStructure = true;
+    protected bool|Closure|null $hasClientStructure = null;
+
+    protected ?bool $hasAppHydrationHooks = null;
 
     public function clientStructure(bool|Closure $condition = true): static
     {
@@ -123,8 +136,10 @@ class ClientRepeater extends Repeater
     }
 
     /**
-     * Client rendering of the items' content is on by default; off, the
-     * server renders every item (the structure stays client-side).
+     * Client rendering of the items' content. Automatic by default (see
+     * `$hasClientRendering`); `clientRendering()` turns it on for an item
+     * with server units too, `clientRendering(false)` off. Off, the server
+     * renders every item; the structure stays in the browser.
      */
     public function clientRendering(bool|Closure $condition = true): static
     {
@@ -139,7 +154,8 @@ class ClientRepeater extends Repeater
      */
     public function isClientRendered(): bool
     {
-        return ($this->renderPlan !== null) && (bool) $this->evaluate($this->hasClientRendering);
+        // `planClientRendering()` already returns null when it is off.
+        return $this->renderPlan !== null;
     }
 
     /**
@@ -148,6 +164,16 @@ class ClientRepeater extends Repeater
     public function getItems(): array
     {
         $items = parent::getItems();
+
+        // The template's second row is only there for what renders between
+        // or around two rows (a separator, `table()`'s reorder column): its
+        // own content is never used, so it renders as an empty shell.
+        if ($this->isRenderingClientTemplate && (count($items) === 2)) {
+            $second = array_key_last($items);
+            $items[$second] = $items[$second]->getClone()->components([]);
+
+            return $items;
+        }
 
         if (! $this->isRenderingItemShells) {
             return $items;
@@ -166,7 +192,53 @@ class ClientRepeater extends Repeater
      */
     protected function shouldRenderItemContent(): bool
     {
-        return ! app(LivewireManager::class)->isLivewireRequest();
+        if (! app(LivewireManager::class)->isLivewireRequest()) {
+            return true;
+        }
+
+        // The handshake: the browser's Alpine component announces itself on
+        // every Livewire request, with the version of the module it runs.
+        // Without it — the asset is not published, failed to load, or is a
+        // stale copy — nothing would fill a shell, so the items render whole.
+        if (self::$isClientFaked) {
+            return false;
+        }
+
+        return request()->header(self::CLIENT_HEADER) !== self::clientAssetVersion();
+    }
+
+    protected static bool $isClientFaked = false;
+
+    /**
+     * Testing: behave as if the browser's Alpine component had made the
+     * handshake on every Livewire request. Livewire's test requests rebuild
+     * their headers (`X-Livewire` only), so a test cannot send it itself.
+     */
+    public static function fakeClient(bool $condition = true): void
+    {
+        self::$isClientFaked = $condition;
+    }
+
+    /**
+     * The request header the Alpine component sets on every Livewire request.
+     */
+    public const CLIENT_HEADER = 'X-Villament-Client-Repeater';
+
+    protected static ?string $clientAssetVersion = null;
+
+    /**
+     * The `?v=` the published Alpine component is served with: the module
+     * reads it from its own URL and sends it back.
+     */
+    public static function clientAssetVersion(): string
+    {
+        if (self::$clientAssetVersion !== null) {
+            return self::$clientAssetVersion;
+        }
+
+        parse_str((string) parse_url(FilamentAsset::getAlpineComponentSrc('client-repeater', 'zvizvi/villament'), PHP_URL_QUERY), $query);
+
+        return self::$clientAssetVersion = (string) ($query['v'] ?? '');
     }
 
     /**
@@ -175,7 +247,14 @@ class ClientRepeater extends Repeater
      */
     public function hasClientStructure(): bool
     {
-        if (! $this->evaluate($this->hasClientStructure)) {
+        $condition = $this->evaluate($this->hasClientStructure);
+
+        if ($condition === null) {
+            $condition = ! ($this->hasAppHydrationHooks ??= $this->memo('hydration', fn (): bool => (($schema = $this->getChildSchema()) !== null)
+                && Renderability::schemaHasAppClosures($schema, onlyProperties: ['afterStateHydrated'])));
+        }
+
+        if (! $condition) {
             return false;
         }
 
@@ -286,19 +365,34 @@ class ClientRepeater extends Repeater
         $contentClass = $this->isSimple() ? 'class="fi-fo-simple-repeater-item-content"' : 'class="fi-fo-repeater-item-content"';
         $attributes = ' wire:ignore'.($isLight ? ' data-villament-repeater-pending' : '');
 
-        foreach ($keys as $key) {
-            $itemStart = strpos($html, 'x-sortable-item="'.e($key).'"');
+        // One front-to-back pass: the rows come in document order, and the
+        // output is built from slices, never by copying the whole document
+        // once per row.
+        $output = '';
+        $cursor = 0;
 
-            if ($itemStart === false) {
+        foreach ($keys as $key) {
+            $row = HtmlFragments::boundsFrom($html, $cursor, 'x-sortable-item="'.e($key).'"', 'li');
+            $contentAt = $row === null ? false : strpos($html, $contentClass, $row[0]);
+
+            if (($row === null) || ($contentAt === false) || ($contentAt > $row[1])) {
                 continue;
             }
 
-            $slot = $this->renderRowSlot($key, renderedHtml: $isLight ? null : (HtmlFragments::element($html, 'x-sortable-item="'.e($key).'"', 'li') ?? ''));
+            $tagStart = (int) strrpos($html, '<', $contentAt - strlen($html));
 
-            $html = HtmlFragments::decorateTag($html, $itemStart, $contentClass, $attributes, before: $slot);
+            if (! preg_match('/\G<[a-zA-Z][a-zA-Z0-9-]*/', $html, $tagName, offset: $tagStart)) {
+                continue;
+            }
+
+            $slot = $this->renderRowSlot($key, renderedHtml: $isLight ? null : substr($html, $row[0], $row[1] - $row[0]));
+            $nameEnd = $tagStart + strlen($tagName[0]);
+
+            $output .= substr($html, $cursor, $tagStart - $cursor).$slot.$tagName[0].$attributes;
+            $cursor = $nameEnd;
         }
 
-        return $html;
+        return $output.substr($html, $cursor);
     }
 
     /**
@@ -315,14 +409,17 @@ class ClientRepeater extends Repeater
         $hasReorderColumn = (count($keys) > 1) && ($this->isReorderableWithButtons() || $this->isReorderableWithDragAndDrop());
         $count = $this->tableCells['count'] ?? 0;
 
-        foreach ($keys as $key) {
-            $needle = 'x-sortable-item="'.e($key).'"';
-            $row = HtmlFragments::element($html, $needle, 'tr');
-            $position = $row === null ? false : strpos($html, $row);
+        $output = '';
+        $cursor = 0;
 
-            if (($row === null) || ($position === false)) {
+        foreach ($keys as $key) {
+            $bounds = HtmlFragments::boundsFrom($html, $cursor, 'x-sortable-item="'.e($key).'"', 'tr');
+
+            if ($bounds === null) {
                 continue;
             }
+
+            $row = substr($html, $bounds[0], $bounds[1] - $bounds[0]);
 
             $cells = $this->tableCells($row);
             $slot = $this->renderRowSlot($key, renderedHtml: $isLight ? null : $row);
@@ -342,10 +439,11 @@ class ClientRepeater extends Repeater
             $openingEnd = (int) HtmlFragments::openingTagEnd($decorated);
             $decorated = substr($decorated, 0, $openingEnd).$slot.substr($decorated, $openingEnd);
 
-            $html = substr_replace($html, $decorated, $position, strlen($row));
+            $output .= substr($html, $cursor, $bounds[0] - $cursor).$decorated;
+            $cursor = $bounds[1];
         }
 
-        return $html;
+        return $output.substr($html, $cursor);
     }
 
     /**
@@ -497,7 +595,7 @@ class ClientRepeater extends Repeater
                 && ActionBehavior::isPristine($action, expectsLivewireClickHandler: $operation !== 'reorder');
 
             if ($isClient && ($operation === 'clone')) {
-                $isClient = CloneSafety::isSafe($this);
+                $isClient = $this->memo('clone', fn (): bool => CloneSafety::isSafe($this));
             }
 
             $this->clientActions[$operation] = $isClient;
@@ -534,24 +632,29 @@ class ClientRepeater extends Repeater
         $originalState = $this->getRawState();
         $originalIsCollapsed = $this->isCollapsed;
         $invalidHtml = null;
+        $nestedItemKeys = [];
 
         try {
             $this->isRenderingClientTemplate = true;
 
-            // What stock's add action does: an empty item, then `fill()`,
-            // which runs defaults and `afterStateHydrated()`.
             $this->rawState([$token => []]);
-            $this->getChildSchema($token)->fill();
 
             if ($reference !== null) {
                 // The ancestor's template carries ours: classify the item
-                // (the shells and slots below need it), render nothing.
-                $this->renderPlan = $this->planClientRendering($token);
+                // (the shells and slots below need it), render nothing. The
+                // classification is shared by every row's copy; only the
+                // first fills an item for it.
+                $this->renderPlan = $this->planClientRendering($token, fillFirst: true);
 
                 return $this->renderTemplateReference($reference);
             }
 
+            // What stock's add action does: an empty item, then `fill()`,
+            // which runs defaults and `afterStateHydrated()`.
+            $this->getChildSchema($token)->fill();
+
             $itemState = $this->getRawState()[$token] ?? [];
+            $nestedItemKeys = $this->collectNestedItemKeys($this->getChildSchema($token));
 
             // Stock renders a freshly added item expanded.
             $this->collapsed(false, shouldMakeComponentCollapsible: false);
@@ -587,7 +690,7 @@ class ClientRepeater extends Repeater
             $this->clearCachedChildSchemas();
         }
 
-        $tokens = new ClientTemplateTokens($token, $this->getStatePath());
+        $tokens = new ClientTemplateTokens($token, $this->getStatePath(), $nestedItemKeys);
 
         [$html, $itemState] = $tokens->normalize($html, $itemState);
 
@@ -688,6 +791,40 @@ class ClientRepeater extends Repeater
     }
 
     /**
+     * The item keys of every repeater and builder nested in `$schema`, at
+     * any depth: the keys the template has to rename, and no others.
+     *
+     * @return list<string>
+     */
+    protected function collectNestedItemKeys(?Schema $schema): array
+    {
+        if ($schema === null) {
+            return [];
+        }
+
+        $keys = [];
+
+        foreach ($schema->getComponents(withActions: false, withHidden: true) as $component) {
+            if (($component instanceof Repeater) || ($component instanceof Builder)) {
+                $state = $component->getRawState();
+
+                foreach (is_array($state) ? array_keys($state) : [] as $key) {
+                    $keys[] = (string) $key;
+                    $keys = [...$keys, ...$this->collectNestedItemKeys($component->getChildSchema($key))];
+                }
+
+                continue;
+            }
+
+            foreach ($component->getChildSchemas(withHidden: true) as $childSchema) {
+                $keys = [...$keys, ...$this->collectNestedItemKeys($childSchema)];
+            }
+        }
+
+        return $keys;
+    }
+
+    /**
      * When this repeater sits in a row of an ancestor `ClientRepeater`
      * whose template already carries this repeater's full template, the
      * reference that replaces our own copy: the ancestor's root id, our row
@@ -695,6 +832,9 @@ class ClientRepeater extends Repeater
      *
      * Inside the ancestor's template render, this repeater IS that copy:
      * it registers itself with the ancestor and renders in full.
+     *
+     * The returned pair is the reference's address; `renderTemplateReference()`
+     * adds the instance's own `meta` to it.
      *
      * @return array{ancestor: string, item: string}|null
      */
@@ -725,9 +865,11 @@ class ClientRepeater extends Repeater
             return null;
         }
 
-        // A closure on this repeater may evaluate differently per row, so
-        // the ancestor's copy (rendered for a blank row) would not do.
-        if (! isset($ancestor->templateSources[$relative]) || Renderability::hasAppClosures($this)) {
+        // A closure on this repeater, or anywhere in its item — a field's
+        // default read from the enclosing row, a label — may evaluate
+        // differently per row, so the ancestor's copy (rendered for a blank
+        // row) would not do.
+        if (! isset($ancestor->templateSources[$relative]) || $this->memo('closures', fn (): bool => Renderability::hasAppClosuresDeep($this))) {
             return null;
         }
 
@@ -795,47 +937,118 @@ class ClientRepeater extends Repeater
      *
      * @return array{server: list<string>, fields: list<array<string, mixed>>}|null
      */
-    protected function planClientRendering(string $token): ?array
+    protected function planClientRendering(string $token, bool $fillFirst = false): ?array
     {
-        if (! $this->evaluate($this->hasClientRendering)) {
+        $condition = $this->evaluate($this->hasClientRendering);
+
+        if ($condition === false) {
             return null;
         }
 
-        $schema = $this->getChildSchema($token);
-        $plan = $schema === null ? null : Renderability::plan($schema);
+        // The classification depends on the configuration, not the row:
+        // every row's copy of a nested repeater shares it (see `memo()`).
+        $plan = $this->memo('plan', function () use ($token, $fillFirst): ?array {
+            if ($fillFirst) {
+                $this->getChildSchema($token)?->fill();
+            }
+
+            $schema = $this->getChildSchema($token);
+            $plan = $schema === null ? null : Renderability::plan($schema);
+
+            if ($plan === null) {
+                return null;
+            }
+
+            $prefix = "{$this->getKey()}.{$token}.";
+            $statePrefix = "{$this->getStatePath()}.{$token}.";
+            $relative = fn (string $value, string $prefix): string => str_starts_with($value, $prefix) ? substr($value, strlen($prefix)) : $value;
+
+            return [
+                'server' => array_values(array_map(
+                    fn (Component $component): string => $relative((string) $component->getKey(), $prefix),
+                    $plan['server'],
+                )),
+                'fields' => array_values(array_map(
+                    fn (Field $field): array => [
+                        'key' => $relative((string) $field->getKey(), $prefix),
+                        'path' => $relative($field->getStatePath(), $statePrefix),
+                        'nested' => $field instanceof HasNestedRecursiveValidationRules,
+                        'html' => $field->areHtmlValidationMessagesAllowed(),
+                    ],
+                    array_filter($plan['client'], fn (Field $field): bool => filled($field->getKey()) && filled($field->getStatePath())),
+                )),
+                // `table()` renders a Hidden field bare inside the `<tr>`,
+                // without a cell: markup the HTML parser moves out of the
+                // row, so there is no cell for the browser to own.
+                'hasHidden' => (bool) array_filter($plan['client'], fn (Field $field): bool => $field instanceof Hidden),
+            ];
+        });
 
         if ($plan === null) {
             return null;
         }
 
-        // `table()` renders a Hidden field bare inside the `<tr>`, without a
-        // cell: markup the HTML parser moves out of the row, so there is no
-        // cell for the browser to own. Such a table renders on the server.
-        if ($this->isTable() && array_filter($plan['client'], fn (Field $field): bool => $field instanceof Hidden)) {
+        // Automatic: only where it is a plain win, an item with no server
+        // units. A mixed item renders its units per row on the server and
+        // still costs more server time than stock (DECISIONS.md).
+        if (($condition === null) && ($plan['server'] !== [])) {
             return null;
         }
 
-        $prefix = "{$this->getKey()}.{$token}.";
-        $statePrefix = "{$this->getStatePath()}.{$token}.";
-        $relative = fn (string $value, string $prefix): string => str_starts_with($value, $prefix) ? substr($value, strlen($prefix)) : $value;
+        if ($this->isTable() && $plan['hasHidden']) {
+            return null;
+        }
 
         return [
-            'server' => array_values(array_map(
-                fn (Component $component): string => $relative((string) $component->getKey(), $prefix),
-                $plan['server'],
-            )),
-            'fields' => array_values(array_map(
-                fn (Field $field): array => [
-                    'key' => $relative((string) $field->getKey(), $prefix),
-                    'absoluteKey' => (string) $field->getKey(),
-                    'path' => $relative($field->getStatePath(), $statePrefix),
-                    'nested' => $field instanceof HasNestedRecursiveValidationRules,
-                    'html' => $field->areHtmlValidationMessagesAllowed(),
-                ],
-                array_filter($plan['client'], fn (Field $field): bool => filled($field->getKey()) && filled($field->getStatePath())),
-            )),
+            'server' => $plan['server'],
+            'fields' => array_map(
+                fn (array $field): array => [...$field, 'absoluteKey' => "{$this->getKey()}.{$token}.{$field['key']}"],
+                $plan['fields'],
+            ),
         ];
     }
+
+    /**
+     * Per-render memo, shared by every instance of the same repeater
+     * definition: a nested repeater is one object per outer row, all with
+     * the same configuration, and classifying it (reflection over its whole
+     * schema, a `fill()`) costs the same for each. Keyed by the Livewire
+     * component (so it lives one request, Octane included) and by the state
+     * path with every item key replaced by `*`.
+     *
+     * Only results that depend on the configuration — which closures exist,
+     * which classes — go through here, never anything a row's state decides.
+     */
+    protected function memo(string $what, Closure $compute): mixed
+    {
+        $livewire = $this->getLivewire();
+
+        if (! is_object($livewire)) {
+            return $compute();
+        }
+
+        self::$memos ??= new WeakMap;
+
+        $key = $what.'|'.static::class.'|'.preg_replace(
+            '/(?<=^|\.)(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|villament-[0-9a-f]{16}-\d{4}|record-[^.]+|\d+)(?=\.|$)/',
+            '*',
+            (string) $this->getStatePath(),
+        );
+
+        $bucket = self::$memos[$livewire] ?? [];
+
+        if (! array_key_exists($key, $bucket)) {
+            $bucket[$key] = $compute();
+            self::$memos[$livewire] = $bucket;
+        }
+
+        return $bucket[$key];
+    }
+
+    /**
+     * @var WeakMap<object, array<string, mixed>>|null
+     */
+    protected static ?WeakMap $memos = null;
 
     /**
      * Renders the template item once more with a sentinel error on every
@@ -859,11 +1072,21 @@ class ClientRepeater extends Repeater
 
         view()->share('errors', (new ViewErrorBag)->put('default', $bag));
 
+        // Each field alone, through the same `toSchemaHtml()` the item's
+        // render uses for it: the variant is exactly that unit, and nothing
+        // else of the item (a nested repeater, a file upload) renders again.
+        $schema = $this->getChildSchema($token);
+        $html = '';
+
         try {
-            return parent::toEmbeddedHtml();
+            foreach ($this->renderPlan['fields'] as $field) {
+                $html .= ($schema === null ? null : Renderability::findByKey($schema, $field['absoluteKey']))?->toSchemaHtml() ?? '';
+            }
         } finally {
             view()->share('errors', $previous);
         }
+
+        return $html;
     }
 
     /**

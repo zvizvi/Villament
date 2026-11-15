@@ -122,6 +122,32 @@ final class HtmlFragments
     }
 
     /**
+     * The bounds (`[start, end]`) of the `<$tag>` element whose opening tag
+     * holds the first `$needle` at or after `$offset`. Lets a caller walk a
+     * document front to back without searching it from the start each time.
+     *
+     * @return array{0: int, 1: int}|null
+     */
+    public static function boundsFrom(string $html, int $offset, string $needle, string $tag): ?array
+    {
+        $position = strpos($html, $needle, $offset);
+
+        if ($position === false) {
+            return null;
+        }
+
+        $start = strrpos($html, '<', $position - strlen($html));
+
+        if (($start === false) || (! self::opensTagAt($html, $start, $tag))) {
+            return null;
+        }
+
+        $end = self::closingOffset($html, $start, $tag);
+
+        return $end === null ? null : [$start, $end];
+    }
+
+    /**
      * The `<$tag>` sibling directly following the element that `$needle`
      * opens, or null when the next thing is not a `<$tag>`.
      */
@@ -196,32 +222,25 @@ final class HtmlFragments
      * tags the browser already treats any whitespace run as one space — and
      * Filament's indented PHP markup shrinks by a third or more.
      *
-     * Nothing inside a tag is touched: attribute values hold Alpine
-     * expressions that rely on newlines (no semicolons, `//` comments), and
-     * collapsing them breaks the JavaScript.
+     * Nothing inside a tag is touched, quoted attribute values included
+     * (they are skipped as a whole, so a raw `>` in one — an app's
+     * `extraAttributes()` is merged unescaped — cannot end the tag early).
+     * Attribute values hold Alpine expressions that rely on newlines (no
+     * semicolons, `//` comments). CSS-driven preformatting
+     * (`white-space: pre` on any other element) is not detected: such
+     * markup loses its inter-tag whitespace.
      */
     public static function collapseWhitespace(string $html): string
     {
-        $parts = preg_split('/(<(pre|textarea|script)\b[\s\S]*?<\/\2>)/i', $html, flags: PREG_SPLIT_DELIM_CAPTURE);
-
-        if ($parts === false) {
-            return $html;
-        }
-
-        $collapsed = '';
-
-        foreach ($parts as $index => $part) {
-            // [text, block, tag name, text, block, tag name, ...]
-            $collapsed .= match ($index % 3) {
-                // Runs at a part's edges sit between a tag and a protected
-                // block's tag, so they collapse too.
-                0 => preg_replace(['/^\s+$/', '/>\s+</', '/>\s+$/', '/^\s+</'], [' ', '> <', '> ', ' <'], $part) ?? $part,
-                1 => $part,
-                default => '',
-            };
-        }
-
-        return $collapsed;
+        // One tokenizing pass in PCRE: a protected block, a whole tag (its
+        // quoted values skipped as units), or a run of text.
+        // On a PCRE failure (a backtrack or JIT limit) the input is returned
+        // untouched: collapsing is an optimization, never a requirement.
+        return preg_replace_callback(
+            '/<(pre|textarea|script)\b(?:[^>"\']|"[^"]*"|\'[^\']*\')*>[\s\S]*?<\/\1\s*>|<(?:[^>"\']|"[^"]*"|\'[^\']*\')*>|[^<]+|</i',
+            static fn (array $match): string => (($match[0][0] !== '<') && (trim($match[0]) === '')) ? ' ' : $match[0],
+            $html,
+        ) ?? $html;
     }
 
     /**

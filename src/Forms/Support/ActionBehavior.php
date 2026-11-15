@@ -20,7 +20,8 @@ use ReflectionProperty;
  * sends an action back to the Livewire path is anything that has to run on
  * the server or open UI the browser cannot: a replaced `action()`, lifecycle
  * hooks, a confirmation, a modal or form, a URL, a dispatched event, a custom
- * Alpine handler.
+ * Alpine handler — and `disabled()`, whose state the browser would overwrite
+ * when it recomputes the first / last move buttons.
  */
 final class ActionBehavior
 {
@@ -50,6 +51,13 @@ final class ActionBehavior
         }
 
         if ($action->isLivewireClickHandlerEnabled() !== $expectsLivewireClickHandler) {
+            return false;
+        }
+
+        // `disabled()` is not presentation here: the browser recomputes a
+        // structural button's disabled state (first / last for the moves)
+        // and would overwrite a condition the app set.
+        if (self::readProperty($action, 'isDisabled') !== false) {
             return false;
         }
 
