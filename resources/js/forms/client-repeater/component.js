@@ -34,6 +34,9 @@ const ACTION_ATTRIBUTE = 'data-villament-repeater-action'
 const LIST_SELECTOR = ':scope > ul.fi-fo-repeater-items, :scope > ul.fi-fo-simple-repeater-items'
 const ADD_SELECTOR = ':scope > .fi-fo-repeater-add, :scope > .fi-fo-simple-repeater-add'
 const ITEM_ACTIONS_SELECTOR = '.fi-fo-repeater-item-header-end-actions, .fi-fo-simple-repeater-item-actions'
+const CONTENT_SELECTOR = ':scope > .fi-fo-repeater-item-content, :scope > .fi-fo-simple-repeater-item-content'
+const PENDING_ATTRIBUTE = 'data-villament-repeater-pending'
+const SLOT_SELECTOR = ':scope > template[data-villament-repeater-slot]'
 
 /**
  * @typedef {object} TemplateMeta
@@ -45,6 +48,16 @@ const ITEM_ACTIONS_SELECTOR = '.fi-fo-repeater-item-header-end-actions, .fi-fo-s
  * @property {Record<string, boolean>} actions
  * @property {boolean} hasItemNumbers
  * @property {string} positionMessage
+ * @property {?RenderingMeta} rendering Present when the items' content renders here.
+ */
+
+/**
+ * @typedef {object} RenderingMeta
+ * @property {string} key The repeater's schema key (`form.items`).
+ * @property {string[]} server The server units' keys, relative to the item.
+ * @property {Array<{ key: string, path: string, nested: boolean, html: boolean, invalid: ?string }>} fields
+ *   The client-rendered fields, each with its invalid variant (rendered with `errorSentinel`).
+ * @property {string} errorSentinel
  */
 
 /**
@@ -75,6 +88,9 @@ export function createClientRepeaterFormComponent(baseFactory, environment = def
             /** @type {?(event: MouseEvent) => void} */
             villamentClickListener: null,
 
+            /** @type {?() => void} */
+            villamentRemoveMessageHook: null,
+
             init() {
                 base.init?.call(this)
 
@@ -83,12 +99,32 @@ export function createClientRepeaterFormComponent(baseFactory, environment = def
                 // Capture: the item header wraps every button in
                 // `x-on:click.stop`, so a bubbling listener would never fire.
                 this.$root.addEventListener('click', this.villamentClickListener, true)
+
+                this.villamentSyncRows()
+
+                // After every morph of our component: the rows go back to the
+                // state's order, and — when the content renders here — rows
+                // the server added get their content and slots and errors
+                // are re-applied. The same interception Filament's own
+                // reordering uses.
+                this.villamentRemoveMessageHook = globalThis.Livewire?.interceptMessage?.(({ message, onSuccess }) => {
+                    if (message.component.id !== this.$wire.$id) {
+                        return
+                    }
+
+                    onSuccess(({ onMorphed }) => onMorphed(() => {
+                        if (this.$root.isConnected) {
+                            this.villamentSyncRows()
+                        }
+                    }))
+                }) ?? null
             },
 
             destroy() {
                 base.destroy?.call(this)
 
                 this.$root.removeEventListener('click', this.villamentClickListener, true)
+                this.villamentRemoveMessageHook?.()
             },
 
             /**
@@ -178,6 +214,7 @@ export function createClientRepeaterFormComponent(baseFactory, environment = def
                 const element = this.villamentItemFromTemplate(replacements)
 
                 if (element) {
+                    this.villamentMarkRendered(element, key, meta)
                     this.villamentInsert(element, afterKey)
                 }
 
@@ -216,6 +253,7 @@ export function createClientRepeaterFormComponent(baseFactory, environment = def
                 const element = this.villamentItemFromTemplate(replacements)
 
                 if (element) {
+                    this.villamentMarkRendered(element, newKey, meta)
                     this.villamentInsert(element, null)
                 }
 
@@ -732,6 +770,334 @@ export function createClientRepeaterFormComponent(baseFactory, environment = def
                 })[placeholder] ?? placeholder)
             },
 
+            // ---- client rendering ----------------------------------------
+
+            /**
+             * Brings every row's content in line with the server: fills the
+             * rows the server sent as pending shells, places the server
+             * units from each row's slot, and draws validation errors.
+             */
+            villamentSyncRows() {
+                const meta = this.villamentMeta()
+
+                this.villamentReconcileOrder()
+
+                if (! meta?.rendering) {
+                    return
+                }
+
+                const errors = this.villamentErrors()
+
+                for (const item of this.villamentItemElements()) {
+                    this.villamentSyncRow(item, meta, errors)
+                }
+            },
+
+            /**
+             * A drag that lands while a request is in flight keeps its new
+             * order in the state (Livewire only patches what the server
+             * changed), but the response's morph puts the rows back in the
+             * order that request saw. Re-applies the state's order; the next
+             * request carries it to the server.
+             */
+            villamentReconcileOrder() {
+                const list = this.villamentList()
+                const elements = this.villamentItemElements()
+                const domKeys = elements.map((item) => item.getAttribute('x-sortable-item'))
+                const stateKeys = Object.keys(this.villamentRead())
+
+                const isSameSet = domKeys.length === stateKeys.length && stateKeys.every((key) => domKeys.includes(key))
+
+                if (! list || ! isSameSet || domKeys.every((key, index) => key === stateKeys[index])) {
+                    return
+                }
+
+                for (const key of stateKeys) {
+                    list.appendChild(elements[domKeys.indexOf(key)])
+                }
+
+                this.villamentRefresh()
+            },
+
+            /**
+             * @param {HTMLElement} item
+             * @param {TemplateMeta} meta
+             * @param {Record<string, string[]>} errors
+             */
+            villamentSyncRow(item, meta, errors) {
+                const key = item.getAttribute('x-sortable-item') ?? ''
+                const content = this.villamentContentOf(item)
+
+                if (! content) {
+                    return
+                }
+
+                if (content.hasAttribute(PENDING_ATTRIBUTE)) {
+                    this.villamentFillContent(content, key, meta)
+                    content.removeAttribute(PENDING_ATTRIBUTE)
+                } else if (! content.__villamentAdopted) {
+                    // Rendered whole by the server (a page load): adopt it as
+                    // it is, so nothing re-renders on the first sync.
+                    this.villamentAdopt(item, content, key, meta, errors)
+
+                    return
+                }
+
+                this.villamentApplySlot(item, content, key)
+                this.villamentApplyErrors(content, key, meta, errors)
+            },
+
+            /**
+             * @param {HTMLElement} item
+             * @returns {?HTMLElement}
+             */
+            villamentContentOf(item) {
+                return item.querySelector(CONTENT_SELECTOR)
+            },
+
+            /**
+             * The template item's content, with this row's key. Nested
+             * placeholder keys (in a server unit's provisional markup) get
+             * fresh ones; the row's slot replaces those units anyway.
+             *
+             * @param {HTMLElement} content
+             * @param {string} key
+             * @param {TemplateMeta} meta
+             */
+            villamentFillContent(content, key, meta) {
+                const templateItem = /** @type {?HTMLElement} */ (this.villamentTemplatePart('li[x-sortable-item]'))
+                const templateContent = templateItem ? this.villamentContentOf(templateItem) : null
+
+                if (! templateContent) {
+                    return
+                }
+
+                const { replacements } = mapTokens(meta.tokens, environment.generateKey, environment.hash, key)
+
+                content.innerHTML = replaceTokens(templateContent.innerHTML, replacements)
+                content.__villamentAdopted = true
+
+                this.villamentRememberUnits(content, key, meta)
+            },
+
+            /**
+             * A row the browser built from the template: its content is
+             * client-owned from the start, and its server units are the
+             * template's provisional ones until the row's slot arrives.
+             *
+             * @param {HTMLElement} item
+             * @param {string} key
+             * @param {TemplateMeta} meta
+             */
+            villamentMarkRendered(item, key, meta) {
+                const content = this.villamentContentOf(item)
+
+                if (! meta.rendering || ! content) {
+                    return
+                }
+
+                content.removeAttribute(PENDING_ATTRIBUTE)
+                content.__villamentAdopted = true
+
+                this.villamentRememberUnits(content, key, meta)
+            },
+
+            /**
+             * @param {HTMLElement} item
+             * @param {HTMLElement} content
+             * @param {string} key
+             * @param {TemplateMeta} meta
+             * @param {Record<string, string[]>} errors
+             */
+            villamentAdopt(item, content, key, meta, errors) {
+                content.__villamentAdopted = true
+
+                for (const unit of this.villamentSlotUnits(item)) {
+                    const target = this.villamentUnit(content, unit.getAttribute('wire:partial'))
+
+                    if (target) {
+                        target.__villamentHtml = this.villamentNormalize(unit.outerHTML, key)
+                    }
+                }
+
+                for (const field of meta.rendering?.fields ?? []) {
+                    const target = this.villamentUnit(content, this.villamentUnitKey(meta, key, field.key))
+
+                    if (target) {
+                        target.__villamentError = this.villamentFirstError(errors, `${statePath}.${key}.${field.path}`, field.nested) ?? ''
+                    }
+                }
+            },
+
+            /**
+             * @param {HTMLElement} content
+             * @param {string} key
+             * @param {TemplateMeta} meta
+             */
+            villamentRememberUnits(content, key, meta) {
+                for (const unit of meta.rendering?.server ?? []) {
+                    const target = this.villamentUnit(content, this.villamentUnitKey(meta, key, unit))
+
+                    if (target) {
+                        target.__villamentHtml = this.villamentNormalize(target.outerHTML, key)
+                    }
+                }
+            },
+
+            /**
+             * Replaces each server unit whose server markup changed. Units
+             * are compared as server HTML (with the row key factored out),
+             * never against the live DOM, which Alpine has since changed.
+             *
+             * @param {HTMLElement} item
+             * @param {HTMLElement} content
+             * @param {string} key
+             */
+            villamentApplySlot(item, content, key) {
+                for (const unit of this.villamentSlotUnits(item)) {
+                    const target = this.villamentUnit(content, unit.getAttribute('wire:partial'))
+                    const html = this.villamentNormalize(unit.outerHTML, key)
+
+                    if (! target || target.__villamentHtml === html) {
+                        continue
+                    }
+
+                    const fresh = /** @type {?HTMLElement} */ (this.villamentParse(unit.outerHTML))
+
+                    if (fresh) {
+                        fresh.__villamentHtml = html
+                        target.replaceWith(fresh)
+                    }
+                }
+            },
+
+            /**
+             * Draws `$wire.$errors` on the client-rendered fields: a field
+             * with an error swaps in the template's invalid variant (the
+             * exact markup the server renders for an invalid field of that
+             * type) with the real message; a field without one goes back to
+             * the template's normal variant. Untouched while nothing changed.
+             *
+             * @param {HTMLElement} content
+             * @param {string} key
+             * @param {TemplateMeta} meta
+             * @param {Record<string, string[]>} errors
+             */
+            villamentApplyErrors(content, key, meta, errors) {
+                const rendering = meta.rendering
+                const templateItem = this.villamentTemplatePart('li[x-sortable-item]')
+
+                for (const field of rendering?.fields ?? []) {
+                    const target = this.villamentUnit(content, this.villamentUnitKey(meta, key, field.key))
+                    const message = this.villamentFirstError(errors, `${statePath}.${key}.${field.path}`, field.nested)
+                    const signature = message ?? ''
+
+                    if (! target || (target.__villamentError ?? '') === signature) {
+                        continue
+                    }
+
+                    let html = message === null
+                        ? (templateItem ? this.villamentUnit(templateItem, this.villamentUnitKey(meta, meta.token, field.key))?.outerHTML : null)
+                        : field.invalid?.split(rendering.errorSentinel).join(field.html ? message : escapeHtml(message))
+
+                    if (! html) {
+                        continue
+                    }
+
+                    html = replaceTokens(html, [[meta.token, key]])
+
+                    const fresh = /** @type {?HTMLElement} */ (this.villamentParse(html))
+
+                    if (fresh) {
+                        fresh.__villamentError = signature
+                        target.replaceWith(fresh)
+                    }
+                }
+            },
+
+            /** @returns {Record<string, string[]>} */
+            villamentErrors() {
+                try {
+                    return this.$wire.$errors?.messages?.() ?? {}
+                } catch {
+                    return {}
+                }
+            },
+
+            /**
+             * Stock's rule: the field's own path, or — for a field with
+             * nested recursive rules (CheckboxList, TagsInput, KeyValue) —
+             * the first message under `{path}.*`.
+             *
+             * @param {Record<string, string[]>} errors
+             * @param {string} path
+             * @param {boolean} nested
+             * @returns {?string}
+             */
+            villamentFirstError(errors, path, nested) {
+                const own = errors[path]
+
+                if (own?.length) {
+                    return String(own[0])
+                }
+
+                if (! nested) {
+                    return null
+                }
+
+                const child = Object.keys(errors).find((errorKey) => errorKey.startsWith(`${path}.`) && errors[errorKey]?.length)
+
+                return child ? String(errors[child][0]) : null
+            },
+
+            /**
+             * @param {HTMLElement} item
+             * @returns {Element[]}
+             */
+            villamentSlotUnits(item) {
+                const slot = /** @type {?HTMLTemplateElement} */ (item.querySelector(SLOT_SELECTOR))
+
+                return slot ? [...slot.content.children].filter((child) => child.hasAttribute('wire:partial')) : []
+            },
+
+            /**
+             * @param {TemplateMeta} meta
+             * @param {string} key
+             * @param {string} unit
+             * @returns {string}
+             */
+            villamentUnitKey(meta, key, unit) {
+                return `schema-component::${meta.rendering?.key}.${key}.${unit}`
+            },
+
+            /**
+             * The component wrapper Filament renders for `partial` — matched by
+             * attribute value, so keys never need CSS escaping.
+             *
+             * @param {Element} root
+             * @param {?string} partial
+             * @returns {?HTMLElement}
+             */
+            villamentUnit(root, partial) {
+                if (! partial) {
+                    return null
+                }
+
+                return /** @type {?HTMLElement} */ ([...(root instanceof HTMLTemplateElement ? root.content : root).querySelectorAll('[wire\\:partial]')]
+                    .find((element) => element.getAttribute('wire:partial') === partial) ?? null)
+            },
+
+            /**
+             * @param {string} html
+             * @param {string} key
+             * @returns {string}
+             */
+            villamentNormalize(html, key) {
+                // Whitespace too: the server collapses what it ships for the
+                // browser to insert, and the comparison must not care.
+                return html.split(key).join('{key}').replace(/\s+/g, ' ')
+            },
+
             /**
              * Moving an element out from under the focus drops it; stock's
              * `reconcile()` puts it back on the same control, or the other
@@ -749,4 +1115,17 @@ export function createClientRepeaterFormComponent(baseFactory, environment = def
             },
         }
     }
+}
+
+/**
+ * @param {string} value
+ * @returns {string}
+ */
+function escapeHtml(value) {
+    return value
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;')
 }

@@ -70,6 +70,82 @@ final class HtmlFragments
     }
 
     /**
+     * The whole element whose opening tag contains `$needle`, whatever its
+     * tag name (a schema component wrapper is a `<div>`, or a `<fieldset>`
+     * when it has a client-side visibility condition).
+     */
+    public static function elementOpenedBy(string $html, string $needle): ?string
+    {
+        $start = self::tagStart($html, $needle);
+
+        if (($start === null) || (! preg_match('/\G<([a-zA-Z][a-zA-Z0-9-]*)/', $html, $match, offset: $start))) {
+            return null;
+        }
+
+        $end = self::closingOffset($html, $start, $match[1]);
+
+        return $end === null ? null : substr($html, $start, $end - $start);
+    }
+
+    /**
+     * Inserts `$before` in front of the first tag containing `$needle` at or
+     * after `$offset`, and `$attributes` inside that tag right after its
+     * name. Returns the HTML unchanged when there is no such tag.
+     */
+    public static function decorateTag(string $html, int $offset, string $needle, string $attributes, string $before = ''): string
+    {
+        $position = strpos($html, $needle, $offset);
+
+        if ($position === false) {
+            return $html;
+        }
+
+        $start = strrpos(substr($html, 0, $position), '<');
+
+        if (($start === false) || (! preg_match('/\G<[a-zA-Z][a-zA-Z0-9-]*/', $html, $match, offset: $start))) {
+            return $html;
+        }
+
+        $nameEnd = $start + strlen($match[0]);
+
+        return substr($html, 0, $start).$before.substr($html, $start, $nameEnd - $start).$attributes.substr($html, $nameEnd);
+    }
+
+    /**
+     * Collapses whitespace BETWEEN tags to one space, outside `<pre>`,
+     * `<textarea>` and `<script>` blocks. Rendering is unchanged — between
+     * tags the browser already treats any whitespace run as one space — and
+     * Filament's indented PHP markup shrinks by a third or more.
+     *
+     * Nothing inside a tag is touched: attribute values hold Alpine
+     * expressions that rely on newlines (no semicolons, `//` comments), and
+     * collapsing them breaks the JavaScript.
+     */
+    public static function collapseWhitespace(string $html): string
+    {
+        $parts = preg_split('/(<(pre|textarea|script)\b[\s\S]*?<\/\2>)/i', $html, flags: PREG_SPLIT_DELIM_CAPTURE);
+
+        if ($parts === false) {
+            return $html;
+        }
+
+        $collapsed = '';
+
+        foreach ($parts as $index => $part) {
+            // [text, block, tag name, text, block, tag name, ...]
+            $collapsed .= match ($index % 3) {
+                // Runs at a part's edges sit between a tag and a protected
+                // block's tag, so they collapse too.
+                0 => preg_replace(['/^\s+$/', '/>\s+</', '/>\s+$/', '/^\s+</'], [' ', '> <', '> ', ' <'], $part) ?? $part,
+                1 => $part,
+                default => '',
+            };
+        }
+
+        return $collapsed;
+    }
+
+    /**
      * Just the opening tag that contains `$needle`.
      */
     public static function openingTag(string $html, string $needle): ?string
