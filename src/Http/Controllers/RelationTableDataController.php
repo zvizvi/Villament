@@ -63,6 +63,15 @@ final class RelationTableDataController
         // resource's pages.
         abort_unless($target['panel'] === $panel->getId(), 404);
 
+        // Rendered under this tenant (set by `IdentifyTenant` from the
+        // route), compared as strings: a key may come back as int or string.
+        $tenantKey = Filament::getTenant()?->getKey();
+        abort_unless(
+            ($target['tenant'] === null && $tenantKey === null)
+                || ($target['tenant'] !== null && is_scalar($tenantKey) && (string) $target['tenant'] === (string) $tenantKey),
+            404,
+        );
+
         $resourceClass = $target['resource'];
         abort_unless(is_subclass_of($resourceClass, Resource::class) && in_array($resourceClass, $panel->getResources(), true), 404);
 

@@ -14,8 +14,8 @@ use ReflectionProperty;
 
 /**
  * Names a relationship table for the relation endpoint: which panel,
- * resource, page, relation manager (with the properties it was mounted
- * with) and owner record. Issued server-side when the island renders, and
+ * tenant, resource, page, relation manager (with the properties it was
+ * mounted with) and owner record. Issued server-side when the island renders, and
  * encrypted with the app key — so it is authenticated too: the client can
  * carry it, never forge or edit it.
  *
@@ -51,6 +51,7 @@ final class RelationTableToken
         array $properties,
         int|string $ownerKey,
         int|string|null $parentKey,
+        int|string|null $tenantKey = null,
     ): string {
         return $this->encrypter->encryptString(json_encode([
             'v' => self::VERSION,
@@ -61,11 +62,15 @@ final class RelationTableToken
             'properties' => $properties,
             'owner' => $ownerKey,
             'parent' => $parentKey,
+            // The tenant the island was rendered under. A tenant-scoped
+            // resource would not resolve the owner under another tenant
+            // anyway; this also holds for one that is not scoped.
+            'tenant' => $tenantKey,
         ], JSON_THROW_ON_ERROR));
     }
 
     /**
-     * @return array{panel: string, resource: string, page: string, manager: ?string, properties: array<string, mixed>, owner: int|string, parent: int|string|null}|null
+     * @return array{panel: string, resource: string, page: string, manager: ?string, properties: array<string, mixed>, owner: int|string, parent: int|string|null, tenant: int|string|null}|null
      */
     public function read(string $token): ?array
     {
@@ -87,11 +92,12 @@ final class RelationTableToken
             || ! is_array($payload['properties'] ?? null)
             || ! (is_int($payload['owner'] ?? null) || is_string($payload['owner'] ?? null))
             || ! (is_int($payload['parent'] ?? null) || is_string($payload['parent'] ?? null) || ($payload['parent'] ?? null) === null)
+            || ! (is_int($payload['tenant'] ?? null) || is_string($payload['tenant'] ?? null) || ($payload['tenant'] ?? null) === null)
         ) {
             return null;
         }
 
-        /** @var array{panel: string, resource: string, page: string, manager: ?string, properties: array<string, mixed>, owner: int|string, parent: int|string|null} */
+        /** @var array{panel: string, resource: string, page: string, manager: ?string, properties: array<string, mixed>, owner: int|string, parent: int|string|null, tenant: int|string|null} */
         return $payload;
     }
 

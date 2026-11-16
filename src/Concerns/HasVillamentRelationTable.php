@@ -128,6 +128,7 @@ trait HasVillamentRelationTable
                 properties: $this instanceof RelationManager ? $tokens->mountedProperties($this) : [],
                 ownerKey: $this->getVillamentRouteKey($resourceClass, $ownerRecord),
                 parentKey: $parentKey,
+                tenantKey: $this->getVillamentTenantKey(),
             ),
         ];
 
@@ -136,6 +137,13 @@ trait HasVillamentRelationTable
         }
 
         return $panel->route('villament.relation-data', $parameters);
+    }
+
+    private function getVillamentTenantKey(): int|string|null
+    {
+        $key = Filament::getTenant()?->getKey();
+
+        return (is_int($key) || is_string($key)) ? $key : null;
     }
 
     /**
