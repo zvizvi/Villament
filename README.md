@@ -54,6 +54,12 @@ Or apply the trait to a customized List page: `use Zvizvi\Villament\Concerns\Has
 
 After the initial paint (schema + first page inlined, no extra requests), sorting, searching and pagination hit a JSON endpoint that runs behind your panel's full middleware stack, checks `canViewAny()`, and whitelists every request parameter against the table schema.
 
+### Reordering records
+
+A table with `->reorderable('sort')` keeps working: the island shows Filament's own reorder trigger in its toolbar, where stock draws it (between the `TOOLBAR_REORDER_TRIGGER_*` render hooks, and customized by `reorderRecordsTriggerAction()` as usual). Pressing it hands the page to the **stock table** for as long as the reordering lasts: the island is hidden, Filament's table renders in its place with its drag handles, and each drop is saved by `reorderTable()`, with `authorizeReorder()`, `reorderable(direction:)`, the before/after callbacks and pagination while reordering all as in stock. Pressing "done" shows the island again, and it refetches the records in their new order.
+
+Dragging rows is not rebuilt in Vue. While reordering, stock turns off sorting, grouping, record actions and pagination anyway, so there is nothing for the island to speed up there.
+
 ## Forms: `ClientRepeater`
 
 A drop-in `Repeater` that **renders and restructures its items in the browser**:

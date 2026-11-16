@@ -245,7 +245,7 @@ Work strictly in order. Each phase ends with: all tests green, `composer analyse
 ## 8. Explicitly out of scope (do not build)
 
 - Relation managers (v2 of the package).
-- Reorderable rows, grouped-by-drag tables.
+- Reorderable rows rebuilt in Vue, grouped-by-drag tables. (Reordering records is supported by handing the page to the stock table, see `DECISIONS.md` 2026-11-16.)
 - Rebuilding Filament actions/forms in Vue.
 - Realtime/websocket updates.
 - Multi-column sort.

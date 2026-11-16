@@ -60,7 +60,8 @@
 
 /**
  * Host-component methods whose successful commit means the table data may
- * have changed (an action ran, or the column manager was applied/reset) —
+ * have changed (an action ran, the column manager was applied/reset, or the
+ * stock table finished reordering the records) —
  * the island refetches records+meta+indicators afterwards.
  */
 const REFRESH_COMMIT_METHODS = [
@@ -71,6 +72,9 @@ const REFRESH_COMMIT_METHODS = [
     'callTableColumnAction',
     'applyTableColumnManager',
     'resetTableColumnManager',
+    // Leaving the stock table's reordering mode: the island is shown again
+    // and must read the order that was just saved.
+    'toggleTableReordering',
 ]
 
 /**

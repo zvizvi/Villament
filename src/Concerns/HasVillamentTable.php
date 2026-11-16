@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Zvizvi\Villament\Concerns;
 
 use Filament\Facades\Filament;
+use Filament\Schemas\Components\EmbeddedTable;
 use Filament\Schemas\Components\RenderHook;
 use Filament\Schemas\Schema;
 use Filament\View\PanelsRenderHook;
@@ -37,6 +38,11 @@ trait HasVillamentTable
                 $this->getTabsContentComponent(),
                 RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_BEFORE),
                 VillamentIsland::make(fn (): array => $this->getVillamentTableConfig()),
+                // Reordering records is handed to the stock table: while it is
+                // on, the island is hidden (never removed — see the island
+                // view) and Filament's own table, with its drag handles and
+                // `reorderTable()`, takes its place until "done" is pressed.
+                EmbeddedTable::make()->visible(fn (): bool => $this->isTableReordering()),
                 RenderHook::make(PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_AFTER),
             ]);
     }
@@ -152,11 +158,10 @@ trait HasVillamentTable
         $this->applyVillamentTableUrlState();
 
         $schemaSerializer = app(SchemaSerializer::class);
-        $recordSerializer = app(RecordSerializer::class);
 
         $table = $this->getTable();
         $schema = $schemaSerializer->serialize($table);
-        $records = $this->getTableRecords();
+        $isReordering = $this->isTableReordering();
         $resourceClass = static::getResource();
         $panel = Filament::getCurrentOrDefaultPanel();
 
@@ -192,18 +197,13 @@ trait HasVillamentTable
             // render hooks have something registered for THIS page class.
             'renderHooks' => ToolbarRenderHooks::presentFor(static::class),
             'schema' => $schema,
-            'initialData' => [
-                // The endpoint is not the only consumer of the record payload:
-                // first paint inlines it server-side. Both channels must run
-                // the action compaction, or the table renders its actions from
-                // deltas alone until the first refetch.
-                ...(new ActionPayloadCompactor)->compact(
-                    $recordSerializer->serialize($this, $resourceClass, $records),
-                ),
-                'meta' => $recordSerializer->meta($records),
-                'indicators' => app(FilterIndicatorSerializer::class)->serialize($table),
-                'summaries' => app(SummarySerializer::class)->serialize($this),
-            ],
+            // While the stock table reorders, the island is hidden and its
+            // config is never read again (it sits inside `wire:ignore`, so the
+            // browser keeps the one it booted from) — the records are not
+            // fetched for it, which matters because stock reorders with
+            // pagination off.
+            'isReordering' => $isReordering,
+            'initialData' => $isReordering ? null : $this->getVillamentInitialData(),
             'state' => [
                 'sort' => $this->tableSort,
                 // Post-`mountInteractsWithTable()`, so it already carries the
@@ -234,6 +234,31 @@ trait HasVillamentTable
                 // and the data endpoint (same session) stay in sync for free.
                 'columns' => $this->tableColumns,
             ],
+        ];
+    }
+
+    /**
+     * The first page of records, inlined so first paint needs no request.
+     *
+     * @return array<string, mixed>
+     */
+    protected function getVillamentInitialData(): array
+    {
+        $recordSerializer = app(RecordSerializer::class);
+        $records = $this->getTableRecords();
+        $resourceClass = static::getResource();
+
+        return [
+            // The endpoint is not the only consumer of the record payload:
+            // first paint inlines it server-side. Both channels must run
+            // the action compaction, or the table renders its actions from
+            // deltas alone until the first refetch.
+            ...(new ActionPayloadCompactor)->compact(
+                $recordSerializer->serialize($this, $resourceClass, $records),
+            ),
+            'meta' => $recordSerializer->meta($records),
+            'indicators' => app(FilterIndicatorSerializer::class)->serialize($this->getTable()),
+            'summaries' => app(SummarySerializer::class)->serialize($this),
         ];
     }
 }

@@ -184,8 +184,8 @@ the state has to be threaded explicitly.
    `wire:loading` there or to route everything through the island's own state, and
    record the choice.
 
-**Out of scope.** The reorder indicator (index.blade.php:755) — reorderable rows are
-explicitly out of scope per `AGENTS.md` §8.
+**Out of scope.** The reorder indicator (index.blade.php:755): while reordering, the
+stock table renders it itself (`DECISIONS.md` 2026-11-16).
 
 **Done means.** The spinner HTML comes from the server (no hand-written SVG in the
 Vue layer); only the clicked control spins; JS tests cover the swap and the

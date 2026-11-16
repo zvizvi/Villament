@@ -84,6 +84,11 @@ final class SchemaSerializer
             // manager does (layout, reset position, grid columns, a customized
             // trigger, drag reordering) stays Filament's.
             'hasColumnManager' => $table->hasColumnManager(),
+            // Reordering records is Filament-native too: the island renders the
+            // stock trigger (teleported into a toolbar slot) and, once it is
+            // pressed, the page swaps the island for the stock table for as
+            // long as the reordering lasts (`HasVillamentTable::content()`).
+            'reorderable' => $table->isReorderable(),
             // The filters UI — trigger included — is Filament-native, rendered
             // in Blade and teleported into a Vue slot. The island only needs
             // the layout to know WHERE to render that slot: the toolbar for

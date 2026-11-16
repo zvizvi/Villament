@@ -585,6 +585,19 @@ Found in a real app (Filament 5.11.3), where a plain `Repeater::make()` → `Cli
 
 Tests: `vendor_hydrating` (a hook from `Str::random(...)`, i.e. vendor code), and `Action::configureUsing()` / `Field::configureUsing()` with `during:` around the render, beside `before_set` and `hooked`, which must still go back to the server. All three fail on the previous code.
 
+## 2026-11-16 — Reordering records: handed to the stock table
+
+Reorderable rows were out of scope (`AGENTS.md` §8), so a table with `->reorderable()` lost its trigger the day its List page moved to the island. It is supported now, but not rebuilt in Vue: the trigger hands the page to the stock table.
+
+- **The trigger is stock's.** `partials/reorder-trigger.blade.php` renders `Table::getReorderRecordsTriggerAction(isReordering: false)` (so `reorderRecordsTriggerAction()` still customizes it), teleported into `[data-villament-reorder-slot]` and adopted by a `NativeSlot` between the two reorder-trigger render hooks, in whichever of the three toolbar rows is on screen. A `NativeSlot`, not the one-shot adoption, because those rows come and go with the selection. Its click is the action's string handler, `wire:click="toggleTableReordering"`. `SchemaSerializer` carries `reorderable` (= `Table::isReorderable()`, which includes `authorizeReorder()`).
+- **While reordering, the island is HIDDEN, never removed.** `HasVillamentTable::content()` adds `EmbeddedTable::make()->visible(fn () => $this->isTableReordering())` after the island, and the island view hides its mount point with a wrapper (`wire:ignore` freezes the island element's own attributes, so the style cannot go on it). Removing the island would mean mounting a new Vue app after a morph: `index.js` scans only on `alpine:init` and `livewire:navigated`, and the native slots' `<template x-teleport>`s would have to find targets that do not exist yet. Hidden, the Vue app and every slot it adopted stay as they were.
+- **No records are fetched for a hidden island.** `getVillamentTableConfig()` sends `isReordering` and `initialData: null` while reordering. The config sits inside `wire:ignore`, so the browser keeps the one it booted from. A page is never booted while reordering: `$isTableReordering` is not URL or session state. Stock reorders with pagination off, so serializing that page would have meant every record.
+- **Back to the island = a refetch.** `toggleTableReordering` is in the bridge's `REFRESH_COMMIT_METHODS`. `reorderTable` is not: the island is hidden during the drags, and one fetch on "done" reads the final order.
+- **Modals.** The island renders the action modals before `EmbeddedTable` does, and both honour `hasActionsModalRendered`, so they are rendered once.
+- Pinned in `InternalApiContractTest`: `toggleTableReordering`, `isTableReordering`, `reorderTable`, `Table::isReorderable`, `Table::getReorderRecordsTriggerAction` (and its `isReordering` parameter name), `EmbeddedTable`.
+
+Tests: `ReorderRecordsTest` (trigger rendered, stock table in reordering mode with the island hidden and unfed, the order saved and read back by the island, no trigger on a table that is not reorderable) and `tests/js/reorderTrigger.test.js` (outlet, adoption, refetch on the toggle and not on the drags).
+
 ## Verified Filament v5 internal API map (§4.1, §4.8)
 
 Verified against **filament/filament v5.6.8** + **livewire/livewire v4.3.3** by reading installed vendor source on 2026-07-15. Paths relative to `vendor/filament/`.

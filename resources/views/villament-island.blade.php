@@ -1,6 +1,15 @@
 <div class="villament">
-    <div data-villament wire:ignore>
-        <script type="application/json" data-villament-config>{!! json_encode($config, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) !!}</script>
+    {{--
+        Hidden, never removed, while the stock table reorders the records in
+        its place: the Vue app and the native slots it adopted stay mounted,
+        so pressing "done" only shows it again (and the toggle's commit
+        refetches it). The hiding sits on a wrapper because `wire:ignore`
+        freezes the island element's own attributes too.
+    --}}
+    <div @style(['display: none' => $isReordering])>
+        <div data-villament wire:ignore>
+            <script type="application/json" data-villament-config>{!! json_encode($config, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) !!}</script>
+        </div>
     </div>
 
     {{--
@@ -44,6 +53,10 @@
 
     @if ($withNativeColumnManager)
         @include('villament::partials.column-manager')
+    @endif
+
+    @if ($withNativeReorderTrigger)
+        @include('villament::partials.reorder-trigger')
     @endif
 
     @if ($withNativeHeader)

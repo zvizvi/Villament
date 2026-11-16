@@ -12,6 +12,7 @@ use Filament\Resources\Pages\ListRecords;
 use Filament\Resources\Pages\PageRegistration;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Component as SchemaComponent;
+use Filament\Schemas\Components\EmbeddedTable;
 use Filament\Schemas\Schema;
 use Filament\Support\Assets\AlpineComponent;
 use Filament\Support\Assets\AssetManager;
@@ -51,6 +52,12 @@ $methodContract = [
     [ListRecords::class, 'removeTableFilter'],
     [ListRecords::class, 'resetTableFiltersForm'],
     [ListRecords::class, 'removeTableFilters'],
+    // Reordering records is handed to the stock table.
+    [ListRecords::class, 'toggleTableReordering'],
+    [ListRecords::class, 'isTableReordering'],
+    [ListRecords::class, 'reorderTable'],
+    [Table::class, 'isReorderable'],
+    [Table::class, 'getReorderRecordsTriggerAction'],
     // Search options carried into the island.
     [Table::class, 'getSearchDebounce'],
     [Table::class, 'isSearchOnBlur'],
@@ -411,4 +418,14 @@ it('still renders each schema component in the wrapper client rendering places u
     expect(str_contains($source, 'wire:partial="schema-component::'))->toBeTrue('Filament internal API drift: schema components no longer render a [wire:partial="schema-component::{key}"] wrapper.')
         ->and(str_contains(file_get_contents(dirname((new ReflectionClass(Repeater::class))->getFileName(), 3).'/resources/views/components/field-wrapper.blade.php'), 'data-validation-error'))->toBeTrue('Filament internal API drift: the field wrapper no longer marks its error with [data-validation-error].')
         ->and(str_contains($wrapper, '$item->toHtml()'))->toBeTrue('Filament internal API drift: Repeater no longer renders an item through [$item->toHtml()].');
+});
+
+it('still swaps in the stock table through EmbeddedTable and names the trigger flag isReordering', function (): void {
+    $parameters = array_map(
+        fn (ReflectionParameter $parameter): string => $parameter->getName(),
+        (new ReflectionMethod(Table::class, 'getReorderRecordsTriggerAction'))->getParameters(),
+    );
+
+    expect(class_exists(EmbeddedTable::class))->toBeTrue('Filament internal API drift: [EmbeddedTable] is gone.')
+        ->and($parameters)->toBe(['isReordering']);
 });
