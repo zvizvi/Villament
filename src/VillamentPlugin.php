@@ -29,17 +29,12 @@ final class VillamentPlugin implements Plugin
                 ->where('resource', '[^/]+')
                 ->name('villament.data');
 
-            // A relation manager's island (`HasVillamentRelationTable`) on
-            // the resource page `{page}`; `?owner=` names the record. The
-            // page is in the path because `?page=` is the pagination's.
-            Route::get('villament/{resource}/pages/{page}/relations/{relation}/data', RelationTableDataController::class)
-                ->where(['resource' => '[^/]+', 'page' => '[^/]+', 'relation' => '[^/]+'])
+            // A relationship table's island (`HasVillamentRelationTable`):
+            // a relation manager or a ManageRelatedRecords page, named by an
+            // encrypted `?token=` (`RelationTableToken`). One segment after
+            // `villament/`, so it can never match `villament/{resource}/data`.
+            Route::get('villament/relation-data', RelationTableDataController::class)
                 ->name('villament.relation-data');
-
-            // A ManageRelatedRecords page's island; `?owner=` the record.
-            Route::get('villament/{resource}/pages/{page}/data', RelationTableDataController::class)
-                ->where(['resource' => '[^/]+', 'page' => '[^/]+'])
-                ->name('villament.related-data');
         };
 
         // Tenant panels: register inside the `{tenant}`-prefixed group so the

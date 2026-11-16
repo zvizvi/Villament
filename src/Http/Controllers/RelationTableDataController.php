@@ -7,40 +7,41 @@ namespace Zvizvi\Villament\Http\Controllers;
 use Filament\Facades\Filament;
 use Filament\Resources\Pages\ManageRelatedRecords;
 use Filament\Resources\Pages\Page;
+use Filament\Resources\Pages\PageRegistration;
+use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Resources\Resource;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Route;
 use Livewire\LivewireManager;
+use Zvizvi\Villament\Concerns\HasVillamentRelationTable;
 use Zvizvi\Villament\Http\HeadlessTableResponder;
 use Zvizvi\Villament\Support\HeadlessTableHarness;
 use Zvizvi\Villament\Support\ParentRouteParameters;
-use Zvizvi\Villament\Support\RelationRegistry;
-use Zvizvi\Villament\Support\ResourceRegistry;
+use Zvizvi\Villament\Support\RelationTableToken;
 
 /**
- * The data endpoint of a relationship table's island, in two shapes:
+ * The data endpoint of a relationship table's island — a relation manager on
+ * one of a resource's record pages, or a ManageRelatedRecords page:
  *
- *     GET /villament/{resource}/pages/edit/relations/{relation}/data?owner=42
- *     GET /villament/{resource}/pages/{page}/data?owner=42
+ *     GET /villament/relation-data?token=…
  *
- * the first for a relation manager on one of the resource's record pages,
- * the second for a ManageRelatedRecords page. Nothing in the request is ever
- * trusted as a class or a record: the page is looked up among the resource's
- * own pages, the owner record through that page's own `resolveRecord()` (the
- * resource's route binding, scoped to the parent record of a nested
- * resource), and the relation manager among the ones the page itself shows
- * for that record. Access is checked as stock checks it on every Livewire
- * request — the page's `canAccess()` for the record, and the manager's
+ * The token ({@see RelationTableToken}) is encrypted and authenticated, so
+ * what it names was named by the server; it is still checked against the
+ * panel (its resources, their pages, the trait opt-in) before anything is
+ * instantiated. Authorization is NOT taken from it: the owner record is
+ * resolved through the page's own `resolveRecord()` (the resource's route
+ * binding, scoped to the parent record of a nested resource), and the
+ * page's and the manager's own access checks run on every request — the
+ * page's `authorizeResourceAccess()` / `canAccess()`, and the manager's
  * `canViewForRecord()` (Filament's own `bootCanAuthorizeAccess()`, replayed
  * by the harness).
  */
 final class RelationTableDataController
 {
     public function __construct(
-        private readonly ResourceRegistry $resources,
-        private readonly RelationRegistry $relations,
+        private readonly RelationTableToken $tokens,
         private readonly HeadlessTableHarness $harness,
         private readonly HeadlessTableResponder $responder,
         private readonly LivewireManager $livewire,
@@ -52,39 +53,53 @@ final class RelationTableDataController
         $panel = Filament::getCurrentPanel();
         abort_if($panel === null, 404);
 
-        // Named route parameters, never positional ones: on tenant panels the
-        // route also carries `{tenant}`.
-        $resource = $request->route('resource');
-        abort_unless(is_string($resource), 404);
+        $token = $request->query('token');
+        abort_unless(is_string($token) && $token !== '', 404);
 
-        $resourceClass = $this->resources->resolve($panel, $resource);
-        abort_if($resourceClass === null, 404);
+        $target = $this->tokens->read($token);
+        abort_if($target === null, 404);
 
-        $relation = $request->route('relation');
+        // Sealed for this panel, for one of its resources and one of that
+        // resource's pages.
+        abort_unless($target['panel'] === $panel->getId(), 404);
 
-        // The host page of a relation manager, or the ManageRelatedRecords
-        // page itself.
-        $pageKey = $request->route('page');
-        abort_unless(is_string($pageKey) && $pageKey !== '', 404);
+        $resourceClass = $target['resource'];
+        abort_unless(is_subclass_of($resourceClass, Resource::class) && in_array($resourceClass, $panel->getResources(), true), 404);
 
-        $pageClass = is_string($relation)
-            ? $this->relations->resolvePage($resourceClass, $pageKey)
-            : $this->relations->resolveRelatedRecordsPage($resourceClass, $pageKey);
-        abort_if($pageClass === null, 404);
+        $pageClass = $target['page'];
+        $pageClasses = array_map(
+            fn (PageRegistration $registration): string => $registration->getPage(),
+            array_values($resourceClass::getPages()),
+        );
 
-        $ownerRecord = $this->resolveOwnerRecord($request, $resourceClass, $pageClass);
+        if (! in_array($pageClass, $pageClasses, true) || ! is_subclass_of($pageClass, Page::class)) {
+            abort(404);
+        }
 
-        if (is_string($relation)) {
-            $manager = $this->relations->resolveRelationManager($pageClass, $ownerRecord, $relation);
-            abort_if($manager === null, 404);
+        $managerClass = $target['manager'];
 
-            $this->harness->forRelationManager($manager['class'], $ownerRecord, $pageClass, $manager['properties']);
+        if ($managerClass !== null) {
+            abort_unless(is_subclass_of($managerClass, RelationManager::class) && $this->optedIn($managerClass), 404);
+        } else {
+            abort_unless(is_subclass_of($pageClass, ManageRelatedRecords::class) && $this->optedIn($pageClass), 404);
+        }
+
+        $ownerRecord = $this->resolveOwnerRecord($request, $resourceClass, $pageClass, $target['owner'], $target['parent']);
+
+        if ($managerClass !== null) {
+            /** @var class-string<RelationManager> $managerClass */
+            $this->harness->forRelationManager($managerClass, $ownerRecord, $pageClass, $target['properties']);
         } else {
             /** @var class-string<ManageRelatedRecords> $pageClass */
             $this->harness->forRelatedRecordsPage($pageClass, $ownerRecord);
         }
 
         return $this->responder->respond($request, $this->harness);
+    }
+
+    private function optedIn(string $class): bool
+    {
+        return in_array(HasVillamentRelationTable::class, class_uses_recursive($class), true);
     }
 
     /**
@@ -94,24 +109,19 @@ final class RelationTableDataController
      * the parent), then `authorizeResourceAccess()` and
      * `canAccess(['record' => …])` — the page's `hydrate` checks.
      *
-     * @param  class-string<resource>  $resourceClass
+     * @param  class-string<\Filament\Resources\Resource>  $resourceClass
      * @param  class-string<Page>  $pageClass
      */
-    private function resolveOwnerRecord(Request $request, string $resourceClass, string $pageClass): Model
+    private function resolveOwnerRecord(Request $request, string $resourceClass, string $pageClass, int|string $ownerKey, int|string|null $parentKey): Model
     {
-        $ownerKey = $request->query('owner');
-        abort_unless(is_string($ownerKey) && $ownerKey !== '', 404);
-
         $page = $this->livewire->new($pageClass);
         abort_unless($page instanceof Page, 404);
 
-        // A nested resource's record lives under one parent record, named by
-        // `parent` and resolved through the PARENT resource's own binding, as
+        // A nested resource's record lives under one parent record, resolved through the PARENT resource's own binding, as
         // on the List endpoint. `mountParentRecord()` (inside
         // `resolveRecord()`) then re-resolves it and authorizes the chain.
         if ($parentRegistration = $resourceClass::getParentResourceRegistration()) {
-            $parentKey = $request->query('parent');
-            abort_unless(is_string($parentKey) && $parentKey !== '', 404);
+            abort_if($parentKey === null, 404);
 
             $parentRecord = $parentRegistration->getParentResource()::resolveRecordRouteBinding($parentKey);
             abort_if($parentRecord === null, 404);

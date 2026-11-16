@@ -8,6 +8,7 @@ use Closure;
 use Filament\Facades\Filament;
 use Filament\Resources\Pages\ManageRelatedRecords;
 use Filament\Resources\RelationManagers\RelationManager;
+use Filament\Resources\Resource;
 use Filament\Schemas\Components\EmbeddedTable;
 use Filament\Schemas\Components\Group;
 use Filament\Schemas\Components\RenderHook;
@@ -16,8 +17,7 @@ use Filament\View\PanelsRenderHook;
 use Illuminate\Database\Eloquent\Model;
 use LogicException;
 use Zvizvi\Villament\Schemas\VillamentIsland;
-use Zvizvi\Villament\Support\RelationRegistry;
-use Zvizvi\Villament\Support\ResourceRegistry;
+use Zvizvi\Villament\Support\RelationTableToken;
 
 /**
  * The island for a relationship table: apply it to a relation manager or to
@@ -26,10 +26,11 @@ use Zvizvi\Villament\Support\ResourceRegistry;
  * header actions — and the component keeps its full Livewire table state,
  * which the actions bridge and the native filters panel drive.
  *
- * A relation manager's island fetches from the relation endpoint, which
- * re-resolves the owner record through the resource's own route binding and
- * the manager through the page's own `getRelationManagers()` — the request
- * only ever names them.
+ * A relation manager's island fetches from the relation endpoint with a
+ * {@see RelationTableToken} naming it, issued here when the island renders.
+ * The endpoint re-resolves the owner record through the page and re-runs
+ * every access check on each request; the token only spares it working out
+ * again which table this is.
  */
 trait HasVillamentRelationTable
 {
@@ -91,8 +92,6 @@ trait HasVillamentRelationTable
     protected function getVillamentEndpoint(): string
     {
         $panel = Filament::getCurrentOrDefaultPanel();
-        $relations = app(RelationRegistry::class);
-
         $pageClass = $this->getPageClass();
 
         if (! method_exists($pageClass, 'getResource')) {
@@ -105,46 +104,55 @@ trait HasVillamentRelationTable
 
         $resourceClass = $pageClass::getResource();
         $ownerRecord = $this->getOwnerRecord();
+        $tokens = app(RelationTableToken::class);
 
-        $parameters = [
-            'resource' => app(ResourceRegistry::class)->keyFor($panel, $resourceClass),
-            'page' => $relations->pageKeyFor($resourceClass, $pageClass),
-            // In the form the resource's own route binding takes.
-            'owner' => filled($routeKeyName = $resourceClass::getRecordRouteKeyName())
-                ? $ownerRecord->getAttribute($routeKeyName)
-                : $ownerRecord->getRouteKey(),
-        ];
+        // A nested resource's record is resolved under its parent record —
+        // the record's inverse relationship, which the page itself sets when
+        // it resolves the record.
+        $parentKey = null;
 
-        // A nested resource's record is resolved under its parent record, so
-        // the endpoint is told which one — the record's inverse relationship,
-        // which the page itself sets when it resolves the record.
         if ($parentRegistration = $resourceClass::getParentResourceRegistration()) {
-            $parentResource = $parentRegistration->getParentResource();
             $parentRecord = $ownerRecord->{$parentRegistration->getInverseRelationshipName()};
 
             if ($parentRecord instanceof Model) {
-                $parameters['parent'] = filled($parentRouteKeyName = $parentResource::getRecordRouteKeyName())
-                    ? $parentRecord->getAttribute($parentRouteKeyName)
-                    : $parentRecord->getRouteKey();
+                $parentKey = $this->getVillamentRouteKey($parentRegistration->getParentResource(), $parentRecord);
             }
         }
 
-        if ($this instanceof RelationManager) {
-            $parameters['relation'] = $relations->keyForComponent($this)
-                ?? throw new LogicException(sprintf(
-                    '[%s] is not among the relation managers [%s] shows for this record.',
-                    static::class,
-                    $pageClass,
-                ));
-        }
+        $parameters = [
+            'token' => $tokens->issue(
+                panelId: $panel->getId(),
+                resourceClass: $resourceClass,
+                pageClass: $pageClass,
+                relationManagerClass: $this instanceof RelationManager ? $this::class : null,
+                properties: $this instanceof RelationManager ? $tokens->mountedProperties($this) : [],
+                ownerKey: $this->getVillamentRouteKey($resourceClass, $ownerRecord),
+                parentKey: $parentKey,
+            ),
+        ];
 
         if ($panel->hasTenancy()) {
             $parameters['tenant'] = Filament::getTenant();
         }
 
-        return $panel->route(
-            $this instanceof RelationManager ? 'villament.relation-data' : 'villament.related-data',
-            $parameters,
-        );
+        return $panel->route('villament.relation-data', $parameters);
+    }
+
+    /**
+     * A record's key in the form its resource's own route binding takes.
+     *
+     * @param  class-string<\Filament\Resources\Resource>  $resourceClass
+     */
+    private function getVillamentRouteKey(string $resourceClass, Model $record): int|string
+    {
+        $key = filled($routeKeyName = $resourceClass::getRecordRouteKeyName())
+            ? $record->getAttribute($routeKeyName)
+            : $record->getRouteKey();
+
+        if (! (is_int($key) || is_string($key))) {
+            throw new LogicException(sprintf('[%s] has no usable route key for the villament endpoint.', $record::class));
+        }
+
+        return $key;
     }
 }

@@ -6,6 +6,7 @@ namespace Zvizvi\Villament\Tests\Fixtures\Resources\TeamRelations\RelationManage
 
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Zvizvi\Villament\Concerns\HasVillamentRelationTable;
 use Zvizvi\Villament\Tests\Fixtures\Resources\TeamRelations\NotesTable;
 
@@ -19,8 +20,15 @@ class NotesRelationManager extends RelationManager
 
     protected static string $relationship = 'notes';
 
+    /**
+     * Set by `NotesRelationManager::make(['kind' => …])`: the same class
+     * registered twice, each with its own slice of the notes.
+     */
+    public ?string $kind = null;
+
     public function table(Table $table): Table
     {
-        return NotesTable::configure($table);
+        return NotesTable::configure($table)
+            ->modifyQueryUsing(fn (Builder $query): Builder => $this->kind === null ? $query : $query->where('kind', $this->kind));
     }
 }

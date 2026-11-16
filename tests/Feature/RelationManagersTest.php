@@ -2,8 +2,11 @@
 
 declare(strict_types=1);
 
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Encryption\Encrypter;
 use Illuminate\Support\Facades\Gate;
 use Livewire\Features\SupportTesting\Testable;
+use Zvizvi\Villament\Support\RelationTableToken;
 use Zvizvi\Villament\Tests\Fixtures\Models\Team;
 use Zvizvi\Villament\Tests\Fixtures\Models\TeamNote;
 use Zvizvi\Villament\Tests\Fixtures\Models\User;
@@ -14,8 +17,12 @@ use Zvizvi\Villament\Tests\Fixtures\Resources\TeamRelations\Pages\ViewTeamRelati
 use Zvizvi\Villament\Tests\Fixtures\Resources\TeamRelations\RelationManagers\MembersRelationManager;
 use Zvizvi\Villament\Tests\Fixtures\Resources\TeamRelations\RelationManagers\NotesRelationManager;
 use Zvizvi\Villament\Tests\Fixtures\Resources\TeamRelations\RelationManagers\StockMembersRelationManager;
+use Zvizvi\Villament\Tests\Fixtures\Resources\TeamRelations\TeamRelationsResource;
 use Zvizvi\Villament\Tests\Fixtures\Resources\TeamUsers\Pages\EditTeamUser;
 use Zvizvi\Villament\Tests\Fixtures\Resources\TeamUsers\RelationManagers\UserTeamsRelationManager;
+use Zvizvi\Villament\Tests\Fixtures\Resources\TeamUsers\TeamUserResource;
+use Zvizvi\Villament\Tests\Fixtures\Resources\Users\Pages\EditUser;
+use Zvizvi\Villament\Tests\Fixtures\Resources\Users\UserResource;
 
 use function Pest\Laravel\actingAs;
 use function Pest\Laravel\get;
@@ -58,9 +65,36 @@ function membersManager(Team $team, string $pageClass = EditTeamRelation::class,
     return livewire($class, ['ownerRecord' => $team, 'pageClass' => $pageClass]);
 }
 
-function membersEndpoint(Team $team, string $query = '', string $page = 'edit', string $relation = 'members-relation-manager'): string
+/**
+ * A token as the island would carry it; `$overrides` replaces any of its
+ * fields, to build the ones a client could never obtain.
+ *
+ * @param  array<string, mixed>  $overrides
+ */
+function relationToken(Model $owner, string $page = EditTeamRelation::class, ?string $manager = MembersRelationManager::class, array $overrides = []): string
 {
-    return "/admin/villament/resources.team-relations/pages/{$page}/relations/{$relation}/data?owner={$team->getKey()}".($query === '' ? '' : "&{$query}");
+    $fields = [
+        'panelId' => 'admin',
+        'resourceClass' => TeamRelationsResource::class,
+        'pageClass' => $page,
+        'relationManagerClass' => $manager,
+        'properties' => [],
+        'ownerKey' => $owner->getKey(),
+        'parentKey' => null,
+        ...$overrides,
+    ];
+
+    return app(RelationTableToken::class)->issue(...$fields);
+}
+
+function relationUrl(string $token, string $query = ''): string
+{
+    return '/admin/villament/relation-data?token='.urlencode($token).($query === '' ? '' : "&{$query}");
+}
+
+function membersEndpoint(Team $team, string $query = '', string $page = EditTeamRelation::class, string $manager = MembersRelationManager::class): string
+{
+    return relationUrl(relationToken($team, $page, $manager), $query);
 }
 
 /**
@@ -104,8 +138,8 @@ describe('a relation manager', function (): void {
         $config = $livewire->instance()->getVillamentTableConfig();
 
         expect($config['endpoint'])
-            ->toContain('/admin/villament/resources.team-relations/pages/edit/relations/members-relation-manager/data')
-            ->toContain('owner='.$this->team->getKey())
+            ->toContain('/admin/villament/relation-data?token=')
+            ->not->toContain('MembersRelationManager')
             ->and($config['livewireId'])->toBe($livewire->id())
             ->and($config['urlSync'])->toBeFalse();
     });
@@ -197,7 +231,7 @@ describe('a relation manager', function (): void {
         $record = $viewManager->getTableRecords()->first();
         $stockVisible = $viewManager->getTable()->getAction('edit')?->record($record)->isVisible() ?? false;
 
-        $payload = getJson(membersEndpoint($this->team, page: 'view'))->assertOk()->json();
+        $payload = getJson(membersEndpoint($this->team, page: ViewTeamRelation::class))->assertOk()->json();
 
         expect($stockVisible)->toBeFalse()
             ->and(collect($payload['records'])->pluck('actions')->flatten(1)->filter()->all())->toBe([]);
@@ -210,26 +244,48 @@ describe('a relation manager', function (): void {
         getJson(membersEndpoint($this->team, 'columnSearches[name]=x'))->assertUnprocessable();
     });
 
-    it('never serves what the request cannot name', function (): void {
-        // A manager that never opted in, one the page does not show, a page
-        // the resource does not have, and owners that do not resolve.
-        getJson(membersEndpoint($this->team, relation: 'stock-members-relation-manager'))->assertNotFound();
-        getJson(membersEndpoint($this->team, relation: urlencode(MembersRelationManager::class)))->assertNotFound();
-        getJson(membersEndpoint($this->team, page: 'nope'))->assertNotFound();
-        getJson(membersEndpoint($this->team, page: 'index'))->assertNotFound();
-        getJson('/admin/villament/resources.team-relations/pages/edit/relations/members-relation-manager/data')->assertNotFound();
-        getJson('/admin/villament/resources.team-relations/pages/edit/relations/members-relation-manager/data?owner=999999')->assertNotFound();
-        getJson('/admin/villament/resources.team-relations/pages/edit/relations/members-relation-manager/data?owner[]=1')->assertNotFound();
+    it('never serves what the token does not name, or a token it did not seal', function (): void {
+        $token = relationToken($this->team);
+
+        // No token, garbage, a tampered one, and one from another app key.
+        getJson('/admin/villament/relation-data')->assertNotFound();
+        getJson(relationUrl('not-a-token'))->assertNotFound();
+        getJson('/admin/villament/relation-data?token[]=x')->assertNotFound();
+        getJson(relationUrl(substr($token, 0, -4).'AAAA'))->assertNotFound();
+        getJson(relationUrl((new Encrypter(str_repeat('k', 32), 'aes-256-cbc'))->encryptString((string) json_encode(['v' => 1]))))->assertNotFound();
+
+        // Sealed, but naming what the panel does not serve: another panel, a
+        // resource or page not registered, a manager or page that never opted
+        // in, a class that is no manager, an owner that does not resolve.
+        getJson(relationUrl(relationToken($this->team, overrides: ['panelId' => 'tenant'])))->assertNotFound();
+        getJson(relationUrl(relationToken($this->team, overrides: ['resourceClass' => UserResource::class])))->assertNotFound();
+        getJson(relationUrl(relationToken($this->team, page: EditUser::class)))->assertNotFound();
+        getJson(relationUrl(relationToken($this->team, manager: StockMembersRelationManager::class)))->assertNotFound();
+        getJson(relationUrl(relationToken($this->team, manager: Team::class)))->assertNotFound();
+        getJson(relationUrl(relationToken($this->team, page: StockManageTeamNotes::class, manager: null)))->assertNotFound();
+        getJson(relationUrl(relationToken($this->team, page: EditTeamRelation::class, manager: null)))->assertNotFound();
+        getJson(relationUrl(relationToken($this->team, overrides: ['ownerKey' => 999999])))->assertNotFound();
     });
 
-    it("is unknown to a user who may not see it, as on Filament's own page", function (): void {
+    it('checks the manager, not only the token, on every request', function (): void {
+        // A token issued while the user could see the manager is refused once
+        // they cannot: `canViewForRecord()` runs on every request
+        // (`bootCanAuthorizeAccess()`), as on a Livewire request.
+        $url = membersEndpoint($this->team);
+        getJson($url)->assertOk();
+
+        actingAs(User::factory()->create(['status' => 'blocked']));
+        getJson($url)->assertForbidden();
+    });
+
+    it("refuses a user who may not see it, as Filament's own boot check does", function (): void {
         actingAs(User::factory()->create(['status' => 'blocked']));
 
         // UserPolicy::viewAny() refuses: `canViewForRecord()` is false, so
-        // the page does not show the manager at all.
+        // the page does not show the manager, and its boot check refuses it.
         expect(MembersRelationManager::canViewForRecord($this->team, EditTeamRelation::class))->toBeFalse();
 
-        getJson(membersEndpoint($this->team))->assertNotFound();
+        getJson(membersEndpoint($this->team))->assertForbidden();
     });
 
     it('refuses a user who may not open the host page', function (): void {
@@ -241,8 +297,8 @@ describe('a relation manager', function (): void {
         // The page's own `hydrate` check: `authorizeResourceAccess()`.
         TeamRelationsTestPolicy::$canViewAny = false;
         getJson(membersEndpoint($this->team))->assertForbidden();
-        getJson(membersEndpoint($this->team, page: 'view'))->assertForbidden();
-        getJson("/admin/villament/resources.team-relations/pages/notes/data?owner={$this->team->getKey()}")->assertForbidden();
+        getJson(membersEndpoint($this->team, page: ViewTeamRelation::class))->assertForbidden();
+        getJson(relationUrl(relationToken($this->team, page: ManageTeamNotes::class, manager: null)))->assertForbidden();
     });
 
     it('requires authentication', function (): void {
@@ -255,12 +311,31 @@ describe('a relation manager', function (): void {
         $config = livewire(NotesRelationManager::class, ['ownerRecord' => $this->team, 'pageClass' => EditTeamRelation::class])
             ->instance()->getVillamentTableConfig();
 
-        expect($config['endpoint'])->toContain('/pages/edit/relations/notes-relation-manager/data');
+        expect($config['endpoint'])->toContain('/admin/villament/relation-data?token=');
 
         $response = getJson($config['endpoint'])->assertOk();
 
         expect(array_column(array_column(array_column($response->json('records'), 'cells'), 'body'), 'formatted'))
             ->toBe(['alpha', 'bravo', 'charlie', 'delta']);
+    });
+});
+
+describe('a relation manager mounted with properties', function (): void {
+    it("carries a configuration's properties to the endpoint, so each registration of one class is served its own", function (): void {
+        $notes = fn (?string $kind): array => array_column(array_column(array_column(
+            getJson(livewire(NotesRelationManager::class, ['ownerRecord' => $this->team, 'pageClass' => EditTeamRelation::class, 'kind' => $kind])
+                ->instance()->getVillamentTableConfig()['endpoint'])->assertOk()->json('records'),
+            'cells'), 'body'), 'formatted');
+
+        expect($notes('client'))->toBe(['alpha', 'bravo'])
+            ->and($notes('stock'))->toBe(['charlie', 'delta'])
+            ->and($notes(null))->toBe(['alpha', 'bravo', 'charlie', 'delta']);
+    });
+
+    it("carries only the subclass's own plain public properties", function (): void {
+        $component = livewire(NotesRelationManager::class, ['ownerRecord' => $this->team, 'pageClass' => EditTeamRelation::class, 'kind' => 'client'])->instance();
+
+        expect(app(RelationTableToken::class)->mountedProperties($component))->toBe(['kind' => 'client']);
     });
 });
 
@@ -275,26 +350,28 @@ describe('a relation manager on a nested resource', function (): void {
             ->instance()->getVillamentTableConfig();
 
         expect($config['endpoint'])
-            ->toContain('/admin/villament/resources.teams.users/pages/edit/relations/user-teams-relation-manager/data')
-            ->toContain('owner='.$this->member->getKey())
-            ->toContain('parent='.$this->team->getKey())
+            ->toContain('/admin/villament/relation-data?token=')
             ->and(array_column(array_column(array_column(getJson($config['endpoint'])->assertOk()->json('records'), 'cells'), 'name'), 'formatted'))
             ->toBe(['Alpha', 'Beta']);
     });
 
     it('refuses an owner outside the parent it is requested under', function (): void {
-        $base = "/admin/villament/resources.teams.users/pages/edit/relations/user-teams-relation-manager/data?owner={$this->member->getKey()}";
+        $token = fn (int|string|null $parent): string => relationToken($this->member, EditTeamUser::class, UserTeamsRelationManager::class, [
+            'resourceClass' => TeamUserResource::class,
+            'parentKey' => $parent,
+        ]);
 
-        getJson("{$base}&parent={$this->otherTeam->getKey()}")->assertNotFound();
-        getJson("{$base}&parent=999999")->assertNotFound();
-        getJson($base)->assertNotFound();
+        getJson(relationUrl($token($this->team->getKey())))->assertOk();
+        getJson(relationUrl($token($this->otherTeam->getKey())))->assertNotFound();
+        getJson(relationUrl($token(999999)))->assertNotFound();
+        getJson(relationUrl($token(null)))->assertNotFound();
     });
 });
 
 describe('a ManageRelatedRecords page', function (): void {
-    function notesEndpoint(Team $team, string $query = '', string $page = 'notes'): string
+    function notesEndpoint(Team $team, string $query = '', string $page = ManageTeamNotes::class): string
     {
-        return "/admin/villament/resources.team-relations/pages/{$page}/data?owner={$team->getKey()}".($query === '' ? '' : "&{$query}");
+        return relationUrl(relationToken($team, $page, null), $query);
     }
 
     it('renders the island, the stock twin does not', function (): void {
@@ -305,8 +382,7 @@ describe('a ManageRelatedRecords page', function (): void {
     it('points at the related endpoint and keeps its state in the URL, like a List page', function (): void {
         $config = livewire(ManageTeamNotes::class, ['record' => $this->team->getKey()])->instance()->getVillamentTableConfig();
 
-        expect($config['endpoint'])->toContain('/admin/villament/resources.team-relations/pages/notes/data')
-            ->toContain('owner='.$this->team->getKey())
+        expect($config['endpoint'])->toContain('/admin/villament/relation-data?token=')
             ->and($config['urlSync'])->toBeTrue();
     });
 
@@ -321,9 +397,8 @@ describe('a ManageRelatedRecords page', function (): void {
     it("never serves another owner's records or a page that did not opt in", function (): void {
         expect(relationEndpointKeys(notesEndpoint($this->team, 'search=foreign')))->toBe([]);
 
-        getJson(notesEndpoint($this->team, page: 'stock-notes'))->assertNotFound();
-        getJson(notesEndpoint($this->team, page: 'edit'))->assertNotFound();
-        getJson('/admin/villament/resources.team-relations/pages/notes/data')->assertNotFound();
+        getJson(notesEndpoint($this->team, page: StockManageTeamNotes::class))->assertNotFound();
+        getJson(notesEndpoint($this->team, page: EditTeamRelation::class))->assertNotFound();
     });
 });
 

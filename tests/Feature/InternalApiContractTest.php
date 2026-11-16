@@ -8,15 +8,11 @@ use Filament\Forms\Components\Field;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Panel;
-use Filament\Resources\Pages\EditRecord;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Resources\Pages\ManageRelatedRecords;
 use Filament\Resources\Pages\Page as ResourcePage;
 use Filament\Resources\Pages\PageRegistration;
-use Filament\Resources\Pages\ViewRecord;
-use Filament\Resources\RelationManagers\RelationGroup;
 use Filament\Resources\RelationManagers\RelationManager;
-use Filament\Resources\RelationManagers\RelationManagerConfiguration;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Component as SchemaComponent;
 use Filament\Schemas\Components\EmbeddedTable;
@@ -341,7 +337,6 @@ $methodContract = [
     // Relationship tables (`HasVillamentRelationTable`, the relation endpoint).
     [RelationManager::class, 'bootCanAuthorizeAccess'],
     [RelationManager::class, 'canViewForRecord'],
-    [RelationManager::class, 'getDefaultProperties'],
     [RelationManager::class, 'getPageClass'],
     [RelationManager::class, 'getOwnerRecord'],
     [RelationManager::class, 'isReadOnly'],
@@ -352,21 +347,14 @@ $methodContract = [
     [RelationManager::class, 'canDelete'],
     [ManageRelatedRecords::class, 'content'],
     [ManageRelatedRecords::class, 'getRelationManagersContentComponent'],
-    [ManageRelatedRecords::class, 'getRelationManagers'],
     [ManageRelatedRecords::class, 'canView'],
     [ManageRelatedRecords::class, 'canEdit'],
     [ManageRelatedRecords::class, 'canDelete'],
-    [EditRecord::class, 'getRelationManagers'],
-    [ViewRecord::class, 'getRelationManagers'],
     [ResourcePage::class, 'resolveRecord'],
     [ResourcePage::class, 'authorizeResourceAccess'],
     [ResourcePage::class, 'canAccess'],
     [Resource::class, 'resolveRecordRouteBinding'],
     [Resource::class, 'getRecordRouteKeyName'],
-    [RelationGroup::class, 'ownerRecord'],
-    [RelationGroup::class, 'pageClass'],
-    [RelationGroup::class, 'getManagers'],
-    [RelationManagerConfiguration::class, 'getProperties'],
 ];
 
 $propertyContract = [
@@ -386,7 +374,6 @@ $propertyContract = [
     [RelationManager::class, 'pageClass'],
     [ManageRelatedRecords::class, 'record'],
     [ResourcePage::class, 'parentRecord'],
-    [RelationManagerConfiguration::class, 'relationManager'],
     // The same table state, on the relationship table components.
     [RelationManager::class, 'tableSort'],
     [RelationManager::class, 'tableFilters'],
