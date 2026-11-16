@@ -709,6 +709,13 @@ const hasColumnSearches = computed(
 const hasColumnManager = computed(() => Boolean(schema.hasColumnManager))
 
 /**
+ * Whether the toolbar renders the reorder-trigger slot. The trigger is the
+ * stock action, teleported in from Blade; pressing it hands the page to the
+ * stock table for as long as the reordering lasts.
+ */
+const isReorderable = computed(() => Boolean(schema.reorderable))
+
+/**
  * Whether this record may be selected. Only present when the table uses
  * `checkIfRecordIsSelectableUsing()`; otherwise every record is selectable.
  *
@@ -787,6 +794,7 @@ const hasHeaderToolbar = computed(
         || hasFilters.value
         || hasGrouping.value
         || hasColumnManager.value
+        || isReorderable.value
         || hasBulkActionsBar.value
         || toolbarActionsStructure.value.length > 0,
 )
@@ -1238,6 +1246,7 @@ function recordCellClasses(column, cellValue = null) {
                         >
                             <template v-if="! toolbarActionsStructure.length" #leading>
                                 <NativeSlot v-if="renderHooks.has('reorder-trigger-before')" family="hook" name="reorder-trigger-before" style="display: contents" />
+                                <NativeSlot v-if="isReorderable" family="reorder" name="toolbar" style="display: contents" />
                                 <NativeSlot v-if="renderHooks.has('reorder-trigger-after')" family="hook" name="reorder-trigger-after" style="display: contents" />
                             </template>
 
@@ -1259,6 +1268,7 @@ function recordCellClasses(column, cellValue = null) {
                         >
                             <template #leading>
                                 <NativeSlot v-if="renderHooks.has('reorder-trigger-before')" family="hook" name="reorder-trigger-before" style="display: contents" />
+                                <NativeSlot v-if="isReorderable" family="reorder" name="toolbar" style="display: contents" />
                                 <NativeSlot v-if="renderHooks.has('reorder-trigger-after')" family="hook" name="reorder-trigger-after" style="display: contents" />
                             </template>
                             <NativeSlot v-if="renderHooks.has('grouping-selector-before')" family="hook" name="grouping-selector-before" style="display: contents" />
@@ -1275,6 +1285,7 @@ function recordCellClasses(column, cellValue = null) {
                             class="fi-ta-actions fi-align-start fi-wrapped"
                         >
                             <NativeSlot v-if="renderHooks.has('reorder-trigger-before')" family="hook" name="reorder-trigger-before" style="display: contents" />
+                            <NativeSlot v-if="isReorderable" family="reorder" name="toolbar" style="display: contents" />
                             <NativeSlot v-if="renderHooks.has('reorder-trigger-after')" family="hook" name="reorder-trigger-after" style="display: contents" />
                             <NativeSlot v-if="renderHooks.has('grouping-selector-before')" family="hook" name="grouping-selector-before" style="display: contents" />
                             <TableGrouping

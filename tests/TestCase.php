@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\Gate;
 use Kirschbaum\PowerJoins\PowerJoinsServiceProvider;
 use Livewire\LivewireServiceProvider;
 use Orchestra\Testbench\TestCase as Orchestra;
+use Zvizvi\Villament\Forms\ClientRepeater;
 use Zvizvi\Villament\Tests\Fixtures\AdminPanelProvider;
 use Zvizvi\Villament\VillamentServiceProvider;
 
@@ -61,6 +62,8 @@ abstract class TestCase extends Orchestra
     protected function setUp(): void
     {
         parent::setUp();
+
+        ClientRepeater::fakeClient(false);
 
         Gate::policy(Fixtures\Models\User::class, Fixtures\Policies\UserPolicy::class);
     }

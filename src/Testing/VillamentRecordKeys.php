@@ -58,6 +58,33 @@ final class VillamentRecordKeys
     }
 
     /**
+     * The `wire:key` of each cell of column `$name` on the stock table's
+     * current page, as Filament renders it.
+     *
+     * @return list<string>
+     */
+    public static function cellKeys(object $component, string $name): array
+    {
+        $keys = [];
+
+        foreach ($component->getTableRecords() as $record) {
+            $keys[] = "wire:key=\"{$component->getId()}.table.record.{$component->getTableRecordKey($record)}.column.{$name}\"";
+        }
+
+        return $keys;
+    }
+
+    /**
+     * The table's visible columns, keyed by name.
+     *
+     * @return array<string, mixed>
+     */
+    public static function visibleColumns(object $component): array
+    {
+        return $component->getTable()->getVisibleColumns();
+    }
+
+    /**
      * Every string in the record payload the island receives for the current
      * page, one per line.
      */

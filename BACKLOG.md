@@ -17,6 +17,16 @@ action-payload compaction (all 2026-07-26).
 
 ---
 
+## `ClientRepeater`: the item shell is the floor
+
+On Livewire requests a row costs its stock shell, mostly the header's icon
+buttons (move up/down, clone, delete, collapse/expand), one SVG each, per
+row. Rendering the shell client-side too would cut that, but the header holds
+server state (`itemLabel()` closures, per-item action visibility, the
+reordering descriptions). Measure first: `client_flat` is at ~5 KB per row.
+
+---
+
 ## Shrink the `cells` payload
 
 The action half of the per-record payload now ships as one copy plus deltas
@@ -144,11 +154,18 @@ Two distinct mechanisms, both keyed to `wire:target`:
 The delay comes from `config('filament.livewire_loading_delay')` — Livewire's
 `.delay` modifier, so a fast response never flashes a spinner.
 
-**Where we stand.** The island has exactly one loading affordance: `isLoading` from
-`useTableData`, which paints `fi-loading` on the table container and disables the
-bulk-action buttons (`BulkActions.vue`, via the `disabled` override it puts on each
-trigger). No spinner ever replaces an icon, and nothing else is disabled mid-flight.
-Our buttons are not Livewire-driven, so `wire:loading` cannot reach them at all —
+**Filament 5.11 changed the disable half** (DECISIONS 2026-11-16). The sort buttons,
+pagination buttons and page / group / record checkboxes now target all of
+`Table::LOADING_TARGETS`, so disabling is table-global and `isLoading` is the right
+signal for it. Sort and pagination use `aria-disabled` + `fi-disabled` +
+`data-prevent-disabled-clicks` rather than `disabled`. The chip delete buttons do the
+same, targeted at `removeTableFilter` alone. The line numbers above are from 5.6.
+
+**Where we stand.** `isLoading` from `useTableData` paints `fi-loading` on the table
+container, disables the bulk-action buttons (`BulkActions.vue`), and, since 2026-11-16,
+marks the sort and pagination buttons busy. The chip delete buttons are disabled for
+a filter removal and its refetch (`isRemovingFilter`). No spinner ever replaces an
+icon yet. Our buttons are not Livewire-driven, so `wire:loading` cannot reach them —
 the state has to be threaded explicitly.
 
 **Scope of the task.**
@@ -164,18 +181,19 @@ the state has to be threaded explicitly.
    `loadingSource = { type: 'sort', column: 'name' }`), which is the island's
    equivalent of `wire:target`.
 3. Honor the configured delay so a sub-`delay` response paints no spinner.
-4. Apply it to: sort buttons, pagination controls and per-page select, group
-   settings, and per-group collapse toggles. Disable-while-loading goes on: page /
-   group / record checkboxes, the indicator chips' remove + remove-all buttons, and
-   the clickable-record element. (The filters and column-manager triggers are
+4. Apply the spinner to: sort buttons (stock: `sortTable('{column}')` only),
+   group settings, and per-group collapse toggles. Disable-while-loading still has
+   to go on: page / group / record checkboxes (table-global, like sort), the
+   remove-all button, and the clickable-record element. Done: sort and pagination
+   disabling, and the chips' delete buttons. Stock leaves the per-page select enabled. (The filters and column-manager triggers are
    Filament-native now — their indicators come with the stock markup.)
 5. Row and bulk actions go through Livewire's `mountAction()`, so those buttons keep
    real `wire:target` semantics available — decide per button whether to reuse
    `wire:loading` there or to route everything through the island's own state, and
    record the choice.
 
-**Out of scope.** The reorder indicator (index.blade.php:755) — reorderable rows are
-explicitly out of scope per `AGENTS.md` §8.
+**Out of scope.** The reorder indicator (index.blade.php:755): while reordering, the
+stock table renders it itself (`DECISIONS.md` 2026-11-16).
 
 **Done means.** The spinner HTML comes from the server (no hand-written SVG in the
 Vue layer); only the clicked control spins; JS tests cover the swap and the
