@@ -8,8 +8,15 @@ use Filament\Forms\Components\Field;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Panel;
+use Filament\Resources\Pages\EditRecord;
 use Filament\Resources\Pages\ListRecords;
+use Filament\Resources\Pages\ManageRelatedRecords;
+use Filament\Resources\Pages\Page as ResourcePage;
 use Filament\Resources\Pages\PageRegistration;
+use Filament\Resources\Pages\ViewRecord;
+use Filament\Resources\RelationManagers\RelationGroup;
+use Filament\Resources\RelationManagers\RelationManager;
+use Filament\Resources\RelationManagers\RelationManagerConfiguration;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Component as SchemaComponent;
 use Filament\Schemas\Components\EmbeddedTable;
@@ -25,6 +32,7 @@ use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
+use Filament\View\PanelsRenderHook;
 use Livewire\LivewireManager;
 
 /**
@@ -330,6 +338,35 @@ $methodContract = [
     [Repeater::class, 'isReorderableWithDragAndDrop'],
     [Repeater::class, 'getExtraItemActions'],
     [Repeater::class, 'isDeletable'],
+    // Relationship tables (`HasVillamentRelationTable`, the relation endpoint).
+    [RelationManager::class, 'bootCanAuthorizeAccess'],
+    [RelationManager::class, 'canViewForRecord'],
+    [RelationManager::class, 'getDefaultProperties'],
+    [RelationManager::class, 'getPageClass'],
+    [RelationManager::class, 'getOwnerRecord'],
+    [RelationManager::class, 'isReadOnly'],
+    [RelationManager::class, 'content'],
+    [RelationManager::class, 'getTabsContentComponent'],
+    [RelationManager::class, 'canView'],
+    [RelationManager::class, 'canEdit'],
+    [RelationManager::class, 'canDelete'],
+    [ManageRelatedRecords::class, 'content'],
+    [ManageRelatedRecords::class, 'getRelationManagersContentComponent'],
+    [ManageRelatedRecords::class, 'getRelationManagers'],
+    [ManageRelatedRecords::class, 'canView'],
+    [ManageRelatedRecords::class, 'canEdit'],
+    [ManageRelatedRecords::class, 'canDelete'],
+    [EditRecord::class, 'getRelationManagers'],
+    [ViewRecord::class, 'getRelationManagers'],
+    [ResourcePage::class, 'resolveRecord'],
+    [ResourcePage::class, 'authorizeResourceAccess'],
+    [ResourcePage::class, 'canAccess'],
+    [Resource::class, 'resolveRecordRouteBinding'],
+    [Resource::class, 'getRecordRouteKeyName'],
+    [RelationGroup::class, 'ownerRecord'],
+    [RelationGroup::class, 'pageClass'],
+    [RelationGroup::class, 'getManagers'],
+    [RelationManagerConfiguration::class, 'getProperties'],
 ];
 
 $propertyContract = [
@@ -344,6 +381,20 @@ $propertyContract = [
     [ListRecords::class, 'selectedTableRecords'],
     [ListRecords::class, 'deselectedTableRecords'],
     [ListRecords::class, 'isTrackingDeselectedTableRecords'],
+    // Written by the harness before boot, as Livewire's mount would.
+    [RelationManager::class, 'ownerRecord'],
+    [RelationManager::class, 'pageClass'],
+    [ManageRelatedRecords::class, 'record'],
+    [ResourcePage::class, 'parentRecord'],
+    [RelationManagerConfiguration::class, 'relationManager'],
+    // The same table state, on the relationship table components.
+    [RelationManager::class, 'tableSort'],
+    [RelationManager::class, 'tableFilters'],
+    [RelationManager::class, 'tableRecordsPerPage'],
+    [RelationManager::class, 'activeTab'],
+    [ManageRelatedRecords::class, 'tableSort'],
+    [ManageRelatedRecords::class, 'tableFilters'],
+    [ManageRelatedRecords::class, 'activeTab'],
     // Read (or overridden around) by `ClientRepeater` / `ActionBehavior`.
     [Repeater::class, 'isAddable'],
     [Repeater::class, 'isCloneable'],
@@ -368,6 +419,27 @@ it('still finds every Livewire state property the package injects', function (st
     expect(property_exists($class, $property))
         ->toBeTrue("Filament internal API drift: property [{$class}::\${$property}] no longer exists.");
 })->with(array_map(fn (array $pair): array => [$pair[0], $pair[1]], $propertyContract));
+
+it('still names the relation manager render hooks the island keeps in place', function (string $constant): void {
+    expect(defined(PanelsRenderHook::class.'::'.$constant))
+        ->toBeTrue("Filament internal API drift: render hook [PanelsRenderHook::{$constant}] no longer exists.");
+})->with([
+    'RESOURCE_RELATION_MANAGER_BEFORE',
+    'RESOURCE_RELATION_MANAGER_AFTER',
+    'RESOURCE_PAGES_MANAGE_RELATED_RECORDS_TABLE_BEFORE',
+    'RESOURCE_PAGES_MANAGE_RELATED_RECORDS_TABLE_AFTER',
+]);
+
+it('still composes a relation manager as stock content the island replaces one-for-one', function (): void {
+    // The trait's `content()` mirrors stock's component list with the island
+    // in the EmbeddedTable's place; if stock grows a component, mirror it.
+    $source = (string) file_get_contents((new ReflectionMethod(RelationManager::class, 'content'))->getFileName());
+
+    expect($source)
+        ->toContain('RenderHook::make(PanelsRenderHook::RESOURCE_RELATION_MANAGER_BEFORE),
+                EmbeddedTable::make(),
+                RenderHook::make(PanelsRenderHook::RESOURCE_RELATION_MANAGER_AFTER),');
+});
 
 it('still finds the icon rendering helper', function (): void {
     expect(function_exists('Filament\Support\generate_icon_html'))->toBeTrue();

@@ -7,6 +7,13 @@
  * down apps whose mount point left the DOM. A page restored from Livewire's
  * back/forward snapshot carries a lifeless copy of the previous render, which
  * is cleared before the new app mounts (`support/staleRender.js`).
+ *
+ * Islands also arrive WITHOUT a navigation: a relation manager's table comes
+ * in when its tab is opened, or when a lazy manager loads, inside a Livewire
+ * morph. Those mount from Livewire's `morph.added` hook — synchronously,
+ * during the morph, so their teleport slots exist before Alpine (whose
+ * mutation observer runs after the morph) walks the new markup — and tear
+ * down from `morph.removed` when the tab closes again.
  */
 
 import { createApp } from 'vue'
@@ -144,4 +151,50 @@ document.addEventListener('livewire:navigated', () => {
     scan()
 })
 
-export { scan, teardownOrphans }
+/**
+ * Whether a node a morph added or removed is, or holds, an island.
+ *
+ * @param {Node} node
+ * @returns {boolean}
+ */
+function holdsIsland(node) {
+    return node instanceof Element
+        && (node.matches('[data-villament]') || node.querySelector('[data-villament]') !== null)
+}
+
+let isLivewireHooked = false
+
+/**
+ * Registers the morph hooks once Livewire is there; called right away and
+ * again on `livewire:init`, whichever comes first wins.
+ *
+ * @returns {void}
+ */
+function hookLivewire() {
+    const livewire = window.Livewire
+
+    if (isLivewireHooked || typeof livewire?.hook !== 'function') {
+        return
+    }
+
+    isLivewireHooked = true
+
+    livewire.hook('morph.added', ({ el }) => {
+        if (holdsIsland(el)) {
+            scan()
+        }
+    })
+
+    livewire.hook('morph.removed', ({ el }) => {
+        if (holdsIsland(el)) {
+            // After the morph: a node Livewire only moves is removed and
+            // re-added within it, and must keep its app.
+            queueMicrotask(teardownOrphans)
+        }
+    })
+}
+
+hookLivewire()
+document.addEventListener('livewire:init', hookLivewire)
+
+export { scan, teardownOrphans, hookLivewire }

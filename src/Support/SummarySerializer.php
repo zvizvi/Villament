@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Zvizvi\Villament\Support;
 
 use Filament\Resources\Pages\ListRecords;
+use Filament\Resources\Pages\ManageRelatedRecords;
+use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables\Grouping\Group;
 use Filament\Tables\Table;
 use Illuminate\Contracts\Pagination\Paginator;
@@ -29,7 +31,7 @@ final class SummarySerializer
     /**
      * @return array{header: array{heading: string, labels: array<string, string>}|null, page: array<string, mixed>|null, all: array<string, mixed>|null, groupsOnly: bool, groupColumn: ?string, groups: list<array{key: ?string, heading: string, cells: array<string, string>}>|null}|null
      */
-    public function serialize(ListRecords $livewire): ?array
+    public function serialize(ListRecords|RelationManager|ManageRelatedRecords $livewire): ?array
     {
         $table = $livewire->getTable();
         $allQuery = $livewire->getAllTableSummaryQuery();
@@ -116,7 +118,7 @@ final class SummarySerializer
      * @param  iterable<int, Model|array<string, mixed>>  $records
      * @return list<array{key: ?string, heading: string, cells: array<string, string>}>
      */
-    private function groupRows(ListRecords $livewire, Table $table, Group $group, iterable $records, bool $groupsOnly): array
+    private function groupRows(ListRecords|RelationManager|ManageRelatedRecords $livewire, Table $table, Group $group, iterable $records, bool $groupsOnly): array
     {
         $allQuery = $livewire->getAllTableSummaryQuery();
 
@@ -166,7 +168,7 @@ final class SummarySerializer
      * @param  array<string, mixed>  $groupedState
      * @return array{key: ?string, heading: string, cells: array<string, string>}
      */
-    private function groupRow(ListRecords $livewire, Table $table, Group $group, Model|array $record, ?string $key, string $title, array $groupedState, bool $groupsOnly): array
+    private function groupRow(ListRecords|RelationManager|ManageRelatedRecords $livewire, Table $table, Group $group, Model|array $record, ?string $key, string $title, array $groupedState, bool $groupsOnly): array
     {
         $groupColumn = $group->getColumn();
         $scopedQuery = $group->scopeQuery($livewire->getAllTableSummaryQuery(), $record);
@@ -246,7 +248,7 @@ final class SummarySerializer
      * @param  Builder<Model>|null  $query
      * @return array{heading: string, striped: bool, cells: array<string, string>}
      */
-    private function row(ListRecords $livewire, Table $table, ?Builder $query, string $heading, bool $striped): array
+    private function row(ListRecords|RelationManager|ManageRelatedRecords $livewire, Table $table, ?Builder $query, string $heading, bool $striped): array
     {
         $cells = [];
 

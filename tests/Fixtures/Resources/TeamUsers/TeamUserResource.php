@@ -10,7 +10,9 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Zvizvi\Villament\Tests\Fixtures\Models\User;
 use Zvizvi\Villament\Tests\Fixtures\Resources\Teams\TeamResource;
+use Zvizvi\Villament\Tests\Fixtures\Resources\TeamUsers\Pages\EditTeamUser;
 use Zvizvi\Villament\Tests\Fixtures\Resources\TeamUsers\Pages\ListTeamUsers;
+use Zvizvi\Villament\Tests\Fixtures\Resources\TeamUsers\RelationManagers\UserTeamsRelationManager;
 
 /**
  * A NESTED resource (a team's users) whose slug is `users` — the same slug as
@@ -40,6 +42,12 @@ class TeamUserResource extends Resource
     {
         return [
             'index' => ListTeamUsers::route('/'),
+            'edit' => EditTeamUser::route('/{record}/edit'),
         ];
+    }
+
+    public static function getRelations(): array
+    {
+        return [UserTeamsRelationManager::class];
     }
 }

@@ -1,5 +1,5 @@
 /**
- * Real-browser suite for `ClientRepeater` (Playwright, Chromium).
+ * Real-browser suite for `ClientRepeater` and relation manager islands (Playwright, Chromium).
  *
  *   npm run build && npm run test:browser
  *
@@ -748,6 +748,73 @@ test('wire:navigate: a ClientRepeater works after an SPA visit, and after the ba
 
     assert.ok(JSON.parse(await page.textContent('#stored-notes')).client.some((note) => note.body === 'After back'))
     assert.deepEqual(errors.filter((message) => ! message.startsWith('Failed to fetch dynamically imported module')), [])
+})
+
+const islandRows = (page) => page.locator('[data-villament] tbody tr.fi-ta-row:not(.fi-ta-row-not-reorderable):not(.fi-ta-summary-row):not(.fi-ta-group-header-row)')
+
+/** The record rows' text, once the island has painted (and finished a refetch). */
+async function islandTexts(page) {
+    await page.waitForSelector('[data-villament] [data-villament-mount] table')
+    await page.waitForFunction(() => ! document.querySelector('[data-villament] .fi-ta-content-loading'))
+
+    return islandRows(page).allInnerTexts()
+}
+
+test('relation manager: the island lists the owner\'s members, and deletes one through the actions bridge', async (page) => {
+    await page.goto(`${baseUrl}/admin/team-relations/1/edit`)
+    await settle(page)
+
+    const before = await islandTexts(page)
+
+    assert.equal(before.length, 5, `the first page, five per page: ${JSON.stringify(before)}`)
+    assert.ok(before[0].includes('Member Ada'), `formatStateUsing() ran server-side: ${before[0]}`)
+
+    const url = page.url()
+    await page.locator('[data-villament] .fi-ta-search-field input[type="search"]').first().fill('Bea')
+    await page.waitForFunction(() => document.querySelectorAll('[data-villament] tbody tr.fi-ta-row:not(.fi-ta-row-not-reorderable)').length === 1)
+    assert.equal(page.url(), url, 'a relation manager keeps its state out of the URL, as stock does')
+
+    await page.locator('[data-villament] .fi-ta-search-field input[type="search"]').first().fill('')
+    await page.waitForFunction(() => document.querySelectorAll('[data-villament] tbody tr.fi-ta-row:not(.fi-ta-row-not-reorderable)').length === 5)
+
+    await press(islandRows(page).first().getByRole('button', { name: 'Delete', exact: true }))
+    await page.locator('.fi-modal-window').getByRole('button', { name: 'Delete', exact: true }).click()
+    await settle(page)
+    await page.waitForFunction(() => ! [...document.querySelectorAll('[data-villament] tbody tr.fi-ta-row:not(.fi-ta-row-not-reorderable)')].some((row) => row.innerText.includes('Member Ada')))
+
+    const after = await islandTexts(page)
+
+    assert.equal(after.length, 5, 'the next member moved up into the page')
+    assert.ok(! after.some((text) => text.includes('Member Ada')), 'the deleted member is gone after the refetch')
+})
+
+test('relation manager: an island mounts when its tab opens (lazily loaded) and again when its tab comes back', async (page) => {
+    await page.goto(`${baseUrl}/admin/team-relations/1/edit`)
+    await settle(page)
+    await islandTexts(page)
+
+    await page.getByRole('tab', { name: 'Notes' }).click()
+    await settle(page)
+    await page.waitForFunction(() => [...document.querySelectorAll('[data-villament] tbody tr.fi-ta-row:not(.fi-ta-row-not-reorderable)')].some((row) => row.innerText.includes('charlie')))
+
+    assert.deepEqual((await islandTexts(page)).map((text) => text.split('\t')[0].trim()), ['alpha', 'charlie', 'delta'], 'the lazy notes manager, sorted by its default sort')
+
+    await page.getByRole('tab', { name: 'Members', exact: true }).click()
+    await settle(page)
+    await page.waitForFunction(() => [...document.querySelectorAll('[data-villament] tbody tr.fi-ta-row:not(.fi-ta-row-not-reorderable)')].some((row) => row.innerText.includes('Member')))
+
+    assert.equal(await page.locator('[data-villament] [data-villament-mount]').count(), 1, 'one island: the closed tab\'s app was torn down')
+})
+
+test('ManageRelatedRecords: the island lists the owner\'s notes and keeps its state in the URL', async (page) => {
+    await page.goto(`${baseUrl}/admin/team-relations/1/notes`)
+    await settle(page)
+
+    assert.equal((await islandTexts(page)).length, 3)
+
+    await page.locator('[data-villament] .fi-ta-search-field input[type="search"]').first().fill('alpha')
+    await page.waitForFunction(() => document.querySelectorAll('[data-villament] tbody tr.fi-ta-row:not(.fi-ta-row-not-reorderable)').length === 1)
+    await page.waitForURL(/search=alpha/)
 })
 
 test('the page is not a secure context, as on a plain-HTTP site, and adding a row still works', async (page, requests) => {

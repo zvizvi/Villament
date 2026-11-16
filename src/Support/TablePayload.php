@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace Zvizvi\Villament\Support;
 
+use Closure;
 use Filament\Resources\Pages\ListRecords;
+use Filament\Resources\Pages\ManageRelatedRecords;
+use Filament\Resources\RelationManagers\RelationManager;
+use Illuminate\Database\Eloquent\Model;
 
 /**
  * Assembles the data payload the Vue island consumes — records, meta,
@@ -23,10 +27,10 @@ final class TablePayload
     ) {}
 
     /**
-     * @param  class-string<\Filament\Resources\Resource>  $resourceClass
+     * @param  class-string<\Filament\Resources\Resource>|Closure(Model): array<string, bool>  $abilities  see {@see RecordSerializer::serialize()}
      * @return array<string, mixed>
      */
-    public function for(ListRecords $component, string $resourceClass): array
+    public function for(ListRecords|RelationManager|ManageRelatedRecords $component, string|Closure $abilities): array
     {
         $table = $component->getTable();
         $records = $component->getTableRecords();
@@ -52,7 +56,7 @@ final class TablePayload
         $compacted = (new ActionPayloadCompactor)->compact(
             $isGroupsOnly
                 ? []
-                : $this->recordSerializer->serialize($component, $resourceClass, $records),
+                : $this->recordSerializer->serialize($component, $abilities, $records),
         );
 
         return [
