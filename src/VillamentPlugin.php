@@ -7,6 +7,7 @@ namespace Zvizvi\Villament;
 use Filament\Contracts\Plugin;
 use Filament\Panel;
 use Illuminate\Support\Facades\Route;
+use Zvizvi\Villament\Http\Controllers\RelationTableDataController;
 use Zvizvi\Villament\Http\Controllers\TableDataController;
 
 final class VillamentPlugin implements Plugin
@@ -27,6 +28,13 @@ final class VillamentPlugin implements Plugin
             Route::get('villament/{resource}/data', TableDataController::class)
                 ->where('resource', '[^/]+')
                 ->name('villament.data');
+
+            // A relationship table's island (`HasVillamentRelationTable`):
+            // a relation manager or a ManageRelatedRecords page, named by an
+            // encrypted `?token=` (`RelationTableToken`). One segment after
+            // `villament/`, so it can never match `villament/{resource}/data`.
+            Route::get('villament/relation-data', RelationTableDataController::class)
+                ->name('villament.relation-data');
         };
 
         // Tenant panels: register inside the `{tenant}`-prefixed group so the

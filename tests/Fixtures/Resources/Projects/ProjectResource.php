@@ -33,6 +33,11 @@ class ProjectResource extends Resource
     /**
      * @return array<string, PageRegistration>
      */
+    public static function getRelations(): array
+    {
+        return [RelationManagers\TeamMembersRelationManager::class];
+    }
+
     public static function getPages(): array
     {
         return [

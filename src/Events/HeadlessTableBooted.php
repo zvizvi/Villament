@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace Zvizvi\Villament\Events;
 
 use Filament\Resources\Pages\ListRecords;
+use Filament\Resources\Pages\ManageRelatedRecords;
+use Filament\Resources\RelationManagers\RelationManager;
 
 /**
- * Dispatched once the data endpoint has booted the list page headlessly —
+ * Dispatched once the data endpoint has booted a table component headlessly (a List
+ * page, a relation manager or a ManageRelatedRecords page) —
  * its table built, before any request state is validated or applied.
  *
  * On a real page a package that adds to the table at runtime (filters pushed
@@ -18,5 +21,5 @@ use Filament\Resources\Pages\ListRecords;
  */
 final readonly class HeadlessTableBooted
 {
-    public function __construct(public ListRecords $component) {}
+    public function __construct(public ListRecords|RelationManager|ManageRelatedRecords $component) {}
 }

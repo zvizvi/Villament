@@ -22,6 +22,7 @@ After the initial page load, all table interactions — sorting, pagination, glo
 - [x] **Phase 2 — Filters**: serializer chain (`select` incl. multiple + enum options, `ternary`, anything else → `livewire-fallback`), Vue filter dropdown, server-computed indicator chips (`indicateUsing` closures included) with per-chip remove + remove-all, localized UI strings via Filament's own translations (the island follows the panel locale, RTL included), and the fallback mechanism: the page's original Livewire filter form stays mounted (hidden) and a JS bridge pushes its state changes into the Vue store, so one exotic filter never blocks adoption. Per-filter parity tests against the stock table.
 - [x] **Phase 3 — Actions bridge + column manager**: row actions (buttons, links, ActionGroup dropdowns) evaluated per record server-side (visibility = Filament authorization; hidden actions never reach the client) and mounted through the page component's unified `mountAction()` — Filament's modals, confirmation and forms work unchanged; record selection with select-page and select-all-matching (Filament's inversion semantics) feeding bulk actions with exactly the selected keys; automatic island refresh after any action completes; the column manager applies through `applyTableColumnManager()` so visibility persists in the session and the data endpoint follows automatically; clickable rows (`recordUrl`/`recordAction`) and striped tables.
 - [ ] **Phase 4 — Polish** (cursor pagination, column toggling, summaries, export, config). In progress: cursor pagination, column toggling, extension API, config, server-computed **summaries** (page + all) and **grouping** all shipped — grouping covers Vue-native group/direction settings, server-evaluated group-header rows (with per-group select-all, collapsible groups, per-group summary subheadings, and `groupsOnly()` summary rows), URL sync, and is parity-tested against the stock table. Summaries cover the page/all/header rows with their `summaries()` toggles; column headers carry Filament's full modifier set (`wrapHeader()`, `grow()`, `width()`, responsive visibility) and `ColumnGroup` header rows. The column manager is Filament-native (teleported like the filters), so `columnManagerLayout()`, reset position, grid columns, a customized trigger and drag reordering all work as they do in stock. Per-column options from the Columns overview are carried through: `$rowLoop` injection, cell click actions (`action()`, `disabledClick()`, `url()` on every column type), `tooltip()`/`emptyTooltip()`/`headerTooltip()`, `placeholder()`, `description(position:)`, the `extra*Attributes()` bags, and the table's own `searchDebounce()`/`searchOnBlur()`/`searchPlaceholder()` plus session persistence of sort and searches. From the Actions docs: every trigger variant (`button()`, `iconButton()`, `badge()`, `size()`, `tooltip()`, `hiddenLabel()`, counter badges, `extraAttributes()`, and `modifyUngroupedRecordActionsUsing()`) with its class list computed by Filament itself; `headerActions()` alongside the table's `heading()`/`description()` (and `header()`, the custom-view escape hatch, teleported in natively so its own Livewire/Alpine bindings stay live); `recordActions(position:)` with `recordActionsAlignment()`/`recordActionsColumnLabel()`; and the complete selection API — `selectable()`, `checkIfRecordIsSelectableUsing()`, `maxSelectableRecords()`, `selectCurrentPageOnly()`, `selectGroupsOnly()`, `disabledSelection()`, shift-click ranges and indeterminate checkboxes. The **empty state** is Filament-native too (icon, heading, description and `emptyStateActions()` with their full action surface, or a custom `emptyState()` view), and `recordClasses()` reaches the row.
+- [x] **Relation managers**: a relation manager or a `ManageRelatedRecords` page opts in with one line, and its table becomes an island fed by its own `table()`, its relationship query and its own authorization. Parity-tested against stock twins, and covered in the browser (actions bridge, lazy tabs). See [Relation managers](#relation-managers).
 - [ ] **Forms** (beyond the table): `ClientRepeater` shipped. It is a drop-in `Repeater` whose structural actions (add, add-between, delete, clone, move, drag reorder) run in the browser, and whose rows render there too: server-only fields arrive per row as native islands, and validation errors come from `$wire.$errors`. It has parity, Vitest and Playwright suites. See [Forms: `ClientRepeater`](#forms-clientrepeater).
 
 ## Usage
@@ -59,6 +60,37 @@ After the initial paint (schema + first page inlined, no extra requests), sortin
 A table with `->reorderable('sort')` keeps working: the island shows Filament's own reorder trigger in its toolbar, where stock draws it (between the `TOOLBAR_REORDER_TRIGGER_*` render hooks, and customized by `reorderRecordsTriggerAction()` as usual). Pressing it hands the page to the **stock table** for as long as the reordering lasts: the island is hidden, Filament's table renders in its place with its drag handles, and each drop is saved by `reorderTable()`, with `authorizeReorder()`, `reorderable(direction:)`, the before/after callbacks and pagination while reordering all as in stock. Pressing "done" shows the island again, and it refetches the records in their new order.
 
 Dragging rows is not rebuilt in Vue. While reordering, stock turns off sorting, grouping, record actions and pagination anyway, so there is nothing for the island to speed up there.
+
+## Relation managers
+
+A relation manager opts in the same way a List page does — swap its parent class:
+
+```php
+use Zvizvi\Villament\RelationManagers\VillamentRelationManager;
+
+class PostsRelationManager extends VillamentRelationManager // ← was RelationManager
+{
+    protected static string $relationship = 'posts';
+
+    public function table(Table $table): Table { /* unchanged */ }
+}
+```
+
+A `ManageRelatedRecords` page swaps to `Zvizvi\Villament\Pages\VillamentManageRelatedRecords`. A customized class can use the trait instead: `use Zvizvi\Villament\Concerns\HasVillamentRelationTable;`. Opting in is per manager, so a page can mix island and stock managers.
+
+What carries over unchanged:
+
+- **The table and its query.** The island is fed by the manager's own `table()`, its relationship query (`getRelationship()`, so only the owner record's related records), its tabs (`getTabs()`), and a `relatedResource`'s `configureTable()`. Sorting, searching, filters, grouping, summaries, column manager, selection and pagination work as on a List page.
+- **Actions.** Row, bulk, header and empty-state actions mount on the relation manager's own Livewire component, so attach/detach, associate/dissociate, create/edit modals and their forms are Filament's. On a View page, `readOnlyRelationManagersOnResourceViewPagesByDefault()` hides them, as in stock.
+- **Authorization.** Each record's `can` map comes from the manager's own `canView()` / `canEdit()` / `canDelete()` (the related model's policy), not from the owner's resource.
+- **Lazy managers, tabs and relation groups.** An island inside a tab or a lazy manager mounts when Livewire adds it, and tears down when the tab closes.
+
+Two behaviours follow stock rather than the List page:
+
+- **No URL sync for a relation manager.** Its stock table keeps no state in the query string (the URL belongs to the host page and its other managers), and neither does the island. A `ManageRelatedRecords` page does sync its URL, as stock does there.
+- **The endpoint is named by a token.** `GET {panel}/villament/relation-data?token=…`. The island renders with an encrypted, authenticated token (the app key, `APP_PREVIOUS_KEYS` included for rotation) naming its panel, resource, host page, manager, the properties it was mounted with (a `RelationManagerConfiguration`'s) and the owner record. The token only spares the endpoint working out again which table this is; it grants nothing. On every request the endpoint checks what the token names against the panel (its resources, their pages, the opt-in), resolves the owner record through the page's own `resolveRecord()` (the resource's route binding, under the parent record of a nested resource), and runs the page's access checks and the manager's `canViewForRecord()`. The token is bound to the tenant it was rendered under. A token that is tampered with, names something the panel does not serve, or comes from another tenant is a 404. A user who may no longer see the manager gets a 403.
+
+The testing assertions (`assertCanSeeTableRecords()` and the rest) work on an island relation manager as they do on a List page.
 
 ## Forms: `ClientRepeater`
 
@@ -168,7 +200,7 @@ composer analyse    # PHPStan level 6
 composer format     # Pint
 npm run build       # Vite → dist/ (island bundle + the ClientRepeater Alpine component)
 npm test            # Vitest
-npm run test:browser # Playwright: the ClientRepeater suite against the fixture app (needs npm run build)
+npm run test:browser # Playwright: the ClientRepeater and relation manager suites against the fixture app (needs npm run build)
 ```
 
 Design decisions and every internal Filament API the package touches are logged in [DECISIONS.md](DECISIONS.md). Understood-but-unscheduled work lives in [BACKLOG.md](BACKLOG.md). The full spec lives in [AGENTS.md](AGENTS.md).

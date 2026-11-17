@@ -16,6 +16,7 @@ use Zvizvi\Villament\Tests\Fixtures\Resources\CursorUsers\CursorUserResource;
 use Zvizvi\Villament\Tests\Fixtures\Resources\HookedUsers\HookedUserResource;
 use Zvizvi\Villament\Tests\Fixtures\Resources\PickedUsers\PickedUserResource;
 use Zvizvi\Villament\Tests\Fixtures\Resources\Stages\StageResource;
+use Zvizvi\Villament\Tests\Fixtures\Resources\TeamRelations\TeamRelationsResource;
 use Zvizvi\Villament\Tests\Fixtures\Resources\Teams\TeamResource;
 use Zvizvi\Villament\Tests\Fixtures\Resources\TeamUsers\TeamUserResource;
 use Zvizvi\Villament\Tests\Fixtures\Resources\Users\UserResource;
@@ -44,6 +45,7 @@ class AdminPanelProvider extends PanelProvider
                 CursorUserResource::class,
                 HookedUserResource::class,
                 StageResource::class,
+                TeamRelationsResource::class,
             ])
             ->middleware([
                 // As in every real panel: Livewire's update route runs the

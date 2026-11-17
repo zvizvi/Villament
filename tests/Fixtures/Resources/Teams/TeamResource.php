@@ -9,7 +9,9 @@ use Filament\Resources\Resource;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Zvizvi\Villament\Tests\Fixtures\Models\Team;
+use Zvizvi\Villament\Tests\Fixtures\Resources\Teams\Pages\EditTeam;
 use Zvizvi\Villament\Tests\Fixtures\Resources\Teams\Pages\ListTeams;
+use Zvizvi\Villament\Tests\Fixtures\Resources\Teams\RelationManagers\UsersRelationManager;
 use Zvizvi\Villament\Tests\Fixtures\Resources\TeamUsers\TeamUserResource;
 
 /**
@@ -33,6 +35,12 @@ class TeamResource extends Resource
     {
         return [
             'index' => ListTeams::route('/'),
+            'edit' => EditTeam::route('/{record}/edit'),
         ];
+    }
+
+    public static function getRelations(): array
+    {
+        return [UsersRelationManager::class];
     }
 }
