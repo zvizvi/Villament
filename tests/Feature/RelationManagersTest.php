@@ -18,6 +18,8 @@ use Zvizvi\Villament\Tests\Fixtures\Resources\TeamRelations\RelationManagers\Mem
 use Zvizvi\Villament\Tests\Fixtures\Resources\TeamRelations\RelationManagers\NotesRelationManager;
 use Zvizvi\Villament\Tests\Fixtures\Resources\TeamRelations\RelationManagers\StockMembersRelationManager;
 use Zvizvi\Villament\Tests\Fixtures\Resources\TeamRelations\TeamRelationsResource;
+use Zvizvi\Villament\Tests\Fixtures\Resources\Teams\Pages\EditTeam;
+use Zvizvi\Villament\Tests\Fixtures\Resources\Teams\RelationManagers\UsersRelationManager;
 use Zvizvi\Villament\Tests\Fixtures\Resources\TeamUsers\Pages\EditTeamUser;
 use Zvizvi\Villament\Tests\Fixtures\Resources\TeamUsers\RelationManagers\UserTeamsRelationManager;
 use Zvizvi\Villament\Tests\Fixtures\Resources\TeamUsers\TeamUserResource;
@@ -365,6 +367,25 @@ describe('a relation manager on a nested resource', function (): void {
         getJson(relationUrl($token($this->otherTeam->getKey())))->assertNotFound();
         getJson(relationUrl($token(999999)))->assertNotFound();
         getJson(relationUrl($token(null)))->assertNotFound();
+    });
+});
+
+describe('a relation manager whose related resource is nested under its owner', function (): void {
+    it("builds the related resource's URLs under the owner, as the host page does", function (): void {
+        // Filament guesses the nested resource's `{team}` from the host
+        // page's `{record}` (`getUrl(shouldGuessMissingParameters: true)`).
+        // The endpoint's own route has no `{record}` of its own.
+        $config = livewire(UsersRelationManager::class, ['ownerRecord' => $this->team, 'pageClass' => EditTeam::class])
+            ->instance()->getVillamentTableConfig();
+
+        $response = getJson($config['endpoint'])->assertOk();
+        $team = $this->team->getKey();
+
+        expect(array_column($response->json('records'), 'key'))
+            ->each->toBeIn(User::query()->where('team_id', $team)->pluck('id')->map(fn (int $id): string => (string) $id)->all())
+            ->and(array_filter(array_column($response->json('records'), 'url')))
+            ->not->toBeEmpty()
+            ->each->toMatch("#/admin/teams/{$team}/users/\\d+/edit$#");
     });
 });
 

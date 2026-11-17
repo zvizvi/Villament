@@ -95,6 +95,8 @@ final class RelationTableDataController
 
         $ownerRecord = $this->resolveOwnerRecord($request, $resourceClass, $pageClass, $target['owner'], $target['parent']);
 
+        $this->giveTheRouteTheOwnersRecordParameter($request, $target['owner']);
+
         if ($managerClass !== null) {
             /** @var class-string<RelationManager> $managerClass */
             $this->harness->forRelationManager($managerClass, $ownerRecord, $pageClass, $target['properties']);
@@ -104,6 +106,25 @@ final class RelationTableDataController
         }
 
         return $this->responder->respond($request, $this->harness);
+    }
+
+    /**
+     * The host page's route carries the owner as `{record}`, and Filament
+     * reads it from there: a related resource NESTED under the owner's
+     * resource (`/campaigns/{campaign}/groups`) builds its create, edit, view
+     * and record URLs by guessing the missing `{campaign}` from the current
+     * route's `{record}` (`Resource::getUrl(shouldGuessMissingParameters:
+     * true)`). The endpoint's route has no `{record}`, so the first such URL
+     * threw. The owner was resolved and authorized above, under the key the
+     * token carries, which is exactly what the page's `{record}` holds.
+     */
+    private function giveTheRouteTheOwnersRecordParameter(Request $request, int|string $ownerKey): void
+    {
+        $route = $request->route();
+
+        if ($route instanceof Route && ! $route->hasParameter('record')) {
+            $route->setParameter('record', $ownerKey);
+        }
     }
 
     private function optedIn(string $class): bool
