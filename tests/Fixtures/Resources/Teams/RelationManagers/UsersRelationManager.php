@@ -22,7 +22,7 @@ class UsersRelationManager extends VillamentRelationManager
 
     protected static ?string $relatedResource = TeamUserResource::class;
 
-    protected static ?bool $isLazyLoaded = false;
+    protected static bool $isLazy = false;
 
     public function table(Table $table): Table
     {

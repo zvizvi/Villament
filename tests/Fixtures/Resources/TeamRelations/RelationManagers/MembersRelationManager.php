@@ -17,7 +17,7 @@ class MembersRelationManager extends VillamentRelationManager
 {
     protected static string $relationship = 'users';
 
-    protected static ?bool $isLazyLoaded = false;
+    protected static bool $isLazy = false;
 
     protected static ?string $title = 'Members';
 

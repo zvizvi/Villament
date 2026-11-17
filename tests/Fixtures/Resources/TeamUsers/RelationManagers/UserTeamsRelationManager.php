@@ -16,7 +16,7 @@ class UserTeamsRelationManager extends VillamentRelationManager
 {
     protected static string $relationship = 'teams';
 
-    protected static ?bool $isLazyLoaded = false;
+    protected static bool $isLazy = false;
 
     public function table(Table $table): Table
     {
