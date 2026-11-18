@@ -250,6 +250,47 @@ final class HeadlessTableHarness
     }
 
     /**
+     * Sets the page's active tab BEFORE boot, for the same reason as
+     * {@see withStateProperties()}: the table is built during boot, and a
+     * table may decide from the tab which columns and filters exist (Filament
+     * supports `->hidden(fn ($livewire) => $livewire->activeTab === …)`, and
+     * `zvizvi/filament-column-filters` adds a `cf_*` filter for each column
+     * visible at that moment). Set only in {@see applyState()}, the tab was
+     * still null while the table was built and validated, so the endpoint
+     * refused with a 422 the very filters the page had drawn on that tab.
+     *
+     * A blank tab is the page's `getDefaultActiveTab()`, as stock's `mount()`
+     * applies it; one the page does not define is a 422.
+     */
+    public function withActiveTab(mixed $tab): self
+    {
+        $component = $this->component;
+
+        if (! property_exists($component, 'activeTab') || ! method_exists($component, 'getCachedTabs')) {
+            return $this;
+        }
+
+        if (blank($tab)) {
+            $defaultTab = $component->getDefaultActiveTab();
+            $component->activeTab = $defaultTab === null ? null : (string) $defaultTab;
+
+            return $this;
+        }
+
+        if (! is_string($tab)) {
+            throw ValidationException::withMessages(['tab' => 'The tab parameter must be a string.']);
+        }
+
+        if (! in_array($tab, array_map('strval', array_keys($component->getCachedTabs())), true)) {
+            throw ValidationException::withMessages(['tab' => "The tab [{$tab}] does not exist."]);
+        }
+
+        $component->activeTab = $tab;
+
+        return $this;
+    }
+
+    /**
      * Replays Livewire's own boot lifecycle — `boot` / `initialize` / `booted`,
      * component method first then every trait hook, in `class_uses_recursive`
      * order, exactly as `SupportLifecycleHooks` does on mount and hydrate. That

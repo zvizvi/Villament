@@ -339,6 +339,18 @@ export function useTableData(endpoint, state, options = {}) {
                 fetchNow()
             }
         }, { flush: 'sync' }),
+
+        // A page past the last one - a stale `?page=` in a URL, or the last
+        // row of the last page deleted - shows no rows and "0 - 0 of N".
+        // Stock does the same; here the URL keeps the page, so it is moved
+        // back to the last page that has rows, which then fetches it.
+        watch(meta, (current) => {
+            const lastPage = current?.lastPage
+
+            if (Number.isInteger(lastPage) && lastPage >= 1 && Number.isInteger(current?.currentPage) && current.currentPage > lastPage) {
+                state.page.value = lastPage
+            }
+        }, { immediate: true }),
     ]
 
     /** @returns {void} */

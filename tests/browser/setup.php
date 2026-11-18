@@ -49,4 +49,15 @@ foreach (['delta', 'alpha', 'charlie'] as $body) {
     $team->notes()->create(['kind' => 'client', 'body' => $body]);
 }
 
+// The tab scenarios (`TabbedUserResource`): the `pending` tab draws a column
+// the `all` tab does not.
+foreach (['Pia', 'Quin', 'Rex'] as $name) {
+    User::query()->create([
+        'name' => $name,
+        'email' => strtolower($name).'@example.test',
+        'password' => 'x',
+        'status' => 'pending',
+    ]);
+}
+
 fwrite(STDOUT, "ready\n");

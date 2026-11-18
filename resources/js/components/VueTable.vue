@@ -349,6 +349,7 @@ watch(isLoading, (loading) => {
 
 const bridge = useLivewireBridge({
     livewireId: props.config.livewireId,
+    isConnected: () => props.rootElement?.isConnected ?? true,
     initialFilters: props.config.state?.filters ?? {},
     initialTab: props.config.state?.tab ?? null,
     initialProperties: props.config.state?.properties ?? {},

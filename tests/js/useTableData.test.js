@@ -358,6 +358,50 @@ describe('useTableData', () => {
         data.destroy()
     })
 
+    it('moves a page past the last one back to the last page', async () => {
+        fetchMock.mockResolvedValue(jsonResponse({
+            meta: { currentPage: 1, perPage: 10, total: 2, lastPage: 1, from: 1, to: 2 },
+        }))
+
+        const state = makeState()
+        state.page.value = 5
+
+        const data = useTableData(ENDPOINT, state, {
+            initialData: {
+                records: [],
+                meta: { currentPage: 5, perPage: 10, total: 2, lastPage: 1, from: null, to: null },
+            },
+            schemaVersion: 'v1',
+        })
+
+        await vi.runAllTimersAsync()
+
+        expect(state.page.value).toBe(1)
+        expect(fetchMock).toHaveBeenCalledTimes(1)
+        expect(fetchMock.mock.calls[0][0]).not.toContain('page=5')
+
+        data.destroy()
+    })
+
+    it('leaves a cursor-paginated table alone (it has no last page)', async () => {
+        const state = makeState()
+
+        const data = useTableData(ENDPOINT, state, {
+            initialData: {
+                records: [],
+                meta: { currentPage: null, perPage: 10, total: null, lastPage: null, from: null, to: null },
+            },
+            schemaVersion: 'v1',
+        })
+
+        await vi.runAllTimersAsync()
+
+        expect(state.page.value).toBe(1)
+        expect(fetchMock).not.toHaveBeenCalled()
+
+        data.destroy()
+    })
+
     it('sends the cursor instead of the page, and search changes clear it', async () => {
         const state = makeState()
 

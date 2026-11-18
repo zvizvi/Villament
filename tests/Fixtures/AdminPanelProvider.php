@@ -16,6 +16,7 @@ use Zvizvi\Villament\Tests\Fixtures\Resources\CursorUsers\CursorUserResource;
 use Zvizvi\Villament\Tests\Fixtures\Resources\HookedUsers\HookedUserResource;
 use Zvizvi\Villament\Tests\Fixtures\Resources\PickedUsers\PickedUserResource;
 use Zvizvi\Villament\Tests\Fixtures\Resources\Stages\StageResource;
+use Zvizvi\Villament\Tests\Fixtures\Resources\TabbedUsers\TabbedUserResource;
 use Zvizvi\Villament\Tests\Fixtures\Resources\TeamRelations\TeamRelationsResource;
 use Zvizvi\Villament\Tests\Fixtures\Resources\Teams\TeamResource;
 use Zvizvi\Villament\Tests\Fixtures\Resources\TeamUsers\TeamUserResource;
@@ -44,6 +45,7 @@ class AdminPanelProvider extends PanelProvider
                 PickedUserResource::class,
                 CursorUserResource::class,
                 HookedUserResource::class,
+                TabbedUserResource::class,
                 StageResource::class,
                 TeamRelationsResource::class,
             ])

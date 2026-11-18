@@ -817,6 +817,33 @@ test('ManageRelatedRecords: the island lists the owner\'s notes and keeps its st
     await page.waitForURL(/search=alpha/)
 })
 
+test('a tab that changes the table swaps the island in place, never reloading the page', async (page) => {
+    await page.goto(`${baseUrl}/admin/tabbed-users`)
+    await settle(page)
+    await islandTexts(page)
+
+    let loads = 0
+    page.on('load', () => loads++)
+
+    const headers = () => page.locator('[data-villament] thead th').allInnerTexts()
+
+    assert.ok(! (await headers()).some((text) => text.includes('Email')), 'the all tab draws no email column')
+
+    await page.locator('.fi-tabs').getByText('Pending', { exact: true }).click()
+    await settle(page)
+    await page.waitForFunction(() => [...document.querySelectorAll('[data-villament] thead th')].some((th) => th.innerText.includes('Email')))
+
+    assert.deepEqual((await islandTexts(page)).map((text) => text.split('\t')[0].trim()), ['Pia', 'Quin', 'Rex'], 'the pending tab\'s records, inlined with its schema')
+
+    await page.locator('.fi-tabs').getByText('All', { exact: true }).click()
+    await settle(page)
+    await page.waitForFunction(() => ! [...document.querySelectorAll('[data-villament] thead th')].some((th) => th.innerText.includes('Email')))
+
+    await page.waitForTimeout(500)
+    assert.equal(loads, 0, 'no full page reload on either tab change')
+    assert.equal(await page.locator('[data-villament] [data-villament-mount]').count(), 1, 'one island: the replaced app was torn down')
+})
+
 test('the page is not a secure context, as on a plain-HTTP site, and adding a row still works', async (page, requests) => {
     assert.equal(await page.evaluate(() => globalThis.isSecureContext), false, 'the suite must run outside a secure context')
     assert.equal(await page.evaluate(() => typeof globalThis.crypto.randomUUID), 'undefined')

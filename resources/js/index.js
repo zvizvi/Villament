@@ -182,6 +182,12 @@ function hookLivewire() {
     livewire.hook('morph.added', ({ el }) => {
         if (holdsIsland(el)) {
             scan()
+
+            // An island REPLACED by the morph (a new `wire:key`: the schema
+            // changed) is reported as an add only - `morph.removed` never
+            // fires for the one it displaced - so its app is torn down here,
+            // once the morph has taken it out of the document.
+            queueMicrotask(teardownOrphans)
         }
     })
 

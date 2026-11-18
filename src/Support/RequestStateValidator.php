@@ -192,18 +192,47 @@ final class RequestStateValidator
         $validated = [];
 
         foreach ($filters as $filterName => $state) {
-            if ($table->getFilter((string) $filterName) === null) {
-                $this->reject("filters.{$filterName}", "The filter [{$filterName}] does not exist.");
-            }
-
             if (! is_array($state)) {
                 $this->reject("filters.{$filterName}", 'Filter state must be an array of form values.');
+            }
+
+            if ($table->getFilter((string) $filterName) === null) {
+                // The page's `tableFilters` outlives a tab change, so the map
+                // the island sends can name a filter another tab drew. Stock
+                // ignores state for a filter it does not show, and so does
+                // this: a filter the table hides on this tab, and an unknown
+                // one that chooses nothing, are dropped. An unknown filter
+                // that DOES choose something is still a 422 - a client bug or
+                // a probe, never something the page itself produced.
+                if ($table->getFilter((string) $filterName, withHidden: true) !== null || $this->choosesNothing($state)) {
+                    continue;
+                }
+
+                $this->reject("filters.{$filterName}", "The filter [{$filterName}] does not exist.");
             }
 
             $validated[(string) $filterName] = $state;
         }
 
         return $validated;
+    }
+
+    /**
+     * Whether a filter's form state picks nothing at all: every value in it,
+     * however nested, empty or off (a query string carries an unticked box as
+     * `0` or `false`).
+     *
+     * @param  array<array-key, mixed>  $state
+     */
+    private function choosesNothing(array $state): bool
+    {
+        foreach ($state as $value) {
+            if (is_array($value) ? ! $this->choosesNothing($value) : ! in_array($value, [null, '', '0', 'false', false], true)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private function validatePage(Request $request): int

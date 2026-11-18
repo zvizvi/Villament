@@ -37,6 +37,9 @@ final class HeadlessTableResponder
         $properties = $request->query('properties');
         $harness->withStateProperties(is_array($properties) ? $properties : []);
 
+        // The tab too: a tab can decide which columns and filters exist.
+        $harness->withActiveTab($request->query('tab'));
+
         $harness->boot();
 
         $table = $harness->getTable();
