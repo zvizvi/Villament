@@ -39,6 +39,44 @@ import { appendFilterParams } from '../support/filterParams.js'
  * @property {() => void} destroy Stops watchers, clears timers, aborts any in-flight request.
  */
 
+const DRIFT_RELOAD_KEY = 'villament:drift-reload'
+
+/**
+ * Reload the page for a schema drift — once per pair of versions.
+ *
+ * A deploy changes the version the endpoint answers with, and a reload brings
+ * the page up to it, after which the two agree. A drift that SURVIVES the
+ * reload is not a deploy: the page and the endpoint disagree about the table
+ * for good, and reloading again would send the person back to the first page
+ * on every page change and sort, for ever. So the second time the same pair
+ * comes back the data is shown as it is and the disagreement is reported in
+ * the console, where it can be found.
+ *
+ * @returns {boolean} Whether the page is reloading.
+ */
+function reloadForDrift(pageVersion, endpointVersion) {
+    const pair = `${pageVersion}->${endpointVersion}`
+
+    try {
+        if (window.sessionStorage.getItem(DRIFT_RELOAD_KEY) === pair) {
+            console.warn(
+                `Villament: the table schema still differs after a reload (page ${pageVersion}, endpoint ${endpointVersion}); not reloading again.`,
+            )
+
+            return false
+        }
+
+        window.sessionStorage.setItem(DRIFT_RELOAD_KEY, pair)
+    } catch {
+        // No session storage (a private window, blocked site data): reload as
+        // before, since nothing could remember the first reload anyway.
+    }
+
+    window.location.reload()
+
+    return true
+}
+
 /**
  * Server-driven table data fetching.
  *
@@ -50,7 +88,8 @@ import { appendFilterParams } from '../support/filterParams.js'
  *   the server's merge-over-defaults semantics clear filters deterministically.
  * - Every request uses a fresh AbortController and aborts the in-flight one.
  * - Current rows stay visible during a fetch; `isLoading` is exposed so the UI can dim them.
- * - A `schemaVersion` mismatch in the response triggers a full page reload (schema drift).
+ * - A `schemaVersion` mismatch in the response triggers a full page reload (schema drift),
+ *   once per pair of versions (see `reloadForDrift()`).
  *
  * @param {string} endpoint Absolute URL of the table data endpoint.
  * @param {import('./useTableState.js').TableState} state Reactive state refs from `useTableState()`.
@@ -178,9 +217,8 @@ export function useTableData(endpoint, state, options = {}) {
                 options.schemaVersion
                 && payload.schemaVersion
                 && payload.schemaVersion !== options.schemaVersion
+                && reloadForDrift(options.schemaVersion, payload.schemaVersion)
             ) {
-                window.location.reload()
-
                 return
             }
 
