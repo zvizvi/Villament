@@ -20,6 +20,7 @@ import { createApp } from 'vue'
 import VueTable from './components/VueTable.vue'
 import { registerCellComponent } from './support/cellRegistry.js'
 import { clearStaleRender } from './support/staleRender.js'
+import './shell.js'
 import tableStyles from './styles/table.css?inline'
 
 /** @type {Map<Element, import('vue').App>} */

@@ -92,6 +92,28 @@ Two behaviours follow stock rather than the List page:
 
 The testing assertions (`assertCanSeeTableRecords()` and the rest) work on an island relation manager as they do on a List page.
 
+## Persistent sidebar (proof of concept)
+
+On an SPA panel (`->spa()`), every `wire:navigate` fetches the whole page from the server, sidebar included. Building the sidebar means building the navigation: every resource's `canViewAny()`, every navigation badge's query. Opt in, and the sidebar stays in the browser instead:
+
+```php
+->spa()
+->plugin(VillamentPlugin::make()->persistentSidebar())
+```
+
+- **Full page load:** the sidebar renders as in stock, inside a root carrying Livewire's `x-persist` with a key.
+- **`wire:navigate` request** (Livewire's `X-Livewire-Navigate` header): the sidebar component renders only that empty keyed root, and the navigation is never built. Livewire moves the browser's existing sidebar into its place, so the very same element stays: Alpine state, open groups and scroll position included.
+- **The key** is a hash of panel, tenant, locale and user, plus `config('villament.shell.version')`, which an app bumps to retire every kept sidebar at once (a deploy that changes the navigation). When the browser has no sidebar under the new page's key (another tenant, panel, locale or user), the empty root stays and asks for its full render.
+- **The active item** is re-marked in the browser from the navigation URLs the server lists for the page: the top-level resource (nested resources mark their parent), the page and the cluster. The server lists them without building the navigation.
+
+Measured on the fixture app (small navigation, no badges), a navigate response is 6 to 8 ms faster and 11 to 13 KB smaller, 10% to 27% of the request. The more resources, policies and badges the navigation has, the larger the saving.
+
+**Known limits of the proof of concept:**
+
+- **Stale badges and visibility:** navigation badges and item visibility are as of the last full render, until the next full load or a `refresh-sidebar` event.
+- **Custom active rules:** an item made active by `NavigationItem::isActiveWhen()` is not re-marked, and an item's `activeIcon()` is not swapped in.
+- **Topbar:** it still renders on every navigation. It holds a nested `x-persist` of Filament's own, which needs separate handling.
+
 ## Forms: `ClientRepeater`
 
 A drop-in `Repeater` that **renders and restructures its items in the browser**:
