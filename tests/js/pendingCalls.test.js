@@ -416,6 +416,75 @@ describe('VueTable loading states', () => {
         expect(rowCell(0).attributes('disabled')).toBeUndefined()
     })
 
+    it('marks only the clicked control data-loading, for its own call, as Livewire does', async () => {
+        mountTable()
+
+        await rowButton(0).trigger('click')
+        await flushPromises()
+
+        expect(rowButton(0).attributes('data-loading')).toBe('true')
+        // The cell shares the call's disabled state, not its origin marker.
+        expect(rowCell(0).attributes('disabled')).toBeDefined()
+        expect(rowCell(0).attributes('data-loading')).toBeUndefined()
+
+        settleWireCall('mountAction')
+        await flushPromises()
+        expect(rowButton(0).attributes('data-loading')).toBeUndefined()
+
+        await rowCell(1).trigger('click')
+        await flushPromises()
+        expect(rowCell(1).attributes('data-loading')).toBe('true')
+        expect(rowButton(1).attributes('data-loading')).toBeUndefined()
+
+        settleWireCall('mountAction')
+        await flushPromises()
+        expect(rowCell(1).attributes('data-loading')).toBeUndefined()
+    })
+
+    it('marks the sort control data-loading until its fetch lands', async () => {
+        mountTable()
+
+        const sortButton = () => wrapper.findAll('.fi-ta-header-cell-sort-btn')[0]
+
+        expect(sortButton().element.tagName).toBe('BUTTON')
+
+        await sortButton().trigger('click')
+        await flushPromises()
+        expect(sortButton().attributes('data-loading')).toBe('true')
+        expect(wrapper.findAll('.fi-ta-header-cell-sort-btn')[1].attributes('data-loading')).toBeUndefined()
+
+        pendingFetches[0].resolve()
+        await flushPromises()
+        expect(sortButton().attributes('data-loading')).toBeUndefined()
+    })
+
+    it('marks the clicked chip, not the others, until its removal and refetch land', async () => {
+        mountTable()
+
+        await wrapper.get('.fi-badge-delete-btn').trigger('click')
+        await flushPromises()
+        expect(wrapper.get('.fi-badge-delete-btn').attributes('data-loading')).toBe('true')
+        expect(wrapper.get('.villament-remove-all-filters-btn').attributes('data-loading')).toBeUndefined()
+
+        filtersState = { status: { value: '' } }
+        settleWireCall('removeTableFilter')
+        respond()
+        await flushPromises()
+        expect(wrapper.get('.fi-badge-delete-btn').attributes('data-loading')).toBe('true')
+
+        pendingFetches[0].resolve()
+        await flushPromises()
+        expect(wrapper.get('.fi-badge-delete-btn').attributes('data-loading')).toBeUndefined()
+    })
+
+    it('gives every record checkbox its group key as data-group, empty when ungrouped', () => {
+        mountTable()
+
+        const checkboxes = wrapper.findAll('input.fi-ta-record-checkbox')
+        expect(checkboxes.length).toBe(2)
+        checkboxes.forEach((checkbox) => expect(checkbox.attributes('data-group')).toBe(''))
+    })
+
     it('does not mount the same call twice while it is in flight', async () => {
         mountTable()
 

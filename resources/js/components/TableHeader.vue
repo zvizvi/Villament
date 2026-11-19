@@ -325,12 +325,45 @@ function sortLoadingIndicatorFor(column) {
 
 /**
  * @param {object} column
+ * @param {?Event} [event] The click, whose control Livewire would mark `data-loading`.
  * @returns {void}
  */
-function onSortClick(column) {
+function onSortClick(column, event = null) {
     if (column.sortable && ! props.busy) {
-        emit('sort', column.key)
+        emit('sort', column.key, event?.currentTarget ?? null)
     }
+}
+
+/**
+ * Stock's sort control is a native `<button type="button">`, except when the
+ * label is HTML: interactive content is invalid inside a `<button>`, so it
+ * becomes a `<span role="button" tabindex="0">` that clicks itself on Enter
+ * and Space.
+ *
+ * @param {object} column
+ * @returns {boolean}
+ */
+function isSortControlSpan(column) {
+    return Boolean(column.labelHtml)
+}
+
+/**
+ * Enter and Space on the span form click it, like stock's
+ * `x-on:keydown.*.self.prevent.stop="$el.click()"`. A native `<button>`
+ * activates itself, so its keys are left alone.
+ *
+ * @param {object} column
+ * @param {KeyboardEvent} event
+ * @returns {void}
+ */
+function onSortControlKeydown(column, event) {
+    if (! isSortControlSpan(column)) {
+        return
+    }
+
+    event.preventDefault()
+    event.stopPropagation()
+    event.currentTarget.click()
 }
 </script>
 
@@ -419,18 +452,20 @@ function onSortClick(column) {
                         : undefined
                 "
             >
-                <span
+                <component
+                    :is="isSortControlSpan(column) ? 'span' : 'button'"
                     v-if="column.sortable"
-                    role="button"
-                    tabindex="0"
+                    :type="isSortControlSpan(column) ? undefined : 'button'"
+                    :role="isSortControlSpan(column) ? 'button' : undefined"
+                    :tabindex="isSortControlSpan(column) ? 0 : undefined"
                     data-prevent-disabled-clicks
                     class="fi-ta-header-cell-sort-btn"
                     :class="{ 'fi-disabled': busy }"
                     :aria-disabled="busy ? 'true' : undefined"
                     :aria-label="sortButtonLabelFor(column)"
-                    @click="onSortClick(column)"
-                    @keydown.enter.self.prevent.stop="onSortClick(column)"
-                    @keydown.space.self.prevent.stop="onSortClick(column)"
+                    @click="onSortClick(column, $event)"
+                    @keydown.enter.self="onSortControlKeydown(column, $event)"
+                    @keydown.space.self="onSortControlKeydown(column, $event)"
                 >
                     <!-- `headerTooltip()` wraps the label in both branches (stock). -->
                     <span
@@ -444,7 +479,7 @@ function onSortClick(column) {
                     />
 
                     <TrustedIcon :html="sortLoadingIndicatorFor(column) ?? sortIconFor(column)" />
-                </span>
+                </component>
 
                 <template v-else>
                     <span

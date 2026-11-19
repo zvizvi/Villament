@@ -33,6 +33,7 @@ import { appendFilterParams } from '../support/filterParams.js'
  * @property {import('vue').Ref<FilterIndicator[]>} indicators Active-filter chips, always from the latest server response.
  * @property {import('vue').Ref<Object<string, object>>} actionDefaults Per-response action fields that came out identical across every record; each record carries only its differences.
  * @property {import('vue').Ref<boolean>} isLoading
+ * @property {import('vue').Ref<number>} fetchCount Increments as each fetch starts, a replacing one included.
  * @property {import('vue').Ref<?Error>} error
  * @property {() => Promise<void>} retry Re-runs the last request immediately.
  * @property {() => Promise<void>} fetchNow Fetches immediately, cancelling any pending debounce.
@@ -108,6 +109,7 @@ export function useTableData(endpoint, state, options = {}) {
     const actionDefaults = ref(options.initialData?.actionDefaults ?? {})
     const summaries = ref(options.initialData?.summaries ?? null)
     const isLoading = ref(false)
+    const fetchCount = ref(0)
     const error = ref(null)
 
     /** @type {?AbortController} */
@@ -191,6 +193,7 @@ export function useTableData(endpoint, state, options = {}) {
         abortController = controller
 
         const requestId = ++latestRequestId
+        fetchCount.value++
         isLoading.value = true
 
         try {
@@ -375,6 +378,7 @@ export function useTableData(endpoint, state, options = {}) {
         indicators,
         summaries,
         isLoading,
+        fetchCount,
         error,
         retry: fetchNow,
         fetchNow,

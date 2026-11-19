@@ -315,7 +315,7 @@ function groupAriaLabel(group) {
     return group.label ? `${group.label}: ${group.title}` : String(group.title ?? '')
 }
 
-const { records, actionDefaults, meta, indicators, summaries, isLoading, error, retry, fetchNow, destroy: destroyData } = useTableData(
+const { records, actionDefaults, meta, indicators, summaries, isLoading, fetchCount, error, retry, fetchNow, destroy: destroyData } = useTableData(
     props.config.endpoint,
     state,
     {
@@ -978,9 +978,10 @@ function cellWrapperNewTab(cellValue, record) {
  *
  * @param {?object} cellValue
  * @param {object} record
+ * @param {?Event} [event] The click, whose cell Livewire would mark `data-loading`.
  * @returns {void}
  */
-function onCellClick(cellValue, record) {
+function onCellClick(cellValue, record, event = null) {
     if (cellWrapperTag(cellValue, record) !== 'button') {
         return
     }
@@ -994,20 +995,20 @@ function onCellClick(cellValue, record) {
 
     const click = cellValue?.click
 
-    if (! click) {
+    const call = ! click
         // Pre-`click` payload: the record action was the only possibility.
-        pendingCalls.track(id, bridge.mountRecordAction(record.action, record.key))
+        ? bridge.mountRecordAction(record.action, record.key)
+        : {
+            mountAction: () => bridge.mountRecordAction(click.name, record.key),
+            columnAction: () => bridge.callColumnAction(click.name, record.key),
+            method: () => bridge.callRecordMethod(click.name, record.key),
+        }[click.type]?.()
 
+    if (! call) {
         return
     }
 
-    if (click.type === 'mountAction') {
-        pendingCalls.track(id, bridge.mountRecordAction(click.name, record.key))
-    } else if (click.type === 'columnAction') {
-        pendingCalls.track(id, bridge.callColumnAction(click.name, record.key))
-    } else if (click.type === 'method') {
-        pendingCalls.track(id, bridge.callRecordMethod(click.name, record.key))
-    }
+    markLoading(event?.currentTarget ?? null, pendingCalls.track(id, call))
 }
 
 /**
@@ -1056,59 +1057,81 @@ function isCellPending(cellValue, record) {
  *
  * @param {string} name
  * @param {string} recordKey
+ * @param {?Element} [element] The clicked trigger (`data-loading`).
  * @returns {void}
  */
-function onRecordActionMount(name, recordKey) {
+function onRecordActionMount(name, recordKey, element = null) {
     const id = pendingIds.mountAction(name, recordKey)
 
     if (pendingCalls.isPending(id)) {
         return
     }
 
-    pendingCalls.track(id, bridge.mountRecordAction(name, recordKey))
+    markLoading(element, pendingCalls.track(id, bridge.mountRecordAction(name, recordKey)))
 }
 
 /**
  * Mounts a header or toolbar action from its button.
  *
  * @param {string} name
+ * @param {?Element} [element] The clicked trigger (`data-loading`).
  * @returns {void}
  */
-function onTableActionMount(name) {
+function onTableActionMount(name, element = null) {
     const id = pendingIds.mountAction(name)
 
     if (pendingCalls.isPending(id)) {
         return
     }
 
-    pendingCalls.track(id, bridge.mountTableAction(name))
+    markLoading(element, pendingCalls.track(id, bridge.mountTableAction(name)))
 }
 
 /**
  * Toggles a column's sort: asc → desc → none.
  *
  * @param {string} columnKey
+ * @param {?Element} [element] The sort control (`data-loading`).
  * @returns {void}
  */
-function onSort(columnKey) {
-    if (state.sort.value === `${columnKey}:asc`) {
-        state.sort.value = `${columnKey}:desc`
-    } else if (state.sort.value === `${columnKey}:desc`) {
-        state.sort.value = null
-    } else {
-        state.sort.value = `${columnKey}:asc`
-    }
+function onSort(columnKey, element = null) {
+    withFetchOrigin(element, () => {
+        if (state.sort.value === `${columnKey}:asc`) {
+            state.sort.value = `${columnKey}:desc`
+        } else if (state.sort.value === `${columnKey}:desc`) {
+            state.sort.value = null
+        } else {
+            state.sort.value = `${columnKey}:asc`
+        }
+    })
 
     // Stock spins the clicked column's sort icon: `sortTable('{column}')`.
     trackUntilRefetched(pendingIds.sort(columnKey), Promise.resolve())
 }
 
 /**
- * @param {string} columnKey
+ * The global search field changed. Debounced: the input is marked
+ * `data-loading` when its fetch starts.
+ *
  * @param {string} value
+ * @param {?Element} [element] The input.
  * @returns {void}
  */
-function onColumnSearch(columnKey, value) {
+function onSearch(value, element = null) {
+    markFetchOrigin(element)
+    state.search.value = value
+}
+
+/**
+ * @param {string} columnKey
+ * @param {string} value
+ * @param {?Element} [element] The input (`data-loading`).
+ * @returns {void}
+ */
+function onColumnSearch(columnKey, value, element = null) {
+    // Debounced: the input is marked when its fetch starts.
+    markFetchOrigin(element)
+
     state.columnSearches.value = {
         ...state.columnSearches.value,
         [columnKey]: value,
@@ -1121,10 +1144,12 @@ function onColumnSearch(columnKey, value) {
  * of truth for filter state) — the commit hook then drives the Vue refetch.
  *
  * @param {import('../composables/useTableData.js').FilterIndicator} indicator
+ * @param {?Element} [element] The chip's delete button (`data-loading`).
  * @returns {void}
  */
-function onRemoveIndicator(indicator) {
+function onRemoveIndicator(indicator, element = null) {
     if (indicator.type === 'search') {
+        markFetchOrigin(element)
         state.search.value = ''
 
         return
@@ -1133,56 +1158,123 @@ function onRemoveIndicator(indicator) {
     if (indicator.type === 'columnSearch') {
         const next = { ...state.columnSearches.value }
         delete next[indicator.column]
+        markFetchOrigin(element)
         state.columnSearches.value = next
 
         return
     }
 
-    trackUntilRefetched(pendingIds.removeFilter, bridge.removeFilter(indicator.filter, indicator.field))
+    markLoading(element, trackUntilRefetched(pendingIds.removeFilter, bridge.removeFilter(indicator.filter, indicator.field)))
 }
 
 /**
- * Ids whose Livewire half has settled and that now only wait for the island
- * refetch it started.
- *
- * @type {Set<string>}
- */
-const awaitingRefetch = new Set()
-
-/**
- * Keeps `id` pending until `call` has settled AND the refetch it triggers has
- * landed. In stock both are one request: the commit re-renders the table.
+ * Settles once `call` has settled AND the refetch it triggers has landed. In
+ * stock both are one request: the commit re-renders the table.
  *
  * Livewire v4 resolves a call, then runs the commit's `respond` hooks in the
  * same task: the bridge writes the new state there, and the state watcher in
  * `useTableData` starts the refetch on the next flush, which `nextTick()`
- * waits for. A call that changes nothing starts no fetch and ends at once.
+ * waits for. A call that changes nothing starts no fetch and settles at once.
+ *
+ * @param {Promise<unknown>} call
+ * @returns {Promise<void>}
+ */
+function untilRefetched(call) {
+    return Promise.resolve(call)
+        .then(() => nextTick())
+        .then(() => (isLoading.value ? new Promise((resolve) => refetchWaiters.add(resolve)) : undefined))
+}
+
+/** @type {Set<() => void>} Resolvers waiting for the current fetch to land. */
+const refetchWaiters = new Set()
+
+/**
+ * Keeps `id` pending until `call` and the refetch it triggers are done.
  *
  * @param {string} id
  * @param {Promise<unknown>} call
- * @returns {void}
+ * @returns {Promise<void>} Settles when the id stops being pending.
  */
 function trackUntilRefetched(id, call) {
-    pendingCalls.begin(id)
-
-    Promise.resolve(call)
-        .then(() => nextTick())
-        .then(() => {
-            if (isLoading.value) {
-                awaitingRefetch.add(id)
-            } else {
-                pendingCalls.end(id)
-            }
-        })
+    return pendingCalls.track(id, untilRefetched(call))
 }
+
+/**
+ * Livewire's `data-loading`: the element that started a request (the
+ * `wire:click` or `wire:model.live` element) carries `data-loading="true"`
+ * until that request finishes. Other controls that share the call do not.
+ *
+ * @param {?Element} element
+ * @param {Promise<unknown>} until
+ * @returns {void}
+ */
+function markLoading(element, until) {
+    if (! element) {
+        return
+    }
+
+    element.setAttribute('data-loading', 'true')
+
+    Promise.resolve(until).finally(() => element.removeAttribute('data-loading'))
+}
+
+/** @type {Set<Element>} Controls whose request is the fetch in flight. */
+const fetchOrigins = new Set()
+
+/** @type {?Element} The control whose state change will start the next fetch. */
+let nextFetchOrigin = null
+
+/**
+ * Marks the control whose state change drives a fetch: call it right
+ * BEFORE the change. Most fetches start inside the change itself; a
+ * debounced search starts one later. Either way the control is marked when
+ * its fetch starts, and stays marked until no fetch is in flight.
+ *
+ * @param {?Element} element
+ * @returns {void}
+ */
+function markFetchOrigin(element) {
+    nextFetchOrigin = element ?? null
+}
+
+/**
+ * Runs a state change whose fetch, if any, starts synchronously, with
+ * `element` as its origin. A change that starts no fetch (the same value
+ * again) leaves nothing waiting to mark a later, unrelated fetch.
+ *
+ * @param {?Element} element
+ * @param {() => void} change
+ * @returns {void}
+ */
+function withFetchOrigin(element, change) {
+    markFetchOrigin(element)
+    change()
+
+    if (nextFetchOrigin === element) {
+        nextFetchOrigin = null
+    }
+}
+
+watch(fetchCount, () => {
+    if (! nextFetchOrigin) {
+        return
+    }
+
+    nextFetchOrigin.setAttribute('data-loading', 'true')
+    fetchOrigins.add(nextFetchOrigin)
+    nextFetchOrigin = null
+}, { flush: 'sync' })
 
 watch(isLoading, (loading) => {
     if (loading) {
         return
     }
 
-    awaitingRefetch.forEach((id) => pendingCalls.end(id))
-    awaitingRefetch.clear()
+    fetchOrigins.forEach((element) => element.removeAttribute('data-loading'))
+    fetchOrigins.clear()
+
+    refetchWaiters.forEach((resolve) => resolve())
+    refetchWaiters.clear()
 })
 
 /**
@@ -1226,9 +1318,10 @@ const hasGroupCheckbox = computed(() => isSelectionEnabled.value && ! isSingleSe
  * global search and per-column searches. Filters are cleared through Livewire
  * (the commit refetches); search and column searches are Vue-owned, reset here.
  *
+ * @param {?Element} [element] The remove-all button (`data-loading`).
  * @returns {void}
  */
-function onRemoveAllFilters() {
+function onRemoveAllFilters(element = null) {
     if (isRemovingAnyFilter.value) {
         return
     }
@@ -1244,7 +1337,7 @@ function onRemoveAllFilters() {
         state.columnSearches.value = {}
     }
 
-    trackUntilRefetched(pendingIds.removeAllFilters, bridge.removeAllFilters())
+    markLoading(element, trackUntilRefetched(pendingIds.removeAllFilters, bridge.removeAllFilters()))
 }
 
 /**
@@ -1357,7 +1450,7 @@ function recordCellClasses(column, cellValue = null) {
                             v-if="visibleHeaderActions.length"
                             :actions="visibleHeaderActions"
                             tracks-loading
-                            @mount="onTableActionMount($event)"
+                            @mount="onTableActionMount"
                         />
                     </div>
 
@@ -1407,7 +1500,7 @@ function recordCellClasses(column, cellValue = null) {
                             v-if="toolbarActionsStructure.length"
                             :actions="toolbarActionsStructure"
                             tracks-loading
-                            @mount="onTableActionMount($event)"
+                            @mount="onTableActionMount"
                         >
                             <template #leading>
                                 <NativeSlot v-if="renderHooks.has('reorder-trigger-before')" family="hook" name="reorder-trigger-before" style="display: contents" />
@@ -1449,7 +1542,7 @@ function recordCellClasses(column, cellValue = null) {
                                 :label="strings.searchLabel"
                                 :icon="icons.search"
                                 :search-on-blur="Boolean(schema.searchOnBlur)"
-                                @update:model-value="state.search.value = $event"
+                                @update:model-value="onSearch"
                             />
 
                             <!--
@@ -1609,7 +1702,7 @@ function recordCellClasses(column, cellValue = null) {
                                             :placeholder="strings.searchPlaceholder"
                                             :icon="icons.search"
                                             :search-on-blur="Boolean(schema.searchOnBlur)"
-                                            @update:model-value="onColumnSearch(column.key, $event)"
+                                            @update:model-value="(value, element) => onColumnSearch(column.key, value, element)"
                                         />
 
                                         <NativeSlot
@@ -1810,7 +1903,7 @@ function recordCellClasses(column, cellValue = null) {
                                                 :defaults="actionDefaults"
                                                 :alignment-class="recordActionsConfig.alignmentClass ?? null"
                                                 :record-key="item.row.original.key"
-                                                @mount="onRecordActionMount($event, item.row.original.key)"
+                                                @mount="(name, element) => onRecordActionMount(name, item.row.original.key, element)"
                                             />
                                         </td>
 
@@ -1831,6 +1924,7 @@ function recordCellClasses(column, cellValue = null) {
                                                 :value="item.row.original.key"
                                                 :checked="selection.isRecordSelected(item.row.original.key)"
                                                 :disabled="isRecordCheckboxDisabled(item.row.original.key)"
+                                                :data-group="item.row.original.group?.key ?? ''"
                                                 class="fi-ta-record-checkbox fi-checkbox-input"
                                                 @click="onRecordCheckboxClick($event, item.row.original.key)"
                                             >
@@ -1847,7 +1941,7 @@ function recordCellClasses(column, cellValue = null) {
                                                 :defaults="actionDefaults"
                                                 :alignment-class="recordActionsConfig.alignmentClass ?? null"
                                                 :record-key="item.row.original.key"
-                                                @mount="onRecordActionMount($event, item.row.original.key)"
+                                                @mount="(name, element) => onRecordActionMount(name, item.row.original.key, element)"
                                             />
                                         </td>
 
@@ -1866,7 +1960,7 @@ function recordCellClasses(column, cellValue = null) {
                                                 :href="cellWrapperUrl(cell.getValue(), item.row.original) || undefined"
                                                 :target="cellWrapperUrl(cell.getValue(), item.row.original) && cellWrapperNewTab(cell.getValue(), item.row.original) ? '_blank' : undefined"
                                                 :rel="cellWrapperUrl(cell.getValue(), item.row.original) && cellWrapperNewTab(cell.getValue(), item.row.original) ? 'noopener noreferrer' : undefined"
-                                                @click="onCellClick(cell.getValue(), item.row.original)"
+                                                @click="onCellClick(cell.getValue(), item.row.original, $event)"
                                             >
                                                 <component
                                                     :is="resolveCellComponent(cell.getValue()?.type, cellComponents) ?? TextCell"
@@ -1887,7 +1981,7 @@ function recordCellClasses(column, cellValue = null) {
                                                 :defaults="actionDefaults"
                                                 :alignment-class="recordActionsConfig.alignmentClass ?? null"
                                                 :record-key="item.row.original.key"
-                                                @mount="onRecordActionMount($event, item.row.original.key)"
+                                                @mount="(name, element) => onRecordActionMount(name, item.row.original.key, element)"
                                             />
                                         </td>
                                     </tr>
@@ -1999,9 +2093,9 @@ function recordCellClasses(column, cellValue = null) {
                         :strings="strings"
                         :icons="icons"
                         :busy="isLoading"
-                        @update:page="state.page.value = $event"
-                        @update:per-page="state.perPage.value = $event"
-                        @update:cursor="state.cursor.value = $event"
+                        @update:page="(page, element) => withFetchOrigin(element, () => { state.page.value = page })"
+                        @update:per-page="(perPage, element) => withFetchOrigin(element, () => { state.perPage.value = perPage })"
+                        @update:cursor="(cursor, element) => withFetchOrigin(element, () => { state.cursor.value = cursor })"
                     />
                 </template>
 

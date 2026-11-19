@@ -71,11 +71,12 @@ onBeforeUnmount(() => {
 
 /**
  * @param {string} name
+ * @param {?Element} [element] The clicked trigger, passed on for `data-loading`.
  * @returns {void}
  */
-function onMount(name) {
+function onMount(name, element = null) {
     openGroup.value = null
-    emit('mount', name)
+    emit('mount', name, element)
 }
 </script>
 

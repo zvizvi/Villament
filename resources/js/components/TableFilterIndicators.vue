@@ -105,7 +105,7 @@ const hasRemovableIndicators = computed(
                         class="fi-badge-delete-btn"
                         :class="{ 'fi-disabled': removing }"
                         :aria-disabled="removing ? 'true' : undefined"
-                        @click="! removing && emit('remove', indicator)"
+                        @click="! removing && emit('remove', indicator, $event.currentTarget)"
                     >
                         <!--
                             Stock draws this icon with a CSS mask on an empty
@@ -144,7 +144,7 @@ const hasRemovableIndicators = computed(
             :class="{ 'fi-disabled': removingAll }"
             :aria-disabled="removingAll ? 'true' : undefined"
             :aria-label="strings.filtersRemoveAll"
-            @click="! removingAll && emit('removeAll')"
+            @click="! removingAll && emit('removeAll', $event.currentTarget)"
         >
             <TrustedIcon :html="(removingAllSpinning && removeAllLoadingIndicator) || icons.removeFilters" />
         </button>

@@ -157,7 +157,7 @@ function onClick(event) {
         return
     }
 
-    emit('mount', props.action.name)
+    emit('mount', props.action.name, event.currentTarget)
 }
 </script>
 
