@@ -34,9 +34,10 @@ it('narrows the endpoint by a property the request carries', function (): void {
 it('builds the table AFTER the property is set, so a filter it decides exists', function (): void {
     // The page offers `team_id` only once a status is picked. Set after the
     // table was built, the endpoint would refuse the very filter the page sent.
-    getJson(PICKED_ENDPOINT.'?properties[pickedStatus]=pending&filters[team_id][value]=')->assertOk();
+    // (A value is chosen: an unknown filter that chooses nothing is ignored.)
+    getJson(PICKED_ENDPOINT.'?properties[pickedStatus]=pending&filters[team_id][value]=1')->assertOk();
 
-    getJson(PICKED_ENDPOINT.'?properties[pickedStatus]=&filters[team_id][value]=')
+    getJson(PICKED_ENDPOINT.'?properties[pickedStatus]=&filters[team_id][value]=1')
         ->assertStatus(422)
         ->assertJsonValidationErrors('filters.team_id');
 });

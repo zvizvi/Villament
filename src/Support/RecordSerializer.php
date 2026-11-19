@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Zvizvi\Villament\Support;
 
+use Closure;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Resources\Resource;
@@ -52,11 +53,17 @@ final class RecordSerializer
     }
 
     /**
-     * @param  class-string<\Filament\Resources\Resource>  $resourceClass
+     * The `can` map comes from `$abilities`: a resource class (its static
+     * `canView()` / `canEdit()` / `canDelete()`), or a closure for a table
+     * whose authorization lives on the component itself — a relation manager
+     * authorizes its records through its own `canEdit($record)` and friends,
+     * never through a resource.
+     *
+     * @param  class-string<\Filament\Resources\Resource>|Closure(Model): array<string, bool>  $abilities
      * @param  iterable<int, Model|array<string, mixed>>  $records
      * @return list<array<string, mixed>>
      */
-    public function serialize(HasTable $livewire, string $resourceClass, iterable $records): array
+    public function serialize(HasTable $livewire, string|Closure $abilities, iterable $records): array
     {
         $table = $livewire->getTable();
         $columns = $table->getVisibleColumns();
@@ -121,15 +128,28 @@ final class RecordSerializer
                 // Stock renders NO checkbox at all for an unselectable record
                 // (an empty selection cell), so the flag has to be per record.
                 ...($checksSelectable ? ['selectable' => $table->isRecordSelectable($record)] : []),
-                'can' => $record instanceof Model ? [
-                    'view' => $resourceClass::canView($record),
-                    'edit' => $resourceClass::canEdit($record),
-                    'delete' => $resourceClass::canDelete($record),
-                ] : [],
+                'can' => $record instanceof Model ? $this->abilities($abilities, $record) : [],
             ];
         }
 
         return $payload;
+    }
+
+    /**
+     * @param  class-string<\Filament\Resources\Resource>|Closure(Model): array<string, bool>  $abilities
+     * @return array<string, bool>
+     */
+    private function abilities(string|Closure $abilities, Model $record): array
+    {
+        if ($abilities instanceof Closure) {
+            return $abilities($record);
+        }
+
+        return [
+            'view' => $abilities::canView($record),
+            'edit' => $abilities::canEdit($record),
+            'delete' => $abilities::canDelete($record),
+        ];
     }
 
     /**

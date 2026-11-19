@@ -340,34 +340,49 @@ final class SchemaSerializer
     }
 
     /**
-     * Header fields a plugin can rewrite at RENDER time, and which the hash
-     * must therefore ignore. `zvizvi/filament-column-filters` is the case that
-     * proved it: on Livewire's `render` event it swaps the column label for an
-     * `HtmlString` carrying its trigger and tags the `<th>`. The page fires
-     * that event; the data endpoint, which renders nothing, cannot — so the
-     * two would hash differently forever and the island would reload on every
-     * fetch, reload, fetch. Excluding them costs nothing real: the endpoint
-     * never ships a schema, so the client keeps the one it painted with and a
-     * cosmetic difference is unobservable.
+     * How a thing LOOKS, at any depth of the schema: wording, colours,
+     * classes, icons. Each of these can be decided by the request it is
+     * rendered in rather than by the table's definition, so the hash ignores
+     * them.
+     *
+     * Two cases proved it. `zvizvi/filament-column-filters` rewrites a column
+     * header on Livewire's `render` event, which the page fires and the data
+     * endpoint (rendering nothing) cannot. And a person's own theme colour,
+     * applied by a middleware that ran on the endpoint's route but not on the
+     * Livewire update the page built its config in, gave the header buttons
+     * different colour classes. Either way the two hashed differently for
+     * good and the island reloaded the page on every page change and sort,
+     * with nothing on screen to say why. Excluding them costs nothing real:
+     * the endpoint never ships a schema, so the client keeps the one it
+     * painted with and a cosmetic difference is unobservable.
      */
-    private const DECORATABLE_COLUMN_KEYS = ['label', 'labelHtml', 'headerTooltip', 'extraHeaderAttributes'];
+    private const PRESENTATIONAL_KEYS = [
+        'label', 'labelHtml', 'headerTooltip', 'extraHeaderAttributes',
+        'heading', 'description', 'tooltip', 'badge', 'badgeClass', 'badgeStyle',
+        'iconHtml', 'class', 'style', 'colorClasses', 'extraAttributes',
+    ];
 
     /**
-     * Drift-detection hash. Column-manager reordering changes the order of
-     * `schema.columns` PER USER SESSION — canonicalize it so the hash only
-     * reacts to real definition changes (deploys), never to user state;
-     * otherwise the island would hard-reload after every drag-reorder.
+     * Top-level schema entries that are presentation through and through.
+     */
+    private const PRESENTATIONAL_SECTIONS = ['strings', 'icons'];
+
+    /**
+     * Drift-detection hash: it moves when the table's STRUCTURE moves (a
+     * column, a filter, an action, sorting, pagination — what a deploy
+     * changes) and never with how it is presented ({@see PRESENTATIONAL_KEYS}).
+     * Column-manager reordering changes the order of `schema.columns` PER
+     * USER SESSION — canonicalize it so the hash only reacts to real
+     * definition changes, never to user state; otherwise the island would
+     * hard-reload after every drag-reorder.
      *
      * @param  array<string, mixed>  $schema
      */
     public function version(array $schema): string
     {
-        if (isset($schema['columns']) && is_array($schema['columns'])) {
-            $schema['columns'] = array_map(
-                fn (array $column): array => Arr::except($column, self::DECORATABLE_COLUMN_KEYS),
-                $schema['columns'],
-            );
+        $schema = $this->withoutPresentation(Arr::except($schema, self::PRESENTATIONAL_SECTIONS));
 
+        if (isset($schema['columns']) && is_array($schema['columns'])) {
             usort(
                 $schema['columns'],
                 fn (array $a, array $b): int => strcmp((string) ($a['key'] ?? ''), (string) ($b['key'] ?? '')),
@@ -375,6 +390,25 @@ final class SchemaSerializer
         }
 
         return hash('sha256', json_encode($schema, JSON_THROW_ON_ERROR));
+    }
+
+    /**
+     * The schema with every {@see PRESENTATIONAL_KEYS} entry removed from
+     * each map in it, however deep (a column, an action inside a group).
+     *
+     * @param  array<array-key, mixed>  $schema
+     * @return array<array-key, mixed>
+     */
+    private function withoutPresentation(array $schema): array
+    {
+        if (! array_is_list($schema)) {
+            $schema = Arr::except($schema, self::PRESENTATIONAL_KEYS);
+        }
+
+        return array_map(
+            fn (mixed $value): mixed => is_array($value) ? $this->withoutPresentation($value) : $value,
+            $schema,
+        );
     }
 
     /**

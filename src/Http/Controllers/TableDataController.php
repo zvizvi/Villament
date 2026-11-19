@@ -7,18 +7,19 @@ namespace Zvizvi\Villament\Http\Controllers;
 use Filament\Facades\Filament;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Route;
+use Zvizvi\Villament\Http\HeadlessTableResponder;
 use Zvizvi\Villament\Support\HeadlessTableHarness;
-use Zvizvi\Villament\Support\RequestStateValidator;
+use Zvizvi\Villament\Support\ParentRouteParameters;
 use Zvizvi\Villament\Support\ResourceRegistry;
-use Zvizvi\Villament\Support\TablePayload;
 
 final class TableDataController
 {
     public function __construct(
         private readonly ResourceRegistry $registry,
         private readonly HeadlessTableHarness $harness,
-        private readonly RequestStateValidator $validator,
-        private readonly TablePayload $payload,
+        private readonly HeadlessTableResponder $responder,
+        private readonly ParentRouteParameters $parentRouteParameters,
     ) {}
 
     public function __invoke(Request $request): JsonResponse
@@ -57,31 +58,14 @@ final class TableDataController
             abort_if($parentRecord === null, 404);
 
             $this->harness->withParentRecord($parentRecord);
+
+            $route = $request->route();
+
+            if ($route instanceof Route) {
+                $this->parentRouteParameters->fill($route, $resourceClass, $parentRecord);
+            }
         }
 
-        // The page's own query-shaping properties, BEFORE boot: the table is
-        // built during boot, and a table may decide which filters exist from
-        // them (filters offered only for a picked campaign, say) — set after,
-        // the island's state would name filters the endpoint never built.
-        $properties = $request->query('properties');
-        $this->harness->withStateProperties(is_array($properties) ? $properties : []);
-
-        $this->harness->boot();
-
-        $table = $this->harness->getTable();
-        $state = $this->validator->validate($request, $table);
-        $this->harness->applyState($state)->persistState();
-
-        $cacheTtl = (int) config('villament.cache_ttl', 0);
-
-        $response = response()->json(
-            $this->payload->for($this->harness->getComponent(), $resourceClass),
-        );
-
-        if ($cacheTtl > 0) {
-            $response->header('Cache-Control', "private, max-age={$cacheTtl}");
-        }
-
-        return $response;
+        return $this->responder->respond($request, $this->harness, $resourceClass);
     }
 }

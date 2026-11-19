@@ -154,6 +154,22 @@ describe('useLivewireBridge', () => {
         expect(onActionCompleted).not.toHaveBeenCalled()
     })
 
+    it('follows nothing once its island is out of the document (replaced by the morph)', () => {
+        const onTabChanged = vi.fn()
+        const onFiltersChanged = vi.fn()
+        let connected = true
+        wireState.activeTab = 'todo'
+        makeBridge({ initialTab: 'todo', onTabChanged, onFiltersChanged, isConnected: () => connected })
+
+        connected = false
+        wireState.activeTab = 'done'
+        wireState.tableFilters = { status: { value: 'archived' } }
+        fireCommit()
+
+        expect(onTabChanged).not.toHaveBeenCalled()
+        expect(onFiltersChanged).not.toHaveBeenCalled()
+    })
+
     it("follows a page property a commit changed, and skips the action refetch with it", () => {
         const onPropertiesChanged = vi.fn()
         const onActionCompleted = vi.fn()

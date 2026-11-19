@@ -123,6 +123,7 @@ function wireFor(livewireId) {
  *     onActionCompleted?: (methods: string[]) => void,
  *     onDeselectAll?: () => void,
  *     getSelection?: () => TableSelection,
+ *     isConnected?: () => boolean,
  * }} options
  * @returns {LivewireBridge}
  */
@@ -135,6 +136,7 @@ export function useLivewireBridge(options) {
         onActionCompleted = null,
         onDeselectAll = null,
         getSelection = null,
+        isConnected = null,
     } = options
 
     let lastKnownFiltersJson = JSON.stringify(options.initialFilters ?? {})
@@ -455,6 +457,16 @@ export function useLivewireBridge(options) {
         forgetCommitHook = livewire().hook('commit', ({ component, commit, respond }) => {
             respond(() => {
                 if (component.id !== livewireId) {
+                    return
+                }
+
+                // An island the commit's own morph replaced (its schema
+                // changed: a tab that shows other columns) is already out of
+                // the document by the time `respond` fires - and Livewire
+                // reports the replacement as an ADD only, so nothing has torn
+                // it down yet. Following the commit from here would refetch
+                // with the old schema and reload the page over the new island.
+                if (isConnected && ! isConnected()) {
                     return
                 }
 

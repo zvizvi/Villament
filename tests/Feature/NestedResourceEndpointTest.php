@@ -53,3 +53,17 @@ it('refuses a nested request without a parent, or with one that does not exist',
 it('still answers a bare slug with the top-level resource', function (): void {
     expect(endpointKeys('/admin/villament/users/data'))->toHaveCount(User::query()->count());
 });
+
+it("builds a nested page's record URLs under its parent, as the page itself does", function (): void {
+    // The record URL is the nested resource's edit page,
+    // `/teams/{team}/users/{record}/edit`: Filament guesses `{team}` from the
+    // current route, which the endpoint fills from the parent record.
+    // Not an admin: the fixture UserPolicy lets no one edit an admin, and a
+    // record nobody may edit has no URL.
+    $member = User::factory()->create(['team_id' => $this->team->getKey(), 'is_admin' => false]);
+
+    $response = getJson("/admin/villament/resources.teams.users/data?parent={$this->team->getKey()}")->assertOk();
+
+    expect(collect($response->json('records'))->firstWhere('key', (string) $member->getKey())['url'])
+        ->toEndWith("/admin/teams/{$this->team->getKey()}/users/{$member->getKey()}/edit");
+});

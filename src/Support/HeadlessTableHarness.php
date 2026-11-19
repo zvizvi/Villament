@@ -6,6 +6,8 @@ namespace Zvizvi\Villament\Support;
 
 use Closure;
 use Filament\Resources\Pages\ListRecords;
+use Filament\Resources\Pages\ManageRelatedRecords;
+use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables\Table;
 use Illuminate\Contracts\Pagination\CursorPaginator;
 use Illuminate\Contracts\Pagination\Paginator;
@@ -26,7 +28,8 @@ use Zvizvi\Villament\Events\HeadlessTableBooted;
 use function Livewire\wrap;
 
 /**
- * Drives the resource's real List page component headlessly (never rendered):
+ * Drives the table's real Livewire component headlessly (never rendered) — a
+ * resource's List page, a relation manager, or a ManageRelatedRecords page:
  * instantiates it, injects table state, fires Filament's own boot hook, and
  * retrieves records through Filament's own pipeline (`getTableRecords()`), so
  * `modifyQueryUsing`, column search callbacks, tenancy scoping and soft-delete
@@ -34,7 +37,7 @@ use function Livewire\wrap;
  */
 final class HeadlessTableHarness
 {
-    private ListRecords $component;
+    private ListRecords|RelationManager|ManageRelatedRecords $component;
 
     public function __construct(private readonly LivewireManager $livewire) {}
 
@@ -59,12 +62,87 @@ final class HeadlessTableHarness
     }
 
     /**
+     * A relation manager, given what its host page would have mounted it with
+     * (`HasRelationManagers::getRelationManagerLivewireData()` plus the
+     * `RelationManagerConfiguration`'s own properties). `ownerRecord` and
+     * `pageClass` are `#[Locked]` on a real component, which is exactly why
+     * they are written here and never from the request: the endpoint resolves
+     * them itself. `bootCanAuthorizeAccess()` then checks
+     * `canViewForRecord()` during {@see boot()}, as on every Livewire request.
+     *
+     * @param  class-string<RelationManager>  $relationManagerClass
+     * @param  class-string  $pageClass
+     * @param  array<string, mixed>  $properties
+     */
+    public function forRelationManager(string $relationManagerClass, Model $ownerRecord, string $pageClass, array $properties = []): self
+    {
+        $component = $this->livewire->new($relationManagerClass);
+
+        if (! $component instanceof RelationManager) {
+            throw new InvalidArgumentException(sprintf(
+                '[%s] must be a %s to drive it headlessly.',
+                $relationManagerClass,
+                RelationManager::class,
+            ));
+        }
+
+        $component->ownerRecord = $ownerRecord;
+        $component->pageClass = $pageClass;
+
+        foreach ($properties as $name => $value) {
+            // `lazy` is Livewire's own mount option, not a property.
+            if ($name === 'lazy' || ! property_exists($component, $name)) {
+                continue;
+            }
+
+            if ((new ReflectionProperty($component, $name))->isPublic()) {
+                $component->{$name} = $value;
+            }
+        }
+
+        $this->component = $component;
+
+        return $this;
+    }
+
+    /**
+     * A ManageRelatedRecords page, for one owner record. Its `mount()` (never
+     * replayed) would resolve the record and `authorizeAccess()`; the caller
+     * has already resolved it through the resource's own route binding, and
+     * checks access (see the relation endpoint).
+     *
+     * @param  class-string<ManageRelatedRecords>  $pageClass
+     */
+    public function forRelatedRecordsPage(string $pageClass, Model $ownerRecord): self
+    {
+        $component = $this->livewire->new($pageClass);
+
+        if (! $component instanceof ManageRelatedRecords) {
+            throw new InvalidArgumentException(sprintf(
+                '[%s] must be a %s page to drive it headlessly.',
+                $pageClass,
+                ManageRelatedRecords::class,
+            ));
+        }
+
+        $component->record = $ownerRecord;
+
+        $this->component = $component;
+
+        return $this;
+    }
+
+    /**
      * Hands a nested resource's page its parent record before boot, where
      * Filament's `mountParentRecord()` takes it from: with no route
      * parameters to read, it re-resolves this record and authorizes it.
      */
     public function withParentRecord(Model $parentRecord): self
     {
+        if (! $this->component instanceof ListRecords) {
+            throw new InvalidArgumentException('Only a List page takes a parent record.');
+        }
+
         $this->component->parentRecord = $parentRecord;
 
         return $this;
@@ -169,6 +247,43 @@ final class HeadlessTableHarness
             },
             default => $value,
         };
+    }
+
+    /**
+     * Sets the page's active tab BEFORE boot, for the same reason as
+     * {@see withStateProperties()}: the table is built during boot, and a
+     * table may decide from the tab which columns and filters exist (Filament
+     * supports `->hidden(fn ($livewire) => $livewire->activeTab === …)`, and
+     * `zvizvi/filament-column-filters` adds a `cf_*` filter for each column
+     * visible at that moment). Set only in {@see applyState()}, the tab was
+     * still null while the table was built and validated, so the endpoint
+     * refused with a 422 the very filters the page had drawn on that tab.
+     *
+     * A blank tab is the page's `getDefaultActiveTab()`, as stock's `mount()`
+     * applies it; one the page does not define is a 422.
+     */
+    public function withActiveTab(mixed $tab): self
+    {
+        $component = $this->component;
+
+        if (blank($tab)) {
+            $defaultTab = $component->getDefaultActiveTab();
+            $component->activeTab = $defaultTab === null ? null : (string) $defaultTab;
+
+            return $this;
+        }
+
+        if (! is_string($tab)) {
+            throw ValidationException::withMessages(['tab' => 'The tab parameter must be a string.']);
+        }
+
+        if (! in_array($tab, array_map('strval', array_keys($component->getCachedTabs())), true)) {
+            throw ValidationException::withMessages(['tab' => "The tab [{$tab}] does not exist."]);
+        }
+
+        $component->activeTab = $tab;
+
+        return $this;
     }
 
     /**
@@ -303,7 +418,7 @@ final class HeadlessTableHarness
         return $this->component->getTable();
     }
 
-    public function getComponent(): ListRecords
+    public function getComponent(): ListRecords|RelationManager|ManageRelatedRecords
     {
         return $this->component;
     }

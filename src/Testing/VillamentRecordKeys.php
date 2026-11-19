@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Zvizvi\Villament\Testing;
 
+use Closure;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
+use Zvizvi\Villament\Concerns\HasVillamentRelationTable;
 use Zvizvi\Villament\Concerns\HasVillamentTable;
 use Zvizvi\Villament\Support\RecordSerializer;
 
@@ -17,7 +19,10 @@ final class VillamentRecordKeys
 {
     public static function isVillament(object $component): bool
     {
-        return in_array(HasVillamentTable::class, class_uses_recursive($component), true);
+        $traits = class_uses_recursive($component);
+
+        return in_array(HasVillamentTable::class, $traits, true)
+            || in_array(HasVillamentRelationTable::class, $traits, true);
     }
 
     public static function keyOf(object $component, mixed $record): string
@@ -94,7 +99,7 @@ final class VillamentRecordKeys
 
         $payload = app(RecordSerializer::class)->serialize(
             $component,
-            $component::getResource(),
+            (fn (): string|Closure => $this->getVillamentRecordAbilities())->call($component),
             $component->getTableRecords(),
         );
 

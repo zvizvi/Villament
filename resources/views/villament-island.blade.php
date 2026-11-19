@@ -7,7 +7,17 @@
         freezes the island element's own attributes too.
     --}}
     <div @style(['display: none' => $isReordering])>
-        <div data-villament wire:ignore>
+        {{--
+            Keyed by the schema's version, so a commit that changes the TABLE
+            (a tab that shows other columns or filters) replaces the island
+            rather than leaving the old one frozen under `wire:ignore`: the
+            morph drops the old app and mounts a new one from the new config,
+            records inlined. A commit that leaves the table as it was (a tab
+            that only narrows the rows) keeps the key, and the island only
+            refetches, as before. Without this the island's own refetch met a
+            new version and reloaded the whole page on every such tab change.
+        --}}
+        <div data-villament wire:ignore wire:key="villament-island-{{ $config['schemaVersion'] }}">
             <script type="application/json" data-villament-config>{!! json_encode($config, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) !!}</script>
         </div>
     </div>

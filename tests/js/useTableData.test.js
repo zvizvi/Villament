@@ -46,6 +46,7 @@ describe('useTableData', () => {
         vi.useFakeTimers()
         fetchMock = vi.fn()
         vi.stubGlobal('fetch', fetchMock)
+        window.sessionStorage.clear()
     })
 
     afterEach(() => {
@@ -307,6 +308,96 @@ describe('useTableData', () => {
         await vi.runAllTimersAsync()
 
         expect(reload).toHaveBeenCalledTimes(1)
+
+        data.destroy()
+    })
+
+    it('does not reload again when the same drift survives the reload', async () => {
+        fetchMock.mockResolvedValue(jsonResponse({
+            schemaVersion: 'v2-endpoint',
+            records: [{ key: 1, cells: {} }],
+        }))
+
+        const reload = vi.fn()
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+        vi.stubGlobal('location', { ...window.location, reload })
+
+        // The page already reloaded once for exactly this pair.
+        window.sessionStorage.setItem('villament:drift-reload', 'v1->v2-endpoint')
+
+        const state = makeState()
+        const data = useTableData(ENDPOINT, state, { schemaVersion: 'v1' })
+
+        state.page.value = 2
+        await vi.runAllTimersAsync()
+
+        expect(reload).not.toHaveBeenCalled()
+        expect(data.records.value).toEqual([{ key: 1, cells: {} }])
+        expect(warn).toHaveBeenCalledOnce()
+
+        warn.mockRestore()
+        data.destroy()
+    })
+
+    it('reloads for a new pair even after reloading for an older one', async () => {
+        fetchMock.mockResolvedValue(jsonResponse({ schemaVersion: 'v3-next-deploy' }))
+
+        const reload = vi.fn()
+        vi.stubGlobal('location', { ...window.location, reload })
+        window.sessionStorage.setItem('villament:drift-reload', 'v1->v2-endpoint')
+
+        const state = makeState()
+        const data = useTableData(ENDPOINT, state, { schemaVersion: 'v1' })
+
+        state.sort.value = 'name:asc'
+        await vi.runAllTimersAsync()
+
+        expect(reload).toHaveBeenCalledTimes(1)
+        expect(window.sessionStorage.getItem('villament:drift-reload')).toBe('v1->v3-next-deploy')
+
+        data.destroy()
+    })
+
+    it('moves a page past the last one back to the last page', async () => {
+        fetchMock.mockResolvedValue(jsonResponse({
+            meta: { currentPage: 1, perPage: 10, total: 2, lastPage: 1, from: 1, to: 2 },
+        }))
+
+        const state = makeState()
+        state.page.value = 5
+
+        const data = useTableData(ENDPOINT, state, {
+            initialData: {
+                records: [],
+                meta: { currentPage: 5, perPage: 10, total: 2, lastPage: 1, from: null, to: null },
+            },
+            schemaVersion: 'v1',
+        })
+
+        await vi.runAllTimersAsync()
+
+        expect(state.page.value).toBe(1)
+        expect(fetchMock).toHaveBeenCalledTimes(1)
+        expect(fetchMock.mock.calls[0][0]).not.toContain('page=5')
+
+        data.destroy()
+    })
+
+    it('leaves a cursor-paginated table alone (it has no last page)', async () => {
+        const state = makeState()
+
+        const data = useTableData(ENDPOINT, state, {
+            initialData: {
+                records: [],
+                meta: { currentPage: null, perPage: 10, total: null, lastPage: null, from: null, to: null },
+            },
+            schemaVersion: 'v1',
+        })
+
+        await vi.runAllTimersAsync()
+
+        expect(state.page.value).toBe(1)
+        expect(fetchMock).not.toHaveBeenCalled()
 
         data.destroy()
     })
