@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
+use Filament\Clusters\Cluster;
 use Filament\Forms\Components\Field;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
+use Filament\Pages\Page;
 use Filament\Panel;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Resources\Pages\ManageRelatedRecords;
@@ -487,4 +489,25 @@ it('still swaps in the stock table through EmbeddedTable and names the trigger f
 
     expect(class_exists(EmbeddedTable::class))->toBeTrue('Filament internal API drift: [EmbeddedTable] is gone.')
         ->and($parameters)->toBe(['isReordering']);
+});
+
+it('still lets a panel swap its sidebar component, which the persistent sidebar subclasses', function (): void {
+    expect(method_exists(Panel::class, 'sidebarLivewireComponent'))->toBeTrue('Filament API drift: Panel::sidebarLivewireComponent() no longer exists.')
+        ->and(method_exists(Panel::class, 'getSidebarLivewireComponent'))->toBeTrue('Filament API drift: Panel::getSidebarLivewireComponent() no longer exists.')
+        ->and(view()->exists('filament-panels::livewire.sidebar'))->toBeTrue('Filament drift: the view [filament-panels::livewire.sidebar] the persistent sidebar includes is gone.')
+        ->and(method_exists(Filament\Resources\Resource::class, 'getNavigationUrl'))->toBeTrue('Filament API drift: Resource::getNavigationUrl() no longer exists.')
+        ->and(method_exists(Page::class, 'getNavigationUrl'))->toBeTrue('Filament API drift: Page::getNavigationUrl() no longer exists.')
+        ->and(method_exists(Cluster::class, 'getNavigationUrl'))->toBeTrue('Filament API drift: Cluster::getNavigationUrl() no longer exists.')
+        ->and(defined(PanelsRenderHook::class.'::BODY_END'))->toBeTrue('Filament API drift: PanelsRenderHook::BODY_END no longer exists.');
+});
+
+it('still keeps x-persist elements across wire:navigate, and still marks its fetch', function (): void {
+    // The persistent sidebar is Livewire's own `x-persist` mechanism, keyed
+    // by the server, and it recognizes a navigate request by this header.
+    $source = (string) file_get_contents(dirname(__DIR__, 2).'/vendor/livewire/livewire/dist/livewire.esm.js');
+
+    expect($source)
+        ->toContain('function putPersistantElementsBack(')
+        ->toContain('document.querySelectorAll("[x-persist]")')
+        ->toContain('"X-Livewire-Navigate": "1"');
 });

@@ -844,6 +844,74 @@ test('a tab that changes the table swaps the island in place, never reloading th
     assert.equal(await page.locator('[data-villament] [data-villament-mount]').count(), 1, 'one island: the replaced app was torn down')
 })
 
+const sidebarLink = (page, path) => page.locator(`#fi-main-sidebar a.fi-sidebar-item-btn[href$="${path}"]`)
+
+/** Records every `wire:navigate` page response: its size and whether it drew a sidebar. */
+function trackNavigateResponses(page) {
+    const responses = []
+
+    page.on('response', async (response) => {
+        if (response.request().headers()['x-livewire-navigate'] === undefined) {
+            return
+        }
+
+        const body = await response.text().catch(() => '')
+        responses.push({ url: response.url(), size: body.length, hasSidebar: body.includes('fi-sidebar-item') })
+    })
+
+    return responses
+}
+
+test('persistent sidebar: wire:navigate keeps the sidebar element, re-marks it, and the server sends none', async (page) => {
+    const responses = trackNavigateResponses(page)
+
+    await page.goto(`${baseUrl}/admin/users`)
+    await settle(page)
+
+    assert.ok(await sidebarLink(page, '/admin/users').evaluate((a) => a.closest('li').classList.contains('fi-active')), 'stock marks the users item on a full load')
+    await page.evaluate(() => { document.getElementById('fi-main-sidebar').villamentKept = true })
+
+    await sidebarLink(page, '/admin/teams').click()
+    await page.waitForURL(/\/admin\/teams$/)
+    await settle(page)
+
+    assert.equal(await page.evaluate(() => document.getElementById('fi-main-sidebar').villamentKept), true, 'the very same sidebar element')
+    assert.ok(await sidebarLink(page, '/admin/teams').evaluate((a) => a.closest('li').classList.contains('fi-active')), 'the teams item is marked')
+    assert.ok(! await sidebarLink(page, '/admin/users').evaluate((a) => a.closest('li').classList.contains('fi-active')), 'the users item is not')
+    assert.equal(await page.locator('[data-villament-shell-stub]').count(), 0)
+
+    const navigated = responses.find((response) => response.url.endsWith('/admin/teams'))
+    assert.ok(navigated, 'a wire:navigate request was made')
+    assert.equal(navigated.hasSidebar, false, 'the navigate response carries no sidebar')
+
+    // On to a page with a table island (not in the sidebar itself): the
+    // island mounts as on any navigation, and the resource's item is marked.
+    await page.evaluate((url) => window.Livewire.navigate(url), `${baseUrl}/admin/users/vue`)
+    await page.waitForURL(/\/admin\/users\/vue$/)
+    await settle(page)
+    await page.waitForSelector('[data-villament] [data-villament-mount] table')
+
+    assert.equal(await page.evaluate(() => document.getElementById('fi-main-sidebar').villamentKept), true)
+    assert.ok(await sidebarLink(page, '/admin/users').evaluate((a) => a.closest('li').classList.contains('fi-active')), 'a resource page marks its resource')
+    assert.ok(! await sidebarLink(page, '/admin/teams').evaluate((a) => a.closest('li').classList.contains('fi-active')))
+})
+
+test('persistent sidebar: a sidebar under another key is not reused, and the empty one renders in full', async (page) => {
+    await page.goto(`${baseUrl}/admin/users`)
+    await settle(page)
+
+    // As if the browser's sidebar belonged to another tenant, locale or user.
+    await page.evaluate(() => document.querySelector('[x-persist^="villament.shell.sidebar."]').setAttribute('x-persist', 'villament.shell.sidebar.other'))
+
+    await sidebarLink(page, '/admin/teams').click()
+    await page.waitForURL(/\/admin\/teams$/)
+    await settle(page)
+    await page.waitForSelector('#fi-main-sidebar a.fi-sidebar-item-btn')
+
+    assert.equal(await page.locator('[data-villament-shell-stub]').count(), 0, 'the stub was filled')
+    assert.ok(await sidebarLink(page, '/admin/teams').evaluate((a) => a.closest('li').classList.contains('fi-active')), 'by the server, marks included')
+})
+
 test('the page is not a secure context, as on a plain-HTTP site, and adding a row still works', async (page, requests) => {
     assert.equal(await page.evaluate(() => globalThis.isSecureContext), false, 'the suite must run outside a secure context')
     assert.equal(await page.evaluate(() => typeof globalThis.crypto.randomUUID), 'undefined')

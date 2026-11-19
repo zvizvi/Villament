@@ -62,6 +62,9 @@ class AdminPanelProvider extends PanelProvider
             ->authMiddleware([
                 Authenticate::class,
             ])
-            ->plugin(VillamentPlugin::make());
+            // SPA navigation with the sidebar kept in the browser
+            // (`persistentSidebar()`): the shell proof of concept.
+            ->spa()
+            ->plugin(VillamentPlugin::make()->persistentSidebar());
     }
 }
