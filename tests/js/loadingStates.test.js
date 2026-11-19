@@ -285,15 +285,16 @@ describe('VueTable wiring', () => {
         await deleteButton().trigger('click')
         expect(deleteButton().attributes('aria-disabled')).toBe('true')
 
-        // The commit finishes: Livewire's new filter state syncs into the
-        // island, which refetches.
+        // The commit finishes in Livewire v4's order: the call's promise
+        // resolves, then the `respond` hooks run in the same task, where the
+        // new filter state syncs into the island, which refetches.
         filtersState = { status: { value: '' } }
+        pendingRemovals.forEach((resolve) => resolve())
         commitHandlers.forEach((handler) => handler({
             component: { id: 'lw-users', $wire: globalThis.Livewire.$wire },
             commit: { calls: [{ method: 'removeTableFilter' }] },
             respond: (callback) => callback(),
         }))
-        pendingRemovals.forEach((resolve) => resolve())
         await flushPromises()
 
         expect(pendingFetches).toHaveLength(1)
@@ -303,6 +304,25 @@ describe('VueTable wiring', () => {
         await flushPromises()
 
         expect(deleteButton().attributes('aria-disabled')).toBeUndefined()
+    })
+
+    it('re-enables the chip delete buttons when the removal changes nothing and nothing is refetched', async () => {
+        wrapper = mount(VueTable, { props: { config: makeConfig() }, attachTo: document.body })
+
+        await wrapper.get('.fi-badge-delete-btn').trigger('click')
+        expect(wrapper.get('.fi-badge-delete-btn').attributes('aria-disabled')).toBe('true')
+
+        // Same filter state as before: the bridge sees no change, no fetch.
+        pendingRemovals.forEach((resolve) => resolve())
+        commitHandlers.forEach((handler) => handler({
+            component: { id: 'lw-users', $wire: globalThis.Livewire.$wire },
+            commit: { calls: [{ method: 'removeTableFilter' }] },
+            respond: (callback) => callback(),
+        }))
+        await flushPromises()
+
+        expect(pendingFetches).toHaveLength(0)
+        expect(wrapper.get('.fi-badge-delete-btn').attributes('aria-disabled')).toBeUndefined()
     })
 
     it('marks an empty group header row aria-hidden, and only the empty one', () => {

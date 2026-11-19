@@ -1041,23 +1041,20 @@ function onRemoveIndicator(indicator) {
     }
 
     isRemovingFilter.value = true
+    hasFilterRemovalSettled = false
 
     bridge.removeFilter(indicator.filter, indicator.field)
-        // The commit's filters watcher starts the refetch on the next flush.
+        // Livewire resolves the call, then runs the commit's `respond` hooks
+        // in the same task: the bridge writes the new filters and the filters
+        // watcher starts the refetch on the next flush, which `nextTick()`
+        // waits for.
         .then(() => nextTick())
         .then(() => {
+            hasFilterRemovalSettled = true
+
             if (! isLoading.value) {
                 isRemovingFilter.value = false
-
-                return
             }
-
-            const stop = watch(isLoading, (loading) => {
-                if (! loading) {
-                    isRemovingFilter.value = false
-                    stop()
-                }
-            })
         })
 }
 
@@ -1067,6 +1064,15 @@ function onRemoveIndicator(indicator) {
  * `removeTableFilter` request, which there also carries the re-render.
  */
 const isRemovingFilter = ref(false)
+
+/** The Livewire half of the current removal is done; only its refetch may remain. */
+let hasFilterRemovalSettled = false
+
+watch(isLoading, (loading) => {
+    if (! loading && hasFilterRemovalSettled) {
+        isRemovingFilter.value = false
+    }
+})
 
 /**
  * Whether a group header row has anything to show. Stock (5.11+) marks an
