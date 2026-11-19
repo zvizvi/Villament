@@ -266,10 +266,6 @@ final class HeadlessTableHarness
     {
         $component = $this->component;
 
-        if (! property_exists($component, 'activeTab') || ! method_exists($component, 'getCachedTabs')) {
-            return $this;
-        }
-
         if (blank($tab)) {
             $defaultTab = $component->getDefaultActiveTab();
             $component->activeTab = $defaultTab === null ? null : (string) $defaultTab;
