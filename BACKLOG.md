@@ -8,12 +8,11 @@ move out of here into `DECISIONS.md` once implemented.
 
 1. [Interactive columns](#interactive-columns--select-toggle-textinput-checkbox) ← next; the big one, needs a decision before code
 2. [Shrink the `cells` payload](#shrink-the-cells-payload)
-3. [Loading indicators](#loading-indicators-on-the-islands-buttons)
-4. [Action trigger options](#action-trigger-options-the-island-cannot-express-yet)
-5. [Docs pages never audited](#docs-pages-never-audited)
+3. [Action trigger options](#action-trigger-options-the-island-cannot-express-yet)
+4. [Docs pages never audited](#docs-pages-never-audited)
 
 Done and moved to `DECISIONS.md`: the empty state, `recordClasses()`, and the
-action-payload compaction (all 2026-07-26).
+action-payload compaction (all 2026-07-26); loading indicators (2026-11-19).
 
 ---
 
@@ -130,74 +129,6 @@ columns are editable in the island, the write goes through Filament's own
 Livewire method, validation errors surface, and parity tests cover the state
 round trip. Until then, the README should say plainly that these four column
 types are read-only inside the island.
-
----
-
-## Loading indicators on the island's buttons
-
-**Stock behavior.** Filament swaps a control's icon for a spinner while the request
-it targets is in flight, and disables controls that would corrupt state mid-request.
-Two distinct mechanisms, both keyed to `wire:target`:
-
-- **Icon → spinner swap.** `generate_icon_html(..., ['wire:loading.remove.delay.{delay}' => true, 'wire:target' => …])`
-  next to `generate_loading_indicator_html(['wire:loading.delay.{delay}' => '', 'wire:target' => …])`.
-  Verified spots: the sort button (`vendor/filament/tables/resources/views/index.blade.php:1811-1828`,
-  targeting `sortTable('{column}')`), the filters trigger (`components/filters.blade.php:27`),
-  the column-manager trigger (`components/column-manager/index.blade.php:37` — both
-  now rendered natively, so they already have this), and every
-  `<x-filament::button>` / `icon-button` / `link` / `dropdown item` with a loading
-  indicator (`support/resources/views/components/button/index.blade.php:152-168`).
-- **Disable-while-loading.** `wire:loading.attr="disabled"` on the page / group / record
-  checkboxes, the filter indicator chips' remove buttons, and the clickable-row
-  `wire:click` element (index.blade.php:862, 949, 1174, 1265, 1298, 1579, 1705, 1904).
-
-The delay comes from `config('filament.livewire_loading_delay')` — Livewire's
-`.delay` modifier, so a fast response never flashes a spinner.
-
-**Filament 5.11 changed the disable half** (DECISIONS 2026-11-16). The sort buttons,
-pagination buttons and page / group / record checkboxes now target all of
-`Table::LOADING_TARGETS`, so disabling is table-global and `isLoading` is the right
-signal for it. Sort and pagination use `aria-disabled` + `fi-disabled` +
-`data-prevent-disabled-clicks` rather than `disabled`. The chip delete buttons do the
-same, targeted at `removeTableFilter` alone. The line numbers above are from 5.6.
-
-**Where we stand.** `isLoading` from `useTableData` paints `fi-loading` on the table
-container, disables the bulk-action buttons (`BulkActions.vue`), and, since 2026-11-16,
-marks the sort and pagination buttons busy. The chip delete buttons are disabled for
-a filter removal and its refetch (`isRemovingFilter`). No spinner ever replaces an
-icon yet. Our buttons are not Livewire-driven, so `wire:loading` cannot reach them —
-the state has to be threaded explicitly.
-
-**Scope of the task.**
-
-1. Serialize the spinner markup into `schema.icons` as `loadingIndicator`, via
-   `generate_loading_indicator_html()` — same treatment as every other icon we ship.
-   It resolves through the swappable `LoadingIndicator` contract, so an app that
-   overrides it gets its own spinner in the island for free. Match the icon size
-   used at each call site (`IconSize::Small` on the sort button, etc.).
-2. Make the in-flight signal **per-control**, not table-global. Stock spins only the
-   control you clicked; one `isLoading` boolean would spin all of them at once.
-   `useTableData` needs to carry what initiated the current request (e.g.
-   `loadingSource = { type: 'sort', column: 'name' }`), which is the island's
-   equivalent of `wire:target`.
-3. Honor the configured delay so a sub-`delay` response paints no spinner.
-4. Apply the spinner to: sort buttons (stock: `sortTable('{column}')` only),
-   group settings, and per-group collapse toggles. Disable-while-loading still has
-   to go on: page / group / record checkboxes (table-global, like sort), the
-   remove-all button, and the clickable-record element. Done: sort and pagination
-   disabling, and the chips' delete buttons. Stock leaves the per-page select enabled. (The filters and column-manager triggers are
-   Filament-native now — their indicators come with the stock markup.)
-5. Row and bulk actions go through Livewire's `mountAction()`, so those buttons keep
-   real `wire:target` semantics available — decide per button whether to reuse
-   `wire:loading` there or to route everything through the island's own state, and
-   record the choice.
-
-**Out of scope.** The reorder indicator (index.blade.php:755): while reordering, the
-stock table renders it itself (`DECISIONS.md` 2026-11-16).
-
-**Done means.** The spinner HTML comes from the server (no hand-written SVG in the
-Vue layer); only the clicked control spins; JS tests cover the swap and the
-per-control targeting; the class list on each control still matches stock.
 
 ---
 

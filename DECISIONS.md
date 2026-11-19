@@ -654,6 +654,31 @@ Tests: `RelationManagersTest` (island vs stock twin rendering, endpoint shape, i
 
 The token also carries the tenant key it was rendered under, and the endpoint requires it to match `Filament::getTenant()`. This covers a resource that is NOT tenant-scoped, where the owner would resolve under any tenant: stock allows that page under any tenant URL, but the island has no legitimate flow that replays a token across tenants. A lazy manager renders its token during a Livewire request. There the tenant comes from `IdentifyTenant`, which Filament registers as Livewire persistent middleware (`FilamentServiceProvider`). This was checked in the source, not by a test, because the Livewire test client does not run persistent middleware.
 
+## 2026-11-19 — Loading indicators: the island's `wire:target`
+
+Closes the BACKLOG entry. Verified against filament v5.11.4, livewire v4.4.8. Stock has one pattern for any control a Livewire call drives: `wire:loading.attr` disables it at once, and after `filament.livewire_loading_delay` the icon (`wire:loading.remove.delay.*`) gives way to `generate_loading_indicator_html()` at the same size (`wire:loading.delay.*`). Both are keyed to the control's `wire:target`. The island's controls are not Livewire-driven, so `wire:loading` cannot reach them, and the state is threaded through instead.
+
+- **`usePendingCalls`** stands in for `wire:target`. A call is in flight by **id**, and two controls that fire the same call share an id, just as stock's target strings match. A row's Edit button and a cell whose click mounts `edit` on that row are one call (`pendingIds.mountAction('edit', key)`), and row 2 is a different one. An id is pending at once and spins after `schema.loadingDelayMs`. A call that ends within the delay never spins. Every bridge call now returns a promise that settles with the Livewire call and never rejects (`settled()`).
+- **The indicator comes from the server**: `schema.icons.loadingIndicator` is `{xs, sm, md, lg}`, rendered through the swappable `LoadingIndicator` contract. A trigger takes its icon's `fi-size-*`. An iconless one takes the size its stock generator falls back to: links, small buttons and badges `sm`; other buttons, grouped items and most icon buttons `md`; large icon buttons `lg`.
+
+| Control | Stock target | Island |
+|---|---|---|
+| Sort button | disable: `LOADING_TARGETS`; spinner: `sortTable('{column}')` | `busy` (2026-11-16); `md` spinner on the clicked column only, until the refetch lands |
+| Page / group / record checkboxes | `disabled` on `LOADING_TARGETS` | `disabled` while `isLoading` |
+| Chip delete buttons | `removeTableFilter` | disabled + `xs` spinner on every chip, until the refetch lands |
+| Remove-all | `removeTableFilters,removeTableFilter` | disabled + `md` spinner on either, until the refetch lands |
+| Button-wrapped cell | `disabled` on its own call | `disabled` while that call is pending, shared with the row's action button |
+| Record, header and toolbar action triggers | `aria-disabled` + `fi-disabled` + spinner on the mount call | same, on the mount promise (`pendingId`) |
+| Bulk action triggers | none: an Alpine handler, no `wire:click` | unchanged: no `pendingId`; the bulk bar keeps its `isLoading` disable |
+
+- **A click on a pending call is ignored** in the island's own handlers, so a second click never mounts twice. Filament's capture listener also swallows it on `aria-disabled` buttons, but the island does not depend on that.
+- **The chip delete icon is a span now.** Since 5.10, stock draws it as `<span aria-hidden="true" class="fi-badge-delete-btn-icon">` with a CSS mask, not with an SVG, and the `BADGE_DELETE_BUTTON` alias is no longer read by any view. `schema.icons.badgeDelete` is gone.
+- **Checked, needing nothing:** the grouping settings trigger opens an Alpine dropdown, and the group collapse toggles are Alpine-only. Neither fires a request, so stock has no loading state there. The BACKLOG listed both. The per-page select has none either.
+- **Same deviation as 2026-11-16:** checkbox disabling follows `isLoading`, so the refetch after an action, `retry()` and page properties also disable the checkboxes, where stock does not.
+- Pinned in `InternalApiContractTest`: `generate_loading_indicator_html` and its `size` parameter.
+
+Tests: `tests/js/pendingCalls.test.js` (the registry, the trigger swap and sizes, the shared row id, no double mount, the sort spinner on the clicked column only, the checkboxes, the chips and remove-all). It was checked by breaking the checkbox, sort-spinner and trigger-class code: each break fails a test. In a real browser on 5.11.4 (an ad-hoc Playwright run against the fixture's `/admin/users/vue`, requests held 1.5s): the sort button and a Delete action go disabled at once, spin only after the delay, other rows and columns are untouched, Filament's CSS dims the busy control (opacity 0.7), and all of it clears when the call lands. The existing browser suite passes (21/21).
+
 ## Verified Filament v5 internal API map (§4.1, §4.8)
 
 Verified against **filament/filament v5.6.8** + **livewire/livewire v4.3.3** by reading installed vendor source on 2026-07-15. Paths relative to `vendor/filament/`.
