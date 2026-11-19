@@ -8,7 +8,6 @@ use Filament\Support\Enums\Alignment;
 use Filament\Support\Enums\IconSize;
 use Filament\Support\Enums\VerticalAlignment;
 use Filament\Support\Icons\Heroicon;
-use Filament\Support\View\SupportIconAlias;
 use Filament\Tables\Columns\Column;
 use Filament\Tables\Enums\PaginationMode;
 use Filament\Tables\Enums\RecordActionsPosition;
@@ -18,6 +17,7 @@ use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Arr;
 
 use function Filament\Support\generate_icon_html;
+use function Filament\Support\generate_loading_indicator_html;
 
 /**
  * Serializes a Filament Table definition into the JSON schema payload the Vue
@@ -131,7 +131,7 @@ final class SchemaSerializer
      * markup is byte-identical to stock (mini/outline variants included) and
      * app-level `FilamentIcon` alias overrides keep working.
      *
-     * @return array<string, string|null>
+     * @return array<string, string|array<string, string>|null>
      */
     private function icons(Table $table): array
     {
@@ -145,10 +145,30 @@ final class SchemaSerializer
             'removeFilters' => $this->iconHtml(Heroicon::XMark, TablesIconAlias::FILTERS_REMOVE_ALL_BUTTON),
             'previous' => $this->iconHtml($isRtl ? Heroicon::ChevronRight : Heroicon::ChevronLeft),
             'next' => $this->iconHtml($isRtl ? Heroicon::ChevronLeft : Heroicon::ChevronRight),
-            'badgeDelete' => $this->iconHtml(Heroicon::XMark, SupportIconAlias::BADGE_DELETE_BUTTON, IconSize::ExtraSmall),
             'group' => $this->iconHtml(Heroicon::RectangleStack, TablesIconAlias::ACTIONS_GROUP),
             'groupCollapse' => $this->iconHtml(Heroicon::ChevronUp, TablesIconAlias::GROUPING_COLLAPSE_BUTTON, IconSize::Small),
+            'loadingIndicator' => $this->loadingIndicators(),
         ];
+    }
+
+    /**
+     * Filament's loading indicator, through the swappable `LoadingIndicator`
+     * contract, in every size a stock call site uses: `xs` on badge delete
+     * buttons, `sm` on links and small buttons, `md` on the sort button and
+     * most icon buttons, `lg` on large ones. Each control swaps its icon for
+     * the matching size, like stock's `wire:loading.delay` pairs do.
+     *
+     * @return array<string, string>
+     */
+    private function loadingIndicators(): array
+    {
+        $html = [];
+
+        foreach ([IconSize::ExtraSmall, IconSize::Small, IconSize::Medium, IconSize::Large] as $size) {
+            $html[$size->value] = generate_loading_indicator_html(size: $size)->toHtml();
+        }
+
+        return $html;
     }
 
     /**

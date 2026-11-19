@@ -59,9 +59,13 @@ describe('filter schema serialization', function (): void {
             // No `empty` icon: the whole empty state is Filament-native now,
             // teleported in with its own icon.
             ->and($icons)->not->toHaveKey('empty')
-            // The indicator-chip delete icon is the xs micro variant, like
-            // the stock badge delete button.
-            ->and($icons['badgeDelete'])->toContain('fi-size-xs')->toContain('viewBox="0 0 16 16"');
+            // Stock draws the chip delete icon as a CSS-masked span (since
+            // 5.10), so no SVG ships for it.
+            ->and($icons)->not->toHaveKey('badgeDelete')
+            // One loading indicator per size a stock call site uses.
+            ->and(array_keys($icons['loadingIndicator']))->toBe(['xs', 'sm', 'md', 'lg'])
+            ->and($icons['loadingIndicator']['xs'])->toContain('fi-loading-indicator')->toContain('fi-size-xs')
+            ->and($icons['loadingIndicator']['md'])->toContain('fi-size-md');
     });
 
     it('teleports the STOCK Filament dropdown (trigger + panel) into the Vue toolbar slot', function (): void {

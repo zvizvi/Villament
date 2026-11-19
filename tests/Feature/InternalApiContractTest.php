@@ -432,6 +432,19 @@ it('still finds the icon rendering helper', function (): void {
     expect(function_exists('Filament\Support\generate_icon_html'))->toBeTrue();
 });
 
+it('still finds the loading indicator helper and its size parameter', function (): void {
+    expect(function_exists('Filament\Support\generate_loading_indicator_html'))
+        ->toBeTrue('Filament internal API drift: function [generate_loading_indicator_html] no longer exists.');
+
+    $parameters = array_map(
+        fn (ReflectionParameter $parameter): string => $parameter->getName(),
+        (new ReflectionFunction('Filament\Support\generate_loading_indicator_html'))->getParameters(),
+    );
+
+    expect(in_array('size', $parameters, true))
+        ->toBeTrue('Filament internal API drift: [generate_loading_indicator_html] lost its [size] parameter.');
+});
+
 it('still finds every Action trigger view constant', function (string $constant): void {
     expect(defined(Action::class.'::'.$constant))
         ->toBeTrue("Filament internal API drift: constant [Action::{$constant}] no longer exists.");

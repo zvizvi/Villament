@@ -154,8 +154,10 @@ describe('VueTable filters (native Livewire panel) + indicators', () => {
 
         expect(wrapper.get('.fi-ta-filter-indicators-label').text()).toBe('Active filters')
 
-        // Only the removable chip gets a delete button, using the server icon html.
-        expect(chips[0].find('.fi-badge-delete-btn [data-icon="x"]').exists()).toBe(true)
+        // Only the removable chip gets a delete button. Its icon is stock's
+        // CSS-masked span, not an SVG.
+        expect(chips[0].find('.fi-badge-delete-btn > span.fi-badge-delete-btn-icon[aria-hidden="true"]').exists()).toBe(true)
+        expect(chips[0].find('.fi-badge-delete-btn svg').exists()).toBe(false)
         expect(chips[1].find('.fi-badge-delete-btn').exists()).toBe(false)
     })
 

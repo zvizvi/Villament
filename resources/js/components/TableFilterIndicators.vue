@@ -1,7 +1,8 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, inject } from 'vue'
 import TrustedIcon from './TrustedIcon.js'
 import { filamentTooltip } from '../support/tooltip.js'
+import { LOADING_INDICATORS_KEY } from '../support/injectionKeys.js'
 
 const props = defineProps({
     /**
@@ -37,9 +38,37 @@ const props = defineProps({
         type: Boolean,
         default: false,
     },
+    /** The removal has run past the loading delay: the delete icons spin. */
+    removingSpinning: {
+        type: Boolean,
+        default: false,
+    },
+    /**
+     * Any removal is in flight — one chip or all of them. Stock targets the
+     * remove-all button at `removeTableFilters,removeTableFilter`.
+     */
+    removingAll: {
+        type: Boolean,
+        default: false,
+    },
+    /** That removal has run past the loading delay: the remove-all icon spins. */
+    removingAllSpinning: {
+        type: Boolean,
+        default: false,
+    },
 })
 
 const emit = defineEmits(['remove', 'removeAll'])
+
+/** @type {import('vue').ComputedRef<Record<string, string>>|null} */
+const loadingIndicators = inject(LOADING_INDICATORS_KEY, null)
+
+/**
+ * Stock's sizes: `ExtraSmall` on the badge delete button, the icon button's
+ * default (`Medium`) on remove-all.
+ */
+const chipLoadingIndicator = computed(() => loadingIndicators?.value?.xs ?? null)
+const removeAllLoadingIndicator = computed(() => loadingIndicators?.value?.md ?? null)
 
 const hasRemovableIndicators = computed(
     () => props.indicators.some((indicator) => indicator.removable),
@@ -78,7 +107,19 @@ const hasRemovableIndicators = computed(
                         :aria-disabled="removing ? 'true' : undefined"
                         @click="! removing && emit('remove', indicator)"
                     >
-                        <TrustedIcon :html="icons.badgeDelete || icons.removeFilters" />
+                        <!--
+                            Stock draws this icon with a CSS mask on an empty
+                            span (Filament 5.10+), not with an SVG.
+                        -->
+                        <TrustedIcon
+                            v-if="removingSpinning && chipLoadingIndicator"
+                            :html="chipLoadingIndicator"
+                        />
+                        <span
+                            v-else
+                            aria-hidden="true"
+                            class="fi-badge-delete-btn-icon"
+                        />
 
                         <span class="fi-sr-only">
                             {{ strings.filtersRemove }}
@@ -100,10 +141,12 @@ const hasRemovableIndicators = computed(
             :x-tooltip="filamentTooltip(strings.filtersRemoveAll)"
             type="button"
             class="fi-icon-btn fi-size-sm fi-ac-icon-btn-action villament-remove-all-filters-btn"
+            :class="{ 'fi-disabled': removingAll }"
+            :aria-disabled="removingAll ? 'true' : undefined"
             :aria-label="strings.filtersRemoveAll"
-            @click="emit('removeAll')"
+            @click="! removingAll && emit('removeAll')"
         >
-            <TrustedIcon :html="icons.removeFilters" />
+            <TrustedIcon :html="(removingAllSpinning && removeAllLoadingIndicator) || icons.removeFilters" />
         </button>
     </div>
 </template>

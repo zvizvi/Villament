@@ -2,6 +2,8 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
 import { getCoreRowModel, useVueTable } from '@tanstack/vue-table'
 import { useTableState } from '../composables/useTableState.js'
+import { pendingIds, usePendingCalls } from '../composables/usePendingCalls.js'
+import { LOADING_INDICATORS_KEY, PENDING_CALLS_KEY } from '../support/injectionKeys.js'
 import { useTableData } from '../composables/useTableData.js'
 import { useLivewireBridge } from '../composables/useLivewireBridge.js'
 import { useSelection } from '../composables/useSelection.js'
@@ -53,6 +55,16 @@ const strings = resolveStrings(schema.strings)
  * nothing (never a broken glyph).
  */
 const icons = schema.icons ?? {}
+
+/**
+ * Which Livewire calls (and island fetches standing in for them) are in
+ * flight: the island's `wire:target`. Controls that fire the same call share
+ * an id; the delay is Livewire's, as for the loading skeleton.
+ */
+const pendingCalls = usePendingCalls({ delayMs: () => schema.loadingDelayMs ?? 200 })
+
+provide(PENDING_CALLS_KEY, pendingCalls)
+provide(LOADING_INDICATORS_KEY, computed(() => icons.loadingIndicator ?? {}))
 
 /**
  * `getVillamentColumnFilterSlots()` on the page: column key → extra classes for
@@ -437,6 +449,7 @@ onMounted(adoptNativeSlots)
 
 onBeforeUnmount(() => {
     clearTimeout(loadingSkeletonTimer)
+    pendingCalls.destroy()
     bridge.destroy()
     destroyData()
     state.destroy()
@@ -774,6 +787,7 @@ const hasBulkActionsBar = computed(
  */
 function isRecordCheckboxDisabled(key) {
     return Boolean(selectionConfig.value.disabled)
+        || isLoading.value
         || ! selection.areRecordsToggleable([key])
 }
 
@@ -971,22 +985,103 @@ function onCellClick(cellValue, record) {
         return
     }
 
+    const id = cellPendingId(cellValue, record)
+
+    // Stock: `wire:loading.attr="disabled"` on the call the cell fires.
+    if (id && pendingCalls.isPending(id)) {
+        return
+    }
+
     const click = cellValue?.click
 
     if (! click) {
         // Pre-`click` payload: the record action was the only possibility.
-        bridge.mountRecordAction(record.action, record.key)
+        pendingCalls.track(id, bridge.mountRecordAction(record.action, record.key))
 
         return
     }
 
     if (click.type === 'mountAction') {
-        bridge.mountRecordAction(click.name, record.key)
+        pendingCalls.track(id, bridge.mountRecordAction(click.name, record.key))
     } else if (click.type === 'columnAction') {
-        bridge.callColumnAction(click.name, record.key)
+        pendingCalls.track(id, bridge.callColumnAction(click.name, record.key))
     } else if (click.type === 'method') {
-        bridge.callRecordMethod(click.name, record.key)
+        pendingCalls.track(id, bridge.callRecordMethod(click.name, record.key))
     }
+}
+
+/**
+ * The call a button-wrapped cell fires, as a pending id. A cell that mounts
+ * a table action shares its id with that action's button in the same row,
+ * exactly as stock's `wire:target` strings match.
+ *
+ * @param {?object} cellValue
+ * @param {object} record
+ * @returns {?string}
+ */
+function cellPendingId(cellValue, record) {
+    const click = cellValue?.click
+
+    if (! click) {
+        return record.action ? pendingIds.mountAction(record.action, record.key) : null
+    }
+
+    return {
+        mountAction: () => pendingIds.mountAction(click.name, record.key),
+        columnAction: () => pendingIds.columnAction(click.name, record.key),
+        method: () => pendingIds.method(click.name, record.key),
+    }[click.type]?.() ?? null
+}
+
+/**
+ * Whether a button-wrapped cell's call is in flight.
+ *
+ * @param {?object} cellValue
+ * @param {object} record
+ * @returns {boolean}
+ */
+function isCellPending(cellValue, record) {
+    if (cellWrapperTag(cellValue, record) !== 'button') {
+        return false
+    }
+
+    const id = cellPendingId(cellValue, record)
+
+    return id !== null && pendingCalls.isPending(id)
+}
+
+/**
+ * Mounts a record action from its button, following the call as stock's
+ * `wire:target` does.
+ *
+ * @param {string} name
+ * @param {string} recordKey
+ * @returns {void}
+ */
+function onRecordActionMount(name, recordKey) {
+    const id = pendingIds.mountAction(name, recordKey)
+
+    if (pendingCalls.isPending(id)) {
+        return
+    }
+
+    pendingCalls.track(id, bridge.mountRecordAction(name, recordKey))
+}
+
+/**
+ * Mounts a header or toolbar action from its button.
+ *
+ * @param {string} name
+ * @returns {void}
+ */
+function onTableActionMount(name) {
+    const id = pendingIds.mountAction(name)
+
+    if (pendingCalls.isPending(id)) {
+        return
+    }
+
+    pendingCalls.track(id, bridge.mountTableAction(name))
 }
 
 /**
@@ -1003,6 +1098,9 @@ function onSort(columnKey) {
     } else {
         state.sort.value = `${columnKey}:asc`
     }
+
+    // Stock spins the clicked column's sort icon: `sortTable('{column}')`.
+    trackUntilRefetched(pendingIds.sort(columnKey), Promise.resolve())
 }
 
 /**
@@ -1040,39 +1138,68 @@ function onRemoveIndicator(indicator) {
         return
     }
 
-    isRemovingFilter.value = true
-    hasFilterRemovalSettled = false
+    trackUntilRefetched(pendingIds.removeFilter, bridge.removeFilter(indicator.filter, indicator.field))
+}
 
-    bridge.removeFilter(indicator.filter, indicator.field)
-        // Livewire resolves the call, then runs the commit's `respond` hooks
-        // in the same task: the bridge writes the new filters and the filters
-        // watcher starts the refetch on the next flush, which `nextTick()`
-        // waits for.
+/**
+ * Ids whose Livewire half has settled and that now only wait for the island
+ * refetch it started.
+ *
+ * @type {Set<string>}
+ */
+const awaitingRefetch = new Set()
+
+/**
+ * Keeps `id` pending until `call` has settled AND the refetch it triggers has
+ * landed. In stock both are one request: the commit re-renders the table.
+ *
+ * Livewire v4 resolves a call, then runs the commit's `respond` hooks in the
+ * same task: the bridge writes the new state there, and the state watcher in
+ * `useTableData` starts the refetch on the next flush, which `nextTick()`
+ * waits for. A call that changes nothing starts no fetch and ends at once.
+ *
+ * @param {string} id
+ * @param {Promise<unknown>} call
+ * @returns {void}
+ */
+function trackUntilRefetched(id, call) {
+    pendingCalls.begin(id)
+
+    Promise.resolve(call)
         .then(() => nextTick())
         .then(() => {
-            hasFilterRemovalSettled = true
-
-            if (! isLoading.value) {
-                isRemovingFilter.value = false
+            if (isLoading.value) {
+                awaitingRefetch.add(id)
+            } else {
+                pendingCalls.end(id)
             }
         })
 }
 
-/**
- * A chip's filter removal is in flight — from the click until the refetch it
- * triggers has landed. Stock disables every chip's delete button for the
- * `removeTableFilter` request, which there also carries the re-render.
- */
-const isRemovingFilter = ref(false)
-
-/** The Livewire half of the current removal is done; only its refetch may remain. */
-let hasFilterRemovalSettled = false
-
 watch(isLoading, (loading) => {
-    if (! loading && hasFilterRemovalSettled) {
-        isRemovingFilter.value = false
+    if (loading) {
+        return
     }
+
+    awaitingRefetch.forEach((id) => pendingCalls.end(id))
+    awaitingRefetch.clear()
 })
+
+/**
+ * Stock targets every chip's delete button at `removeTableFilter`, and the
+ * remove-all button at `removeTableFilters,removeTableFilter`.
+ */
+const isRemovingFilter = computed(() => pendingCalls.isPending(pendingIds.removeFilter))
+
+const isRemovingFilterSpinning = computed(() => pendingCalls.isSpinning(pendingIds.removeFilter))
+
+const isRemovingAnyFilter = computed(
+    () => isRemovingFilter.value || pendingCalls.isPending(pendingIds.removeAllFilters),
+)
+
+const isRemovingAnyFilterSpinning = computed(
+    () => isRemovingFilterSpinning.value || pendingCalls.isSpinning(pendingIds.removeAllFilters),
+)
 
 /**
  * Whether a group header row has anything to show. Stock (5.11+) marks an
@@ -1102,6 +1229,10 @@ const hasGroupCheckbox = computed(() => isSelectionEnabled.value && ! isSingleSe
  * @returns {void}
  */
 function onRemoveAllFilters() {
+    if (isRemovingAnyFilter.value) {
+        return
+    }
+
     // Only reset when non-empty, so we don't kick off a spurious refetch with
     // the still-current filters; the removeAllFilters commit refetches with the
     // cleared state (and wins the race via the request-id guard) either way.
@@ -1113,7 +1244,7 @@ function onRemoveAllFilters() {
         state.columnSearches.value = {}
     }
 
-    bridge.removeAllFilters()
+    trackUntilRefetched(pendingIds.removeAllFilters, bridge.removeAllFilters())
 }
 
 /**
@@ -1225,7 +1356,8 @@ function recordCellClasses(column, cellValue = null) {
                         <BulkActions
                             v-if="visibleHeaderActions.length"
                             :actions="visibleHeaderActions"
-                            @mount="bridge.mountTableAction($event)"
+                            tracks-loading
+                            @mount="onTableActionMount($event)"
                         />
                     </div>
 
@@ -1274,7 +1406,8 @@ function recordCellClasses(column, cellValue = null) {
                         <BulkActions
                             v-if="toolbarActionsStructure.length"
                             :actions="toolbarActionsStructure"
-                            @mount="bridge.mountTableAction($event)"
+                            tracks-loading
+                            @mount="onTableActionMount($event)"
                         >
                             <template #leading>
                                 <NativeSlot v-if="renderHooks.has('reorder-trigger-before')" family="hook" name="reorder-trigger-before" style="display: contents" />
@@ -1372,6 +1505,9 @@ function recordCellClasses(column, cellValue = null) {
                     :strings="strings"
                     :icons="icons"
                     :removing="isRemovingFilter"
+                    :removing-spinning="isRemovingFilterSpinning"
+                    :removing-all="isRemovingAnyFilter"
+                    :removing-all-spinning="isRemovingAnyFilterSpinning"
                     @remove="onRemoveIndicator"
                     @remove-all="onRemoveAllFilters"
                 />
@@ -1421,7 +1557,7 @@ function recordCellClasses(column, cellValue = null) {
                                 :all-selected="areAllPageRecordsSelected"
                                 :show-page-checkbox="! isSingleSelect && ! selectionConfig.groupsOnly"
                                 :page-indeterminate="isPagePartiallySelected"
-                                :page-checkbox-disabled="isPageCheckboxDisabled"
+                                :page-checkbox-disabled="isPageCheckboxDisabled || isLoading"
                                 :has-actions-column="hasRecordActions"
                                 :actions-position="recordActionsPosition"
                                 :actions-column-label="recordActionsConfig.columnLabel ?? null"
@@ -1564,7 +1700,7 @@ function recordCellClasses(column, cellValue = null) {
                                                 class="fi-ta-group-checkbox fi-checkbox-input"
                                                 :checked="selection.areRecordsSelected(item.keys)"
                                                 :indeterminate="selection.areRecordsPartiallySelected(item.keys)"
-                                                :disabled="Boolean(selectionConfig.disabled)"
+                                                :disabled="Boolean(selectionConfig.disabled) || isLoading"
                                                 @change="selection.toggleSelectPage(item.keys)"
                                             >
                                         </td>
@@ -1673,7 +1809,8 @@ function recordCellClasses(column, cellValue = null) {
                                                 :names="item.row.original.actionNames ?? []"
                                                 :defaults="actionDefaults"
                                                 :alignment-class="recordActionsConfig.alignmentClass ?? null"
-                                                @mount="bridge.mountRecordAction($event, item.row.original.key)"
+                                                :record-key="item.row.original.key"
+                                                @mount="onRecordActionMount($event, item.row.original.key)"
                                             />
                                         </td>
 
@@ -1709,7 +1846,8 @@ function recordCellClasses(column, cellValue = null) {
                                                 :names="item.row.original.actionNames ?? []"
                                                 :defaults="actionDefaults"
                                                 :alignment-class="recordActionsConfig.alignmentClass ?? null"
-                                                @mount="bridge.mountRecordAction($event, item.row.original.key)"
+                                                :record-key="item.row.original.key"
+                                                @mount="onRecordActionMount($event, item.row.original.key)"
                                             />
                                         </td>
 
@@ -1724,6 +1862,7 @@ function recordCellClasses(column, cellValue = null) {
                                                 class="fi-ta-col"
                                                 :class="{ 'fi-ta-col-has-column-url': Boolean(cell.getValue()?.hasColumnUrl) }"
                                                 :type="cellWrapperTag(cell.getValue(), item.row.original) === 'button' ? 'button' : undefined"
+                                                :disabled="isCellPending(cell.getValue(), item.row.original) || undefined"
                                                 :href="cellWrapperUrl(cell.getValue(), item.row.original) || undefined"
                                                 :target="cellWrapperUrl(cell.getValue(), item.row.original) && cellWrapperNewTab(cell.getValue(), item.row.original) ? '_blank' : undefined"
                                                 :rel="cellWrapperUrl(cell.getValue(), item.row.original) && cellWrapperNewTab(cell.getValue(), item.row.original) ? 'noopener noreferrer' : undefined"
@@ -1747,7 +1886,8 @@ function recordCellClasses(column, cellValue = null) {
                                                 :names="item.row.original.actionNames ?? []"
                                                 :defaults="actionDefaults"
                                                 :alignment-class="recordActionsConfig.alignmentClass ?? null"
-                                                @mount="bridge.mountRecordAction($event, item.row.original.key)"
+                                                :record-key="item.row.original.key"
+                                                @mount="onRecordActionMount($event, item.row.original.key)"
                                             />
                                         </td>
                                     </tr>

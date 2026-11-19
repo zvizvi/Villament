@@ -1,9 +1,11 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, inject } from 'vue'
 import TrustedIcon from './TrustedIcon.js'
 import ActionsHeaderCell from './ActionsHeaderCell.vue'
 import ColumnLabel from './ColumnLabel.vue'
 import { filamentTooltip } from '../support/tooltip.js'
+import { pendingIds } from '../composables/usePendingCalls.js'
+import { LOADING_INDICATORS_KEY, PENDING_CALLS_KEY } from '../support/injectionKeys.js'
 
 const props = defineProps({
     /**
@@ -299,6 +301,28 @@ function headerCellStyle(column) {
     return column.width ? { width: column.width } : undefined
 }
 
+/** @type {?import('../composables/usePendingCalls.js').PendingCalls} */
+const pendingCalls = inject(PENDING_CALLS_KEY, null)
+
+/** @type {import('vue').ComputedRef<Record<string, string>>|null} */
+const loadingIndicators = inject(LOADING_INDICATORS_KEY, null)
+
+/**
+ * Stock swaps the sort icon for a medium loading indicator once
+ * `sortTable('{column}')` has run past the loading delay — only on the
+ * column that was clicked.
+ *
+ * @param {object} column
+ * @returns {?string}
+ */
+function sortLoadingIndicatorFor(column) {
+    if (! pendingCalls?.isSpinning(pendingIds.sort(column.key))) {
+        return null
+    }
+
+    return loadingIndicators?.value?.md ?? null
+}
+
 /**
  * @param {object} column
  * @returns {void}
@@ -419,7 +443,7 @@ function onSortClick(column) {
                         :column="column"
                     />
 
-                    <TrustedIcon :html="sortIconFor(column)" />
+                    <TrustedIcon :html="sortLoadingIndicatorFor(column) ?? sortIconFor(column)" />
                 </span>
 
                 <template v-else>
