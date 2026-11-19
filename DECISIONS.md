@@ -679,6 +679,25 @@ Closes the BACKLOG entry. Verified against filament v5.11.4, livewire v4.4.8. St
 
 Tests: `tests/js/pendingCalls.test.js` (the registry, the trigger swap and sizes, the shared row id, no double mount, the sort spinner on the clicked column only, the checkboxes, the chips and remove-all). It was checked by breaking the checkbox, sort-spinner and trigger-class code: each break fails a test. In a real browser on 5.11.4 (an ad-hoc Playwright run against the fixture's `/admin/users/vue`, requests held 1.5s): the sort button and a Delete action go disabled at once, spin only after the delay, other rows and columns are untouched, Filament's CSS dims the busy control (opacity 0.7), and all of it clears when the call lands. The existing browser suite passes (21/21).
 
+## 2026-11-19 — Loading-state DOM checked against stock in a browser
+
+A Playwright run captured the same controls on the stock table (`/admin/users`) and on the island (`/admin/users/vue`), on Filament 5.11.4. The controls were the sort button, a row's Delete button and a record checkbox, each at rest and with its request held. The snapshot compares tags, classes, `aria-*`, `disabled`, `data-*` and which nodes render. After this change, the only differences are the ones kept on purpose:
+
+- **Kept: icon and indicator are swapped, not both rendered.** Stock renders the icon and the loading indicator side by side and hides one with `display:none` (`wire:loading.remove` / `wire:loading`). The island renders only the visible one. It looks the same; only stock's DOM holds a hidden extra SVG.
+- **Kept: `aria-label` on the sort control** (see `sortButtonLabelFor()`).
+- **Unavoidable: `disabled="true"` vs `disabled=""`** on a checkbox. Livewire writes the attribute's value, while Vue always renders a boolean attribute empty. Browsers, `[disabled]` selectors and assistive tech read both the same.
+
+Closed here:
+
+- **`data-loading="true"`**, as Livewire 4.4.8's `supportDataLoading` sets it. It goes on the request's **origin** element only: the `wire:click` or `wire:model.live` element that started it. It stays until that request finishes. Two controls that share a call share its disabled state, not this marker, so a row's Delete button and a cell firing the same mount are marked only where the click happened. The island marks:
+  - the clicked action trigger or cell, until its call settles;
+  - the clicked chip and remove-all, until their removal and its refetch land;
+  - the sort control, pagination buttons, per-page select and search inputs, from the start of the fetch they cause until no fetch is in flight.
+
+  `useTableData` exposes `fetchCount`, which ticks on every fetch start, a replacing one included, so a debounced search marks its input when its own fetch starts. Checkboxes and bulk actions run through Alpine in stock, have no origin, and get no marker.
+- **The sort control is a native `<button type="button">`**, as in stock (5.10+). It becomes a `<span role="button" tabindex="0">` only when the label is HTML (`labelHtml`), because interactive content is invalid inside a `<button>`. Only the span handles Enter and Space itself; the button activates natively, so its keys are no longer prevented.
+- **`data-group`** on record checkboxes: the record's group key, empty when ungrouped, as in stock.
+
 ## Verified Filament v5 internal API map (§4.1, §4.8)
 
 Verified against **filament/filament v5.6.8** + **livewire/livewire v4.3.3** by reading installed vendor source on 2026-07-15. Paths relative to `vendor/filament/`.
