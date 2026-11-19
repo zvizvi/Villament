@@ -151,19 +151,21 @@ export function useLivewireBridge(options) {
      *
      * @param {string} filterName
      * @param {?string} [field] Indicator-scoped form field, when applicable.
-     * @returns {void}
+     * @returns {Promise<void>} Settles when the Livewire call does (never rejects).
      */
     function removeFilter(filterName, field = null) {
         const wire = wireFor(livewireId)
 
         if (! wire) {
-            return
+            return Promise.resolve()
         }
 
         try {
-            wire.removeTableFilter(filterName, field ?? null)
+            return Promise.resolve(wire.removeTableFilter(filterName, field ?? null))
+                .then(() => {}, () => {})
         } catch {
             // Never break the island on a mid-teardown component.
+            return Promise.resolve()
         }
     }
 

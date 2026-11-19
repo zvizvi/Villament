@@ -598,6 +598,37 @@ Reorderable rows were out of scope (`AGENTS.md` §8), so a table with `->reorder
 
 Tests: `ReorderRecordsTest` (trigger rendered, stock table in reordering mode with the island hidden and unfed, the order saved and read back by the island, no trigger on a table that is not reorderable) and `tests/js/reorderTrigger.test.js` (outlet, adoption, refetch on the toggle and not on the drags).
 
+## 2026-11-16 — Filament 5.11: no breakage, four markup gaps closed, the ratio holds
+
+Checked per the 2026-07-26 rule. The setup isolates the Filament version. Two copies of the same tree shared one `composer.lock` (Livewire v4.4.8 in both), and only `filament/*` differed: v5.10.3 vs v5.11.3. The full suite (445 tests, parity and `InternalApiContractTest` included) passes on 5.11.3 unchanged.
+
+**`#[Exposed]` / `#[Unexposed]` (new in 5.11).** `Filament\Support\Livewire\MethodAccess` now runs before every Livewire `call` and answers 403 for a method marked `#[Unexposed]`, or one whose return type is a Filament component. Every method the bridge calls is marked `#[Exposed]`: `mountAction`, `removeTableFilter`, `removeTableFilters`, `callTableColumnAction`, `applyTableColumnManager`, `resetTableColumnManager`, `getAllSelectableTableRecordKeys`. The headless harness calls PHP methods directly, which the hook never sees. **Any new bridge call must target an exposed method.**
+
+**Markup changes in `tables::index` and the support components, and what the island did with them:**
+
+- **Loading state on the controls.** While any of the new `Table::LOADING_TARGETS` is loading (no delay), stock now marks the sort buttons and every clickable pagination button `aria-disabled="true"` + `fi-disabled`. It also gives them `data-prevent-disabled-clicks`, so the rewritten `disabled-button.js` capture listener swallows clicks. The island mirrors this with a `busy` prop (`isLoading`) on `TableHeader` and `TablePagination`. The mobile `fi-btn` previous/next buttons get it too, which stock's button component already did. The handlers also return early while busy, so the island never depends on Filament's listener being loaded. The sort keys are now `.self`, as in stock. The per-page select is left enabled, as in stock.
+- **Filter-chip delete buttons.** These target `removeTableFilter` only, not every loading target. The island disables all of them from the click until both the Livewire removal and the refetch it triggers have landed (`isRemovingFilter`). In stock, the re-render rides in that same request. `bridge.removeFilter()` now returns the call's promise, and it never rejects.
+- **Where the island's `busy` differs from stock.** It is `isLoading`, true for every island fetch. Stock disables only on `Table::LOADING_TARGETS`, and three island fetches have no stock target: the refetch after an action or column-manager commit, `retry()` after an error, and a page's own query-shaping property (`state.properties`). For those the sort and pagination buttons are disabled for the length of the fetch, about one endpoint round trip, while stock leaves them alone. This was accepted rather than splitting the loading flag: the table already dims during those fetches (`fi-loading` or the skeleton), and a click there would only be aborted by the next one.
+- **Order of a removal, checked in Livewire v4.4.8** (`dist/livewire.esm.js`, the request's `finally`): `resolveActionPromises()` runs first, then `invokeOnFinish()` runs the commit's `respond` hooks in the same task. The island's `.then` is a microtask, so by then the bridge has written the new filters and Vue's flush, which `nextTick()` awaits, has started the refetch. A single setup-scoped `watch(isLoading)` clears the flag. Watchers created inside the promise callback were dropped, because they outlived the component.
+- **Empty group header row** (no title, label, description, collapse toggle or group checkbox) gets `aria-hidden="true"`. While there, two gaps from before 5.11 were closed. The island never added `fi-ta-group-header-row-with-selection`, which carries the mobile grid layout. It also drew the group checkbox under `maxSelectableRecords(1)`, where stock omits it. Both follow stock's `$hasRecordGroupCheckbox` now.
+- **No action needed:** `fi-ta-group-summary` wrappers and the narrowed `fi-ta-record-collapsed` (content/grid layout only); `--loading-skeleton-background-color` → `--loading-skeleton-bg` (the island never names it); `ps-3` → `fi-input-wrp-content-ctn-ps` (the island's search field has no loading indicator); `$recordAction = $recordUrl ? null : …` (`cellInteraction()` already picks `a` whenever there is a record URL and no column action, so the wrapper and click are unchanged); `deferLoading()` → `lazyLoaded()` (BC alias, unused).
+
+**Re-benchmark.** The interleaved `DataChannelBenchmarkTest` ran as before (25 iterations, page 2 @ 50/page, sorted), in A-B-B-A blocks (5.10.3 → 5.11.3 ×2 → 5.10.3). It ran in a cloud container with higher absolute times than earlier runs, so only compare within the table.
+
+| | filament **v5.10.3** | filament **v5.11.3** |
+|---|---|---|
+| A stock, 2k rows (6 runs) | 101.6ms | 101.1ms |
+| B endpoint, 2k rows (6 runs) | 44.2ms | 44.5ms |
+| **time ratio, 2k** | **2.30x** | **2.24x** |
+| time ratio, 500 / 10k (2 runs each) | 2.36x / 2.20x | 2.35x / 2.19x |
+| payload ratio | 7.96x | 7.98x |
+
+Verdict: **5.11 is speed-neutral for both paths.** The 2k ratio moves by −0.06, about the per-run spread (±0.05), and 500/10k do not move at all. The lead stays ~2.2x on server time and ~8x on payload.
+
+**5.11.4** (re-checked on 0.0.23) changes nothing the island draws. A lazily loaded table now starts loading on `x-intersect.once` instead of `wire:init`, and the island never lazy-loads. `getSelectedTableRecords()` plucks the keys from a slimmer query: that is the host page's own code path, so bulk actions get it for free. The loading-section label moved to a new translation key. Reordering (0.0.23) hands the page to the stock table, which brings its own 5.11 loading markup, so nothing here applies while it runs.
+
+**Against the BACKLOG "Loading indicators" plan.** 5.11 settles one of its open questions. *Disabling* is now **table-global** in stock: the sort buttons, the pagination buttons and the page / group / record checkboxes all target `Table::LOADING_TARGETS`. So a single `isLoading` boolean is the right signal for that half, and this entry ships it for sort and pagination. Only the *spinner* stays per-control: the sort icon swaps to a loading indicator on `sortTable('{column}')` alone, with the configured delay. That half, the checkboxes, the remove-all button and the clickable-record element remain in the backlog. The chip delete buttons are the one per-target disable (`removeTableFilter`), which `isRemovingFilter` mirrors. In 5.11 they use `aria-disabled` + `fi-disabled`, not the `disabled` attribute the backlog entry quotes from 5.6.
+
 ## 2026-11-16 — Relation managers and ManageRelatedRecords pages (Filament 5.11.4)
 
 Relation managers were out of scope (`AGENTS.md` §8), so the island stopped at the List page. They are supported now, by the same design: the stock component is driven headlessly, and nothing about the relationship is restated.

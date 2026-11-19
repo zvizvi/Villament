@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
 import { getCoreRowModel, useVueTable } from '@tanstack/vue-table'
 import { useTableState } from '../composables/useTableState.js'
 import { useTableData } from '../composables/useTableData.js'
@@ -1040,8 +1040,57 @@ function onRemoveIndicator(indicator) {
         return
     }
 
+    isRemovingFilter.value = true
+    hasFilterRemovalSettled = false
+
     bridge.removeFilter(indicator.filter, indicator.field)
+        // Livewire resolves the call, then runs the commit's `respond` hooks
+        // in the same task: the bridge writes the new filters and the filters
+        // watcher starts the refetch on the next flush, which `nextTick()`
+        // waits for.
+        .then(() => nextTick())
+        .then(() => {
+            hasFilterRemovalSettled = true
+
+            if (! isLoading.value) {
+                isRemovingFilter.value = false
+            }
+        })
 }
+
+/**
+ * A chip's filter removal is in flight — from the click until the refetch it
+ * triggers has landed. Stock disables every chip's delete button for the
+ * `removeTableFilter` request, which there also carries the re-render.
+ */
+const isRemovingFilter = ref(false)
+
+/** The Livewire half of the current removal is done; only its refetch may remain. */
+let hasFilterRemovalSettled = false
+
+watch(isLoading, (loading) => {
+    if (! loading && hasFilterRemovalSettled) {
+        isRemovingFilter.value = false
+    }
+})
+
+/**
+ * Whether a group header row has anything to show. Stock (5.11+) marks an
+ * empty one `aria-hidden="true"`.
+ *
+ * @param {object} group
+ * @returns {boolean}
+ */
+function hasGroupHeaderContent(group) {
+    return Boolean(group.title)
+        || Boolean(group.label)
+        || Boolean(group.description)
+        || Boolean(group.collapsible)
+        || hasGroupCheckbox.value
+}
+
+/** Stock's `$hasRecordGroupCheckbox`: selection on and not `maxSelectableRecords(1)`. */
+const hasGroupCheckbox = computed(() => isSelectionEnabled.value && ! isSingleSelect.value)
 
 /**
  * "Remove all" on the indicators bar. Mirrors stock's `removeTableFilters`:
@@ -1322,6 +1371,7 @@ function recordCellClasses(column, cellValue = null) {
                     :indicators="indicators"
                     :strings="strings"
                     :icons="icons"
+                    :removing="isRemovingFilter"
                     @remove="onRemoveIndicator"
                     @remove-all="onRemoveAllFilters"
                 />
@@ -1364,6 +1414,7 @@ function recordCellClasses(column, cellValue = null) {
                                 :columns="visibleColumns"
                                 :column-groups="columnGroupRow"
                                 :sort="state.sort.value"
+                                :busy="isLoading"
                                 :icons="icons"
                                 :selectable="isSelectionEnabled"
                                 :has-selectable-records="hasRecords"
@@ -1497,6 +1548,8 @@ function recordCellClasses(column, cellValue = null) {
                                     <tr
                                         v-if="item.type === 'group-header'"
                                         class="fi-ta-row fi-ta-group-header-row"
+                                        :class="{ 'fi-ta-group-header-row-with-selection': hasGroupCheckbox }"
+                                        :aria-hidden="hasGroupHeaderContent(item.group) ? undefined : 'true'"
                                     >
                                         <td v-if="actionsBeforeSelection" />
 
@@ -1505,6 +1558,7 @@ function recordCellClasses(column, cellValue = null) {
                                             class="fi-ta-cell fi-ta-group-selection-cell"
                                         >
                                             <input
+                                                v-if="hasGroupCheckbox"
                                                 :aria-label="formatString(strings.bulkSelectGroup, { title: item.group.title })"
                                                 type="checkbox"
                                                 class="fi-ta-group-checkbox fi-checkbox-input"
@@ -1804,6 +1858,7 @@ function recordCellClasses(column, cellValue = null) {
                         :mode="schema.pagination?.mode ?? 'offset'"
                         :strings="strings"
                         :icons="icons"
+                        :busy="isLoading"
                         @update:page="state.page.value = $event"
                         @update:per-page="state.perPage.value = $event"
                         @update:cursor="state.cursor.value = $event"
