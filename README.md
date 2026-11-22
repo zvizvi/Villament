@@ -193,7 +193,7 @@ A browser clone is exact only when the whole item is client-rendered (see above)
 ## Development
 
 ```bash
-composer install && npm install
+composer install && npm ci
 
 composer test       # Pest (Testbench, in-memory SQLite)
 composer analyse    # PHPStan level 6
@@ -202,6 +202,8 @@ npm run build       # Vite → dist/ (island bundle + the ClientRepeater Alpine 
 npm test            # Vitest
 npm run test:browser # Playwright: the ClientRepeater and relation manager suites against the fixture app (needs npm run build)
 ```
+
+`dist/` is committed, so Composer users need no build step. After a change under `resources/js`, run `npm ci && npm run build` and commit `dist/` with it. CI rebuilds from `package-lock.json` and fails when the committed `dist/` differs. CI also runs Pest, PHPStan and the browser suite on every Filament minor `^5.10` allows (`.github/workflows/tests.yml`).
 
 Design decisions and every internal Filament API the package touches are logged in [DECISIONS.md](DECISIONS.md). Understood-but-unscheduled work lives in [BACKLOG.md](BACKLOG.md). The full spec lives in [AGENTS.md](AGENTS.md).
 

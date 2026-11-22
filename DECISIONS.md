@@ -743,7 +743,7 @@ Verdict: **5.12's PHP renderer is a real win for stock**, the largest since 5.7.
 
 - **Every push runs it, on any branch.** A pull request from this repository is already covered by its branch's push, so `pull_request` runs only for forks.
 - **The benchmark is excluded** (`->group('benchmark')`). Its timings on shared runners mean nothing. It still runs on its own: `vendor/bin/pest --group=benchmark`.
-- **No check that the committed `dist` matches its source.** With no `package-lock.json`, a fresh build differs with dependency versions alone (seen on `main`). Adding one would make that check meaningful.
+- **`package-lock.json` is committed, and CI checks `dist`.** The lock pins the build: `npm ci` from it in an empty directory rebuilt the committed `dist/` byte for byte. It carries every platform's rollup and esbuild binaries, so `npm ci` also works on macOS and Windows. The JS job builds with `npm ci` and fails if `dist/` then differs from the commit (`git status --porcelain -- dist`). Without a lock, a fresh build differed from the committed `dist` on dependency versions alone (seen on `main`). The rule for contributors is to change `resources/js`, run `npm ci && npm run build`, and commit `dist/` with it.
 - **Verified locally before adding**, on 5.10.3, 5.11.4 and 5.12.0: Pest 697/697, the browser suite 21/21, and PHPStan level 6 clean on 5.10.3 and 5.12.0. PHPStan had not run in this environment before, because its dist is not reachable through the proxy. It was installed from a git clone for the check.
 - **A new Filament minor gets a matrix line.** That is the per-minor re-check the 2026-07-26 rule asks for, now automatic for correctness. The benchmark is still a manual run.
 
