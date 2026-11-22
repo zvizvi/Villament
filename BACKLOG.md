@@ -8,8 +8,9 @@ move out of here into `DECISIONS.md` once implemented.
 
 1. [Interactive columns](#interactive-columns--select-toggle-textinput-checkbox) ← next; the big one, needs a decision before code
 2. [Shrink the `cells` payload](#shrink-the-cells-payload)
-3. [Action trigger options](#action-trigger-options-the-island-cannot-express-yet)
-4. [Docs pages never audited](#docs-pages-never-audited)
+3. [Lazily loaded column state](#lazily-loaded-column-state-filament-512)
+4. [Action trigger options](#action-trigger-options-the-island-cannot-express-yet)
+5. [Docs pages never audited](#docs-pages-never-audited)
 
 Done and moved to `DECISIONS.md`: the empty state, `recordClasses()`, and the
 action-payload compaction (all 2026-07-26); loading indicators (2026-11-19).
@@ -129,6 +130,18 @@ columns are editable in the island, the write goes through Filament's own
 Livewire method, validation errors surface, and parity tests cover the state
 round trip. Until then, the README should say plainly that these four column
 types are read-only inside the island.
+
+---
+
+## Lazily loaded column state (Filament 5.12)
+
+**Stock behavior.** Filament 5.12 adds `Column::lazyLoadedState()` (`Filament\Support\Concerns\CanLazyLoadState`), optionally grouped with a `LazyLoadedStateGroup`. The table renders a placeholder cell, `fi-ta-state-placeholder` holding `x-data="filamentLazyLoadedState(...)"`, with a small loading indicator and "Loading…". After the first paint, it fetches the cell's state through a Livewire call and swaps it in. Cells in one group load together. The point is that an expensive `getStateUsing()` does not hold up the table.
+
+**Where we stand.** The island ignores the option. `RecordSerializer` evaluates every cell's state in the endpoint request, lazy ones included. So the table is correct, but it waits for the expensive state, which is the thing the option exists to avoid. Nothing breaks.
+
+**Scope of the task.** Serialize a lazy cell as a placeholder (`type: 'lazy'`, its group and key). Add a second endpoint call, or a mode of the existing one, that evaluates only the lazy columns for the page's record keys. The island then fills the cells per group. It must keep the whitelisting and the harness path (§4.5), and add no Livewire round trip. Error state: stock's `fi-lazy-loaded-state-error` markup.
+
+**Done means.** A `lazyLoadedState()` column paints its placeholder on first load and fills it from one request per group. It matches stock's placeholder markup and the final cell markup, has a parity test on the filled state, and the table's first paint no longer waits on that column.
 
 ---
 
