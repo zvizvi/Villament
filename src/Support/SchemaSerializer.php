@@ -8,6 +8,7 @@ use Filament\Support\Enums\Alignment;
 use Filament\Support\Enums\IconSize;
 use Filament\Support\Enums\VerticalAlignment;
 use Filament\Support\Icons\Heroicon;
+use Filament\Support\View\ComponentAttributeBag;
 use Filament\Tables\Columns\Column;
 use Filament\Tables\Enums\PaginationMode;
 use Filament\Tables\Enums\RecordActionsPosition;
@@ -158,6 +159,12 @@ final class SchemaSerializer
      * most icon buttons, `lg` on large ones. Each control swaps its icon for
      * the matching size, like stock's `wire:loading.delay` pairs do.
      *
+     * It carries `fi-loading`: the island only renders it while it shows.
+     * From Filament 5.12 the controls' CSS hides an indicator without
+     * `fi-loading` (`:not(.fi-loading) > .fi-loading-indicator:not(.fi-loading)`),
+     * which stock toggles with `wire:loading.class`. Earlier versions have no
+     * rule for the class.
+     *
      * @return array<string, string>
      */
     private function loadingIndicators(): array
@@ -165,7 +172,10 @@ final class SchemaSerializer
         $html = [];
 
         foreach ([IconSize::ExtraSmall, IconSize::Small, IconSize::Medium, IconSize::Large] as $size) {
-            $html[$size->value] = generate_loading_indicator_html(size: $size)->toHtml();
+            $html[$size->value] = generate_loading_indicator_html(
+                (new ComponentAttributeBag)->class(['fi-loading']),
+                size: $size,
+            )->toHtml();
         }
 
         return $html;

@@ -65,6 +65,8 @@ describe('filter schema serialization', function (): void {
             // One loading indicator per size a stock call site uses.
             ->and(array_keys($icons['loadingIndicator']))->toBe(['xs', 'sm', 'md', 'lg'])
             ->and($icons['loadingIndicator']['xs'])->toContain('fi-loading-indicator')->toContain('fi-size-xs')
+            // Shown whenever rendered: 5.12's CSS hides an indicator without it.
+            ->and($icons['loadingIndicator']['xs'])->toMatch('/class="(?:[^"]*\\s)?fi-loading(?:\\s[^"]*)?"/')
             ->and($icons['loadingIndicator']['md'])->toContain('fi-size-md');
     });
 

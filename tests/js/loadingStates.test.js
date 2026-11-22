@@ -392,6 +392,7 @@ describe('VueTable wiring', () => {
         expect(header.classes()).toContain('fi-ta-group-header-row-with-selection')
         expect(header.attributes('aria-hidden')).toBeUndefined()
         expect(header.find('input.fi-ta-group-checkbox').exists()).toBe(true)
+        expect(header.get('input.fi-ta-group-checkbox').attributes('autocomplete')).toBe('off')
 
         wrapper.unmount()
         config.schema.selection = { enabled: true, maxRecords: 1 }

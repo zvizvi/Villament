@@ -423,6 +423,7 @@ function onSortControlKeydown(column, event) {
                     v-if="hasSelectableRecords && showPageCheckbox"
                     :aria-label="strings.bulkSelectPage"
                     type="checkbox"
+                    autocomplete="off"
                     :checked="allSelected"
                     :indeterminate="pageIndeterminate"
                     :disabled="pageCheckboxDisabled"

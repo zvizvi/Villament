@@ -485,6 +485,15 @@ describe('VueTable loading states', () => {
         checkboxes.forEach((checkbox) => expect(checkbox.attributes('data-group')).toBe(''))
     })
 
+    it('turns autocomplete off on the page and record checkboxes, as stock does from 5.12', () => {
+        mountTable()
+
+        expect(wrapper.get('thead input.fi-ta-page-checkbox').attributes('autocomplete')).toBe('off')
+        wrapper.findAll('input.fi-ta-record-checkbox').forEach((checkbox) => {
+            expect(checkbox.attributes('autocomplete')).toBe('off')
+        })
+    })
+
     it('does not mount the same call twice while it is in flight', async () => {
         mountTable()
 
