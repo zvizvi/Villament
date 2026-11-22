@@ -33,7 +33,7 @@ jobs:
                       php: '8.4'
 
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v5
 
             - uses: shivammathur/setup-php@v2
               with:
@@ -56,7 +56,7 @@ jobs:
                   composer update --with-all-dependencies --prefer-dist --no-interaction --no-progress
 
             - name: Installed versions
-              run: composer show filament/filament filament/tables livewire/livewire laravel/framework | grep -E '^(name|versions)'
+              run: composer show | grep -E '^(filament/(filament|tables)|livewire/livewire|laravel/framework) '
 
             - name: Pest
               run: vendor/bin/pest --exclude-group=benchmark
@@ -84,7 +84,7 @@ jobs:
         timeout-minutes: 15
 
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v5
 
             - uses: actions/setup-node@v4
               with:
