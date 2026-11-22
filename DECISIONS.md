@@ -737,6 +737,16 @@ Checked per the 2026-07-26 rule. The setup isolates the Filament version. Two co
 
 Verdict: **5.12's PHP renderer is a real win for stock**, the largest since 5.7. It is about a quarter faster and sends a third fewer bytes. The endpoint does not render, so it gains nothing from it. Villament stays ahead: ~1.6x on server time and ~5.2x on payload. But the lead is smaller than on any version measured before, and the payload lead is no longer "structural ~8x". Per-run spread was ±0.05 on the time ratio. Absolute times on this container run higher than in earlier entries; compare within this table only.
 
+## 2026-11-22 — CI across every Filament minor `^5.10` allows
+
+`.github/workflows/tests.yml` backs the `^5.10` constraint (AGENTS.md §6). Each Filament minor gets a job, 5.10, 5.11 and 5.12 on PHP 8.3, plus 5.12 on PHP 8.4. A job pins the minor with `composer require filament/filament:5.x.*`, then resolves everything else fresh (`update -W`), because no lock file is committed and 5.12 needs newer Livewire and Laravel. It then runs Pest, PHPStan and the browser suite against that version. A separate job runs Vitest and the build.
+
+- **Every push runs it, on any branch.** A pull request from this repository is already covered by its branch's push, so `pull_request` runs only for forks.
+- **The benchmark is excluded** (`->group('benchmark')`). Its timings on shared runners mean nothing. It still runs on its own: `vendor/bin/pest --group=benchmark`.
+- **No check that the committed `dist` matches its source.** With no `package-lock.json`, a fresh build differs with dependency versions alone (seen on `main`). Adding one would make that check meaningful.
+- **Verified locally before adding**, on 5.10.3, 5.11.4 and 5.12.0: Pest 697/697, the browser suite 21/21, and PHPStan level 6 clean on 5.10.3 and 5.12.0. PHPStan had not run in this environment before, because its dist is not reachable through the proxy. It was installed from a git clone for the check.
+- **A new Filament minor gets a matrix line.** That is the per-minor re-check the 2026-07-26 rule asks for, now automatic for correctness. The benchmark is still a manual run.
+
 ## Verified Filament v5 internal API map (§4.1, §4.8)
 
 Verified against **filament/filament v5.6.8** + **livewire/livewire v4.3.3** by reading installed vendor source on 2026-07-15. Paths relative to `vendor/filament/`.
