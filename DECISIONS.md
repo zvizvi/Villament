@@ -654,6 +654,99 @@ Tests: `RelationManagersTest` (island vs stock twin rendering, endpoint shape, i
 
 The token also carries the tenant key it was rendered under, and the endpoint requires it to match `Filament::getTenant()`. This covers a resource that is NOT tenant-scoped, where the owner would resolve under any tenant: stock allows that page under any tenant URL, but the island has no legitimate flow that replays a token across tenants. A lazy manager renders its token during a Livewire request. There the tenant comes from `IdentifyTenant`, which Filament registers as Livewire persistent middleware (`FilamentServiceProvider`). This was checked in the source, not by a test, because the Livewire test client does not run persistent middleware.
 
+## 2026-11-19 — Loading indicators: the island's `wire:target`
+
+Closes the BACKLOG entry. Verified against filament v5.11.4, livewire v4.4.8. Stock has one pattern for any control a Livewire call drives: `wire:loading.attr` disables it at once, and after `filament.livewire_loading_delay` the icon (`wire:loading.remove.delay.*`) gives way to `generate_loading_indicator_html()` at the same size (`wire:loading.delay.*`). Both are keyed to the control's `wire:target`. The island's controls are not Livewire-driven, so `wire:loading` cannot reach them, and the state is threaded through instead.
+
+- **`usePendingCalls`** stands in for `wire:target`. A call is in flight by **id**, and two controls that fire the same call share an id, just as stock's target strings match. A row's Edit button and a cell whose click mounts `edit` on that row are one call (`pendingIds.mountAction('edit', key)`), and row 2 is a different one. An id is pending at once and spins after `schema.loadingDelayMs`. A call that ends within the delay never spins. Every bridge call now returns a promise that settles with the Livewire call and never rejects (`settled()`).
+- **The indicator comes from the server**: `schema.icons.loadingIndicator` is `{xs, sm, md, lg}`, rendered through the swappable `LoadingIndicator` contract. A trigger takes its icon's `fi-size-*`. An iconless one takes the size its stock generator falls back to: links, small buttons and badges `sm`; other buttons, grouped items and most icon buttons `md`; large icon buttons `lg`.
+
+| Control | Stock target | Island |
+|---|---|---|
+| Sort button | disable: `LOADING_TARGETS`; spinner: `sortTable('{column}')` | `busy` (2026-11-16); `md` spinner on the clicked column only, until the refetch lands |
+| Page / group / record checkboxes | `disabled` on `LOADING_TARGETS` | `disabled` while `isLoading` |
+| Chip delete buttons | `removeTableFilter` | disabled + `xs` spinner on every chip, until the refetch lands |
+| Remove-all | `removeTableFilters,removeTableFilter` | disabled + `md` spinner on either, until the refetch lands |
+| Button-wrapped cell | `disabled` on its own call | `disabled` while that call is pending, shared with the row's action button |
+| Record, header and toolbar action triggers | `aria-disabled` + `fi-disabled` + spinner on the mount call | same, on the mount promise (`pendingId`) |
+| Bulk action triggers | none: an Alpine handler, no `wire:click` | unchanged: no `pendingId`; the bulk bar keeps its `isLoading` disable |
+
+- **A click on a pending call is ignored** in the island's own handlers, so a second click never mounts twice. Filament's capture listener also swallows it on `aria-disabled` buttons, but the island does not depend on that.
+- **The chip delete icon is a span now.** Since 5.10, stock draws it as `<span aria-hidden="true" class="fi-badge-delete-btn-icon">` with a CSS mask, not with an SVG, and the `BADGE_DELETE_BUTTON` alias is no longer read by any view. `schema.icons.badgeDelete` is gone.
+- **Checked, needing nothing:** the grouping settings trigger opens an Alpine dropdown, and the group collapse toggles are Alpine-only. Neither fires a request, so stock has no loading state there. The BACKLOG listed both. The per-page select has none either.
+- **Same deviation as 2026-11-16:** checkbox disabling follows `isLoading`, so the refetch after an action, `retry()` and page properties also disable the checkboxes, where stock does not.
+- Pinned in `InternalApiContractTest`: `generate_loading_indicator_html` and its `size` parameter.
+
+Tests: `tests/js/pendingCalls.test.js` (the registry, the trigger swap and sizes, the shared row id, no double mount, the sort spinner on the clicked column only, the checkboxes, the chips and remove-all). It was checked by breaking the checkbox, sort-spinner and trigger-class code: each break fails a test. In a real browser on 5.11.4 (an ad-hoc Playwright run against the fixture's `/admin/users/vue`, requests held 1.5s): the sort button and a Delete action go disabled at once, spin only after the delay, other rows and columns are untouched, Filament's CSS dims the busy control (opacity 0.7), and all of it clears when the call lands. The existing browser suite passes (21/21).
+
+## 2026-11-19 — Loading-state DOM checked against stock in a browser
+
+A Playwright run captured the same controls on the stock table (`/admin/users`) and on the island (`/admin/users/vue`), on Filament 5.11.4. The controls were the sort button, a row's Delete button and a record checkbox, each at rest and with its request held. The snapshot compares tags, classes, `aria-*`, `disabled`, `data-*` and which nodes render. After this change, the only differences are the ones kept on purpose:
+
+- **Kept: icon and indicator are swapped, not both rendered.** Stock renders the icon and the loading indicator side by side and hides one with `display:none` (`wire:loading.remove` / `wire:loading`). The island renders only the visible one. It looks the same; only stock's DOM holds a hidden extra SVG.
+- **Kept: `aria-label` on the sort control** (see `sortButtonLabelFor()`).
+- **Unavoidable: `disabled="true"` vs `disabled=""`** on a checkbox. Livewire writes the attribute's value, while Vue always renders a boolean attribute empty. Browsers, `[disabled]` selectors and assistive tech read both the same.
+
+Closed here:
+
+- **`data-loading="true"`**, as Livewire 4.4.8's `supportDataLoading` sets it. It goes on the request's **origin** element only: the `wire:click` or `wire:model.live` element that started it. It stays until that request finishes. Two controls that share a call share its disabled state, not this marker, so a row's Delete button and a cell firing the same mount are marked only where the click happened. The island marks:
+  - the clicked action trigger or cell, until its call settles;
+  - the clicked chip and remove-all, until their removal and its refetch land;
+  - the sort control, pagination buttons, per-page select and search inputs, from the start of the fetch they cause until no fetch is in flight.
+
+  `useTableData` exposes `fetchCount`, which ticks on every fetch start, a replacing one included, so a debounced search marks its input when its own fetch starts. Checkboxes and bulk actions run through Alpine in stock, have no origin, and get no marker.
+- **The sort control is a native `<button type="button">`**, as in stock (5.10+). It becomes a `<span role="button" tabindex="0">` only when the label is HTML (`labelHtml`), because interactive content is invalid inside a `<button>`. Only the span handles Enter and Space itself; the button activates natively, so its keys are no longer prevented.
+- **`data-group`** on record checkboxes: the record's group key, empty when ungrouped, as in stock.
+
+## 2026-11-22 — Filament 5.12: stock renders its table from PHP; the island needed two fixes, and its lead narrowed
+
+Checked per the 2026-07-26 rule. The setup isolates the Filament version. Two copies of the same tree had identical non-Filament packages, and only `filament/*` differed: v5.11.4 vs v5.12.0. 5.12 requires livewire v4.4.9 and laravel/framework v12.73.0, so both copies were moved to those first.
+
+**Stock no longer has a table Blade view.** `tables/resources/views/index.blade.php` is gone. The table is generated in PHP (`Table\Concerns\CanBeRendered::toEmbeddedHtml()` → `generateTableHtml()`, plus `CanGenerate*Html` traits in support). Villament never renders that view: the reordering hand-off uses `EmbeddedTable`. Nothing referenced it, and the full suite stays green: Pest 697, Vitest, and the browser suite 21/21.
+
+**The markup barely moved.** The same fixture table (`/admin/users`, every column type, actions, filters, column manager) was captured in a browser on both versions and normalized: tags, classes, `aria-*`, `data-*`, text, visibility, with random ids masked. Every row and cell matched. What changed:
+
+| Change in stock 5.12 | Island |
+|---|---|
+| Loading indicators are an empty `<svg class="… fi-loading-indicator-default">` drawn with a CSS mask, and the controls' CSS hides any indicator without `fi-loading` (`:not(.fi-loading) > .fi-loading-indicator:not(.fi-loading)`) | **Fixed.** The island's indicator rendered but stayed `display:none`. `schema.icons.loadingIndicator` now carries `fi-loading`: the island only renders it while it shows, which keeps the swap kept on 2026-11-19. Checked visible, with a size, on 5.11.4 and 5.12.0 |
+| `autocomplete="off"` on the page, group and record checkboxes | **Fixed**, on all three |
+| The indicator now comes before the icon inside a control | No change: the island renders one or the other |
+| `aria-label="Bulk actions"` on the bulk group's icon button | Already there |
+| The filter `Select` is an async component (`fi-async-component`) | Native Filament inside the island too: it changed by itself |
+| `disabled-button.js` also swallows clicks on `button.fi-btn:is(.fi-processing, .fi-disabled)` | No change: every island `fi-btn` that gets `fi-disabled` also gets `aria-disabled` |
+| `ValidatePanelOrigin` checks the panel and tenant context of every Livewire request | Bridge calls pass, browser suite included. The endpoint's harness never dehydrates |
+
+- **New and not supported yet:** `Column::lazyLoadedState()`. The island evaluates such state eagerly: it is correct, just not lazy. Recorded in BACKLOG.
+- **Tests:** the only failure on 5.12 was a ClientRepeater test regex that did not allow Livewire's `<!--[if BLOCK]>` markers between the add wrapper and its button. The markup itself was right.
+
+**Re-benchmark** (`DataChannelBenchmarkTest`, interleaved, 25 iterations, page 2 @ 50/page, sorted; A-B-B-A blocks 5.11.4 → 5.12.0 ×2 → 5.11.4). 2k rows, 6 runs per version, means of the per-run medians:
+
+| | filament **v5.11.4** | filament **v5.12.0** | change |
+|---|---|---|---|
+| A stock (commit + render) | 136.1 ms | 100.5 ms | **−26%** |
+| B Villament endpoint | 65.7 ms | 63.2 ms | −4% (within drift) |
+| **time ratio A/B** | **2.08x** | **1.61x** | −0.47 |
+| stock response | ~1,403 KB | ~935 KB | **−33%** |
+| **payload ratio** | **7.97x** | **5.22x** | |
+
+| rows | ratio v5.11.4 | ratio v5.12.0 |
+|---|---|---|
+| 500 | 2.11x | 1.55x |
+| 2,000 | 2.08x | 1.61x |
+| 10,000 | 2.00x | 1.53x |
+
+Verdict: **5.12's PHP renderer is a real win for stock**, the largest since 5.7. It is about a quarter faster and sends a third fewer bytes. The endpoint does not render, so it gains nothing from it. Villament stays ahead: ~1.6x on server time and ~5.2x on payload. But the lead is smaller than on any version measured before, and the payload lead is no longer "structural ~8x". Per-run spread was ±0.05 on the time ratio. Absolute times on this container run higher than in earlier entries; compare within this table only.
+
+## 2026-11-22 — CI across every Filament minor `^5.10` allows
+
+`.github/workflows/tests.yml` backs the `^5.10` constraint (AGENTS.md §6). Each Filament minor gets a job, 5.10, 5.11 and 5.12 on PHP 8.3, plus 5.12 on PHP 8.4. A job pins the minor with `composer require filament/filament:5.x.*`, then resolves everything else fresh (`update -W`), because no lock file is committed and 5.12 needs newer Livewire and Laravel. It then runs Pest, PHPStan and the browser suite against that version. A separate job runs Vitest and the build.
+
+- **Every push runs it, on any branch.** A pull request from this repository is already covered by its branch's push, so `pull_request` runs only for forks.
+- **The benchmark is excluded** (`->group('benchmark')`). Its timings on shared runners mean nothing. It still runs on its own: `vendor/bin/pest --group=benchmark`.
+- **`package-lock.json` is committed, and CI checks `dist`.** The lock pins the build: `npm ci` from it in an empty directory rebuilt the committed `dist/` byte for byte. It carries every platform's rollup and esbuild binaries, so `npm ci` also works on macOS and Windows. The JS job builds with `npm ci` and fails if `dist/` then differs from the commit (`git status --porcelain -- dist`). Without a lock, a fresh build differed from the committed `dist` on dependency versions alone (seen on `main`). The rule for contributors is to change `resources/js`, run `npm ci && npm run build`, and commit `dist/` with it.
+- **Verified locally before adding**, on 5.10.3, 5.11.4 and 5.12.0: Pest 697/697, the browser suite 21/21, and PHPStan level 6 clean on 5.10.3 and 5.12.0. PHPStan had not run in this environment before, because its dist is not reachable through the proxy. It was installed from a git clone for the check.
+- **A new Filament minor gets a matrix line.** That is the per-minor re-check the 2026-07-26 rule asks for, now automatic for correctness. The benchmark is still a manual run.
+
 ## 2026-11-22 — A replaced island hands its native slots back (Filament 5.11.4, Livewire 4)
 
 Since 0.0.26 the island is keyed by its schema version, so a tab whose table differs makes the morph put a NEW island where the old one stood. Livewire adds the new island before it removes the old one and reports the swap as an add only (no `morph.removed`, so Alpine never destroys the old subtree). The old island was still holding the native slots it had adopted - the filters UI and the column manager, with their Alpine teleport clones - so the new island found the holders empty and drew neither, and the slots left the document with the old island.

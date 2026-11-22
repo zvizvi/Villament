@@ -2,6 +2,7 @@
 import { onBeforeUnmount, ref } from 'vue'
 import TrustedIcon from './TrustedIcon.js'
 import ActionTrigger from './ActionTrigger.vue'
+import { pendingIds } from '../composables/usePendingCalls.js'
 
 defineProps({
     /**
@@ -20,6 +21,15 @@ defineProps({
      * mirroring stock `wire:loading.attr="disabled"` on toolbar actions.
      */
     isLoading: {
+        type: Boolean,
+        default: false,
+    },
+    /**
+     * Header and toolbar actions mount through a Livewire click handler, so
+     * each button follows its own call's loading state, as in stock. Bulk
+     * actions use an Alpine handler there and have none: they leave this off.
+     */
+    tracksLoading: {
         type: Boolean,
         default: false,
     },
@@ -61,11 +71,12 @@ onBeforeUnmount(() => {
 
 /**
  * @param {string} name
+ * @param {?Element} [element] The clicked trigger, passed on for `data-loading`.
  * @returns {void}
  */
-function onMount(name) {
+function onMount(name, element = null) {
     openGroup.value = null
-    emit('mount', name)
+    emit('mount', name, element)
 }
 </script>
 
@@ -84,6 +95,7 @@ function onMount(name) {
             <ActionTrigger
                 v-if="item.type === 'action'"
                 :action="isLoading ? { ...item, disabled: true } : item"
+                :pending-id="tracksLoading ? pendingIds.mountAction(item.name) : null"
                 @mount="onMount"
             />
 
@@ -151,6 +163,7 @@ function onMount(name) {
                             v-for="action in item.actions"
                             :key="action.name"
                             :action="action"
+                            :pending-id="tracksLoading ? pendingIds.mountAction(action.name) : null"
                             @mount="onMount"
                         />
                     </div>

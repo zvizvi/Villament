@@ -34,6 +34,9 @@ use function Pest\Livewire\livewire;
  *   vendor/bin/pest tests/Feature/DataChannelBenchmarkTest.php
  *   VILLAMENT_BENCH_ROWS=10000 vendor/bin/pest tests/Feature/DataChannelBenchmarkTest.php
  *
+ * Grouped `benchmark`: CI runs `--exclude-group=benchmark`, since its timings
+ * on shared runners mean nothing and it adds ~15s to every job.
+ *
  * Prints percentiles; asserts only sanity.
  */
 it('benchmarks the stock table against the Villament endpoint', function (): void {
@@ -137,4 +140,4 @@ it('benchmarks the stock table against the Villament endpoint', function (): voi
 
     expect($endpointKeys)->toHaveCount(50);
     expect($ratios)->toHaveCount($iterations);
-});
+})->group('benchmark');

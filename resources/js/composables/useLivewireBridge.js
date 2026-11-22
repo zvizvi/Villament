@@ -47,10 +47,13 @@
  *   (`$wire.$on`, as `table.js` does in `init()`) → `onDeselectAll`.
  *
  * @typedef {object} LivewireBridge
- * @property {(name: string, recordKey: string) => void} mountRecordAction
- * @property {(columnName: string, recordKey: string) => void} callColumnAction
- * @property {(method: string, recordKey: string) => void} callRecordMethod
- * @property {(name: string, selection?: ?TableSelection) => void} mountBulkAction
+ * @property {(name: string, recordKey: string) => Promise<void>} mountRecordAction
+ * @property {(columnName: string, recordKey: string) => Promise<void>} callColumnAction
+ * @property {(method: string, recordKey: string) => Promise<void>} callRecordMethod
+ * @property {(name: string, selection?: ?TableSelection) => Promise<void>} mountBulkAction
+ * @property {(name: string) => Promise<void>} mountTableAction
+ * @property {(filterName: string, field?: ?string) => Promise<void>} removeFilter
+ * @property {() => Promise<void>} removeAllFilters
  * @property {() => Promise<string[]>} getAllSelectableRecordKeys
  * @property {(columns: object[]) => void} applyColumnManager
  * @property {() => void} resetColumnManager
@@ -127,6 +130,24 @@ function wireFor(livewireId) {
  * }} options
  * @returns {LivewireBridge}
  */
+/**
+ * Runs a Livewire call and hands back a promise that settles with it and
+ * never rejects, so the island can follow a call's lifetime (stock's
+ * `wire:target`) without a failed request breaking it. A call that throws
+ * synchronously, or a mock that returns nothing, settles at once.
+ *
+ * @param {() => unknown} call
+ * @returns {Promise<void>}
+ */
+function settled(call) {
+    try {
+        return Promise.resolve(call()).then(() => {}, () => {})
+    } catch {
+        // Never break the island on a mid-teardown component.
+        return Promise.resolve()
+    }
+}
+
 export function useLivewireBridge(options) {
     const {
         livewireId,
@@ -160,13 +181,7 @@ export function useLivewireBridge(options) {
             return Promise.resolve()
         }
 
-        try {
-            return Promise.resolve(wire.removeTableFilter(filterName, field ?? null))
-                .then(() => {}, () => {})
-        } catch {
-            // Never break the island on a mid-teardown component.
-            return Promise.resolve()
-        }
+        return settled(() => wire.removeTableFilter(filterName, field ?? null))
     }
 
     /**
@@ -176,20 +191,16 @@ export function useLivewireBridge(options) {
      * to their reset state, so filters configured with a default are removed
      * too, matching stock. The resulting commit drives the Vue refetch.
      *
-     * @returns {void}
+     * @returns {Promise<void>} Settles when the Livewire call does (never rejects).
      */
     function removeAllFilters() {
         const wire = wireFor(livewireId)
 
         if (! wire) {
-            return
+            return Promise.resolve()
         }
 
-        try {
-            wire.removeTableFilters()
-        } catch {
-            // Never break the island on a mid-teardown component.
-        }
+        return settled(() => wire.removeTableFilters())
     }
 
     /**
@@ -222,21 +233,20 @@ export function useLivewireBridge(options) {
      *
      * @param {string} name
      * @param {string} recordKey
-     * @returns {void}
+     * @returns {Promise<void>} Settles when the Livewire call does (never rejects).
      */
     function mountRecordAction(name, recordKey) {
         const wire = wireFor(livewireId)
 
         if (! wire) {
-            return
+            return Promise.resolve()
         }
 
-        try {
+        return settled(() => {
             pushSelection(wire)
-            wire.mountAction(name, {}, { table: true, recordKey })
-        } catch {
-            // Never break the island on a mid-teardown component.
-        }
+
+            return wire.mountAction(name, {}, { table: true, recordKey })
+        })
     }
 
     /**
@@ -246,20 +256,16 @@ export function useLivewireBridge(options) {
      *
      * @param {string} columnName
      * @param {string} recordKey
-     * @returns {void}
+     * @returns {Promise<void>} Settles when the Livewire call does (never rejects).
      */
     function callColumnAction(columnName, recordKey) {
         const wire = wireFor(livewireId)
 
         if (! wire) {
-            return
+            return Promise.resolve()
         }
 
-        try {
-            wire.callTableColumnAction(columnName, recordKey)
-        } catch {
-            // Never break the island on a mid-teardown component.
-        }
+        return settled(() => wire.callTableColumnAction(columnName, recordKey))
     }
 
     /**
@@ -269,20 +275,16 @@ export function useLivewireBridge(options) {
      *
      * @param {string} method
      * @param {string} recordKey
-     * @returns {void}
+     * @returns {Promise<void>} Settles when the Livewire call does (never rejects).
      */
     function callRecordMethod(method, recordKey) {
         const wire = wireFor(livewireId)
 
         if (! wire || typeof wire[method] !== 'function') {
-            return
+            return Promise.resolve()
         }
 
-        try {
-            wire[method](recordKey)
-        } catch {
-            // Never break the island on a mid-teardown component.
-        }
+        return settled(() => wire[method](recordKey))
     }
 
     /**
@@ -292,42 +294,40 @@ export function useLivewireBridge(options) {
      *
      * @param {string} name
      * @param {?TableSelection} [selection] Explicit snapshot; defaults to `getSelection()`.
-     * @returns {void}
+     * @returns {Promise<void>} Settles when the Livewire call does (never rejects).
      */
     function mountBulkAction(name, selection = null) {
         const wire = wireFor(livewireId)
 
         if (! wire) {
-            return
+            return Promise.resolve()
         }
 
-        try {
+        return settled(() => {
             pushSelection(wire, selection)
-            wire.mountAction(name, {}, { table: true, bulk: true })
-        } catch {
-            // Never break the island on a mid-teardown component.
-        }
+
+            return wire.mountAction(name, {}, { table: true, bulk: true })
+        })
     }
 
     /**
      * Mounts a TOOLBAR (non-bulk, non-record) table action.
      *
      * @param {string} name
-     * @returns {void}
+     * @returns {Promise<void>} Settles when the Livewire call does (never rejects).
      */
     function mountTableAction(name) {
         const wire = wireFor(livewireId)
 
         if (! wire) {
-            return
+            return Promise.resolve()
         }
 
-        try {
+        return settled(() => {
             pushSelection(wire)
-            wire.mountAction(name, {}, { table: true })
-        } catch {
-            // Never break the island on a mid-teardown component.
-        }
+
+            return wire.mountAction(name, {}, { table: true })
+        })
     }
 
     /**

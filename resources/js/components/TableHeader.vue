@@ -1,9 +1,11 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, inject } from 'vue'
 import TrustedIcon from './TrustedIcon.js'
 import ActionsHeaderCell from './ActionsHeaderCell.vue'
 import ColumnLabel from './ColumnLabel.vue'
 import { filamentTooltip } from '../support/tooltip.js'
+import { pendingIds } from '../composables/usePendingCalls.js'
+import { LOADING_INDICATORS_KEY, PENDING_CALLS_KEY } from '../support/injectionKeys.js'
 
 const props = defineProps({
     /**
@@ -299,14 +301,69 @@ function headerCellStyle(column) {
     return column.width ? { width: column.width } : undefined
 }
 
+/** @type {?import('../composables/usePendingCalls.js').PendingCalls} */
+const pendingCalls = inject(PENDING_CALLS_KEY, null)
+
+/** @type {import('vue').ComputedRef<Record<string, string>>|null} */
+const loadingIndicators = inject(LOADING_INDICATORS_KEY, null)
+
+/**
+ * Stock swaps the sort icon for a medium loading indicator once
+ * `sortTable('{column}')` has run past the loading delay — only on the
+ * column that was clicked.
+ *
+ * @param {object} column
+ * @returns {?string}
+ */
+function sortLoadingIndicatorFor(column) {
+    if (! pendingCalls?.isSpinning(pendingIds.sort(column.key))) {
+        return null
+    }
+
+    return loadingIndicators?.value?.md ?? null
+}
+
 /**
  * @param {object} column
+ * @param {?Event} [event] The click, whose control Livewire would mark `data-loading`.
  * @returns {void}
  */
-function onSortClick(column) {
+function onSortClick(column, event = null) {
     if (column.sortable && ! props.busy) {
-        emit('sort', column.key)
+        emit('sort', column.key, event?.currentTarget ?? null)
     }
+}
+
+/**
+ * Stock's sort control is a native `<button type="button">`, except when the
+ * label is HTML: interactive content is invalid inside a `<button>`, so it
+ * becomes a `<span role="button" tabindex="0">` that clicks itself on Enter
+ * and Space.
+ *
+ * @param {object} column
+ * @returns {boolean}
+ */
+function isSortControlSpan(column) {
+    return Boolean(column.labelHtml)
+}
+
+/**
+ * Enter and Space on the span form click it, like stock's
+ * `x-on:keydown.*.self.prevent.stop="$el.click()"`. A native `<button>`
+ * activates itself, so its keys are left alone.
+ *
+ * @param {object} column
+ * @param {KeyboardEvent} event
+ * @returns {void}
+ */
+function onSortControlKeydown(column, event) {
+    if (! isSortControlSpan(column)) {
+        return
+    }
+
+    event.preventDefault()
+    event.stopPropagation()
+    event.currentTarget.click()
 }
 </script>
 
@@ -366,6 +423,7 @@ function onSortClick(column) {
                     v-if="hasSelectableRecords && showPageCheckbox"
                     :aria-label="strings.bulkSelectPage"
                     type="checkbox"
+                    autocomplete="off"
                     :checked="allSelected"
                     :indeterminate="pageIndeterminate"
                     :disabled="pageCheckboxDisabled"
@@ -395,18 +453,20 @@ function onSortClick(column) {
                         : undefined
                 "
             >
-                <span
+                <component
+                    :is="isSortControlSpan(column) ? 'span' : 'button'"
                     v-if="column.sortable"
-                    role="button"
-                    tabindex="0"
+                    :type="isSortControlSpan(column) ? undefined : 'button'"
+                    :role="isSortControlSpan(column) ? 'button' : undefined"
+                    :tabindex="isSortControlSpan(column) ? 0 : undefined"
                     data-prevent-disabled-clicks
                     class="fi-ta-header-cell-sort-btn"
                     :class="{ 'fi-disabled': busy }"
                     :aria-disabled="busy ? 'true' : undefined"
                     :aria-label="sortButtonLabelFor(column)"
-                    @click="onSortClick(column)"
-                    @keydown.enter.self.prevent.stop="onSortClick(column)"
-                    @keydown.space.self.prevent.stop="onSortClick(column)"
+                    @click="onSortClick(column, $event)"
+                    @keydown.enter.self="onSortControlKeydown(column, $event)"
+                    @keydown.space.self="onSortControlKeydown(column, $event)"
                 >
                     <!-- `headerTooltip()` wraps the label in both branches (stock). -->
                     <span
@@ -419,8 +479,8 @@ function onSortClick(column) {
                         :column="column"
                     />
 
-                    <TrustedIcon :html="sortIconFor(column)" />
-                </span>
+                    <TrustedIcon :html="sortLoadingIndicatorFor(column) ?? sortIconFor(column)" />
+                </component>
 
                 <template v-else>
                     <span

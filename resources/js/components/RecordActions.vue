@@ -2,6 +2,7 @@
 import { onBeforeUnmount, ref } from 'vue'
 import TrustedIcon from './TrustedIcon.js'
 import ActionTrigger from './ActionTrigger.vue'
+import { pendingIds } from '../composables/usePendingCalls.js'
 
 const props = defineProps({
     /**
@@ -44,6 +45,14 @@ const props = defineProps({
      * for the default (end).
      */
     alignmentClass: {
+        type: String,
+        default: null,
+    },
+    /**
+     * The record these actions belong to: a click mounts with this key, and
+     * the button follows that call's loading state.
+     */
+    recordKey: {
         type: String,
         default: null,
     },
@@ -116,11 +125,12 @@ function visibleGroupActions(group) {
 
 /**
  * @param {string} name
+ * @param {?Element} [element] The clicked trigger, passed on for `data-loading`.
  * @returns {void}
  */
-function onMount(name) {
+function onMount(name, element = null) {
     openGroup.value = null
-    emit('mount', name)
+    emit('mount', name, element)
 }
 </script>
 
@@ -138,6 +148,7 @@ function onMount(name) {
             <ActionTrigger
                 v-if="item.type === 'action' && isVisible(item.name)"
                 :action="triggerFor(item.name)"
+                :pending-id="recordKey === null ? null : pendingIds.mountAction(item.name, recordKey)"
                 @mount="onMount"
             />
 
@@ -170,6 +181,7 @@ function onMount(name) {
                             v-for="name in visibleGroupActions(item)"
                             :key="name"
                             :action="triggerFor(name)"
+                            :pending-id="recordKey === null ? null : pendingIds.mountAction(name, recordKey)"
                             @mount="onMount"
                         />
                     </div>

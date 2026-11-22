@@ -1,7 +1,8 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, inject } from 'vue'
 import TrustedIcon from './TrustedIcon.js'
 import { filamentTooltip } from '../support/tooltip.js'
+import { LOADING_INDICATORS_KEY, PENDING_CALLS_KEY } from '../support/injectionKeys.js'
 
 const props = defineProps({
     /**
@@ -18,9 +19,23 @@ const props = defineProps({
         type: Object,
         required: true,
     },
+    /**
+     * The id of the call a click fires (`pendingIds.mountAction(...)`), the
+     * island's `wire:target`. Null: no loading state (bulk and url actions).
+     */
+    pendingId: {
+        type: String,
+        default: null,
+    },
 })
 
 const emit = defineEmits(['mount'])
+
+/** @type {?import('../composables/usePendingCalls.js').PendingCalls} */
+const pendingCalls = inject(PENDING_CALLS_KEY, null)
+
+/** @type {import('vue').ComputedRef<Record<string, string>>|null} */
+const loadingIndicators = inject(LOADING_INDICATORS_KEY, null)
 
 /** Which structural shape to render; anything unknown falls back to a link. */
 const view = computed(() => {
@@ -31,6 +46,46 @@ const view = computed(() => {
 
 /** A disabled action never navigates — stock drops the `href` too. */
 const tag = computed(() => (props.action.url && ! props.action.disabled ? 'a' : 'button'))
+
+/**
+ * The call this trigger fires is in flight. Stock gives every trigger with a
+ * Livewire click handler `wire:loading.attr="aria-disabled"` +
+ * `wire:loading.class="fi-disabled"` on that exact handler; an url action and
+ * a bulk action (an Alpine handler) have none, and get no `pendingId`.
+ */
+const isPending = computed(() => tag.value === 'button'
+    && ! props.action.disabled
+    && Boolean(props.pendingId)
+    && Boolean(pendingCalls?.isPending(props.pendingId)))
+
+/** Past the loading delay: the icon gives way to Filament's loading indicator. */
+const isSpinning = computed(() => isPending.value && Boolean(pendingCalls?.isSpinning(props.pendingId)))
+
+/**
+ * The indicator takes the icon's size, as each stock generator passes the
+ * same `$iconSize` to both; without an icon, the size the generator falls
+ * back to for this view.
+ */
+const loadingIndicatorHtml = computed(() => {
+    const sizes = loadingIndicators?.value ?? {}
+    const iconSize = /\bfi-size-(xs|sm|md|lg)\b/.exec(props.action.iconHtml ?? '')?.[1]
+
+    if (iconSize) {
+        return sizes[iconSize] ?? null
+    }
+
+    const triggerSize = /\bfi-size-(xs|sm|md|lg|xl)\b/.exec(props.action.class ?? '')?.[1] ?? 'md'
+
+    const size = {
+        link: ['xs', 'sm'].includes(triggerSize) ? 'sm' : 'md',
+        button: ['xs', 'sm'].includes(triggerSize) ? 'sm' : 'md',
+        iconButton: triggerSize === 'xs' ? 'sm' : (['lg', 'xl'].includes(triggerSize) ? 'lg' : 'md'),
+        badge: 'sm',
+        grouped: 'md',
+    }[view.value] ?? 'md'
+
+    return sizes[size] ?? null
+})
 
 const badgeContainerClass = computed(() => ({
     link: 'fi-link-badge-ctn',
@@ -65,7 +120,7 @@ const attrs = computed(() => {
 
     return {
         ...(action.extraAttributes ?? {}),
-        class: action.class,
+        class: isPending.value ? [action.class, 'fi-disabled'] : action.class,
         style: action.style || undefined,
         type: tag.value === 'button' ? 'button' : undefined,
         href: tag.value === 'a' ? action.url : undefined,
@@ -73,7 +128,7 @@ const attrs = computed(() => {
         rel: tag.value === 'a' && action.newTab ? 'noopener noreferrer' : undefined,
         ...(tag.value === 'a' && action.wireNavigate ? { 'wire:navigate': '' } : {}),
         disabled: tag.value === 'button' && action.disabled ? true : undefined,
-        'aria-disabled': action.disabled ? 'true' : undefined,
+        'aria-disabled': (action.disabled || isPending.value) ? 'true' : undefined,
         // `hiddenLabel()` keeps the label only as the accessible name; the
         // icon-button view always does, since it renders no label either.
         'aria-label': (action.labelHidden || view.value === 'iconButton') ? action.label : undefined,
@@ -98,11 +153,11 @@ function onClick(event) {
     event.preventDefault()
     event.stopPropagation()
 
-    if (props.action.disabled) {
+    if (props.action.disabled || isPending.value) {
         return
     }
 
-    emit('mount', props.action.name)
+    emit('mount', props.action.name, event.currentTarget)
 }
 </script>
 
@@ -113,7 +168,11 @@ function onClick(event) {
         @click="onClick"
     >
         <TrustedIcon
-            v-if="iconBefore"
+            v-if="isSpinning && ! iconAfter && loadingIndicatorHtml"
+            :html="loadingIndicatorHtml"
+        />
+        <TrustedIcon
+            v-else-if="iconBefore"
             :html="action.iconHtml"
         />
 
@@ -138,7 +197,11 @@ function onClick(event) {
         <template v-else-if="view === 'button' && ! action.labelHidden">{{ action.label }}</template>
 
         <TrustedIcon
-            v-if="iconAfter"
+            v-if="isSpinning && iconAfter && loadingIndicatorHtml"
+            :html="loadingIndicatorHtml"
+        />
+        <TrustedIcon
+            v-else-if="iconAfter"
             :html="action.iconHtml"
         />
 

@@ -50,7 +50,7 @@ describe('TableHeader sort button while loading', () => {
         expect(sorted).toEqual(['name'])
     })
 
-    it('is aria-disabled + fi-disabled and ignores clicks and keys while busy', async () => {
+    it('is aria-disabled + fi-disabled and ignores clicks while busy', async () => {
         const sorted = []
         wrapper = mount(TableHeader, { props: { columns, sort: null, icons: {}, busy: true, onSort: (key) => sorted.push(key) } })
 
@@ -59,13 +59,41 @@ describe('TableHeader sort button while loading', () => {
         expect(button.classes()).toContain('fi-disabled')
 
         await button.trigger('click')
-        await button.trigger('keydown', { key: 'Enter' })
-        await button.trigger('keydown', { key: ' ' })
         expect(sorted).toEqual([])
 
         await wrapper.setProps({ busy: false })
-        await button.trigger('keydown', { key: 'Enter' })
+        await button.trigger('click')
         expect(sorted).toEqual(['name'])
+    })
+
+    it('is a native <button type="button"> for a plain label, which activates itself from the keyboard', () => {
+        wrapper = mount(TableHeader, { props: { columns, sort: null, icons: {} } })
+
+        const control = wrapper.get('.fi-ta-header-cell-sort-btn')
+        expect(control.element.tagName).toBe('BUTTON')
+        expect(control.attributes('type')).toBe('button')
+        expect(control.attributes('role')).toBeUndefined()
+        expect(control.attributes('tabindex')).toBeUndefined()
+    })
+
+    it('is a <span role="button"> for an HTML label, and clicks itself on Enter and Space unless busy', async () => {
+        const sorted = []
+        const htmlColumns = [{ key: 'name', label: 'Name', labelHtml: '<em>Name</em>', sortable: true }]
+        wrapper = mount(TableHeader, { props: { columns: htmlColumns, sort: null, icons: {}, busy: true, onSort: (key) => sorted.push(key) } })
+
+        const control = wrapper.get('.fi-ta-header-cell-sort-btn')
+        expect(control.element.tagName).toBe('SPAN')
+        expect(control.attributes('role')).toBe('button')
+        expect(control.attributes('tabindex')).toBe('0')
+
+        await control.trigger('keydown', { key: 'Enter' })
+        await control.trigger('keydown', { key: ' ' })
+        expect(sorted).toEqual([])
+
+        await wrapper.setProps({ busy: false })
+        await control.trigger('keydown', { key: 'Enter' })
+        await control.trigger('keydown', { key: ' ' })
+        expect(sorted).toEqual(['name', 'name'])
     })
 })
 
@@ -364,6 +392,7 @@ describe('VueTable wiring', () => {
         expect(header.classes()).toContain('fi-ta-group-header-row-with-selection')
         expect(header.attributes('aria-hidden')).toBeUndefined()
         expect(header.find('input.fi-ta-group-checkbox').exists()).toBe(true)
+        expect(header.get('input.fi-ta-group-checkbox').attributes('autocomplete')).toBe('off')
 
         wrapper.unmount()
         config.schema.selection = { enabled: true, maxRecords: 1 }

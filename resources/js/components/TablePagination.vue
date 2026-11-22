@@ -135,25 +135,27 @@ function range(start, end) {
 
 /**
  * @param {number} page
+ * @param {?Event} [event] The click, whose button Livewire would mark `data-loading`.
  * @returns {void}
  */
-function goToPage(page) {
+function goToPage(page, event = null) {
     if (props.busy) {
         return
     }
 
     if (page >= 1 && page !== props.page && (lastPage.value === null || page <= lastPage.value)) {
-        emit('update:page', page)
+        emit('update:page', page, event?.currentTarget ?? null)
     }
 }
 
 /**
  * @param {?string} cursor
+ * @param {?Event} [event] The click, whose button Livewire would mark `data-loading`.
  * @returns {void}
  */
-function goToCursor(cursor) {
+function goToCursor(cursor, event = null) {
     if (! props.busy) {
-        emit('update:cursor', cursor)
+        emit('update:cursor', cursor, event?.currentTarget ?? null)
     }
 }
 
@@ -164,7 +166,7 @@ function goToCursor(cursor) {
 function onPerPageChange(event) {
     const value = event.target.value
 
-    emit('update:perPage', value === 'all' ? 'all' : Number.parseInt(value, 10))
+    emit('update:perPage', value === 'all' ? 'all' : Number.parseInt(value, 10), event.target)
 }
 
 /**
@@ -196,7 +198,7 @@ const overview = computed(() => formatPaginationOverview(props.strings.paginatio
             class="fi-btn fi-size-md fi-pagination-previous-btn"
             :class="{ 'fi-disabled': busy }"
             :aria-disabled="busy ? 'true' : undefined"
-            @click="isCursor ? goToCursor(meta.previousCursor) : goToPage(page - 1)"
+            @click="isCursor ? goToCursor(meta.previousCursor, $event) : goToPage(page - 1, $event)"
         >
             {{ strings.previousLabel }}
         </button>
@@ -266,7 +268,7 @@ const overview = computed(() => formatPaginationOverview(props.strings.paginatio
             class="fi-btn fi-size-md fi-pagination-next-btn"
             :class="{ 'fi-disabled': busy }"
             :aria-disabled="busy ? 'true' : undefined"
-            @click="isCursor ? goToCursor(meta.nextCursor) : goToPage(page + 1)"
+            @click="isCursor ? goToCursor(meta.nextCursor, $event) : goToPage(page + 1, $event)"
         >
             {{ strings.nextLabel }}
         </button>
@@ -287,7 +289,7 @@ const overview = computed(() => formatPaginationOverview(props.strings.paginatio
                     class="fi-pagination-item-btn"
                     :class="{ 'fi-disabled': busy }"
                     :aria-disabled="busy ? 'true' : undefined"
-                    @click="goToPage(page - 1)"
+                    @click="goToPage(page - 1, $event)"
                 >
                     <TrustedIcon :html="icons.previous" />
                 </button>
@@ -310,7 +312,7 @@ const overview = computed(() => formatPaginationOverview(props.strings.paginatio
                     class="fi-pagination-item-btn"
                     :class="{ 'fi-disabled': busy && element !== '...' }"
                     :aria-disabled="busy && element !== '...' ? 'true' : undefined"
-                    @click="element !== '...' && goToPage(element)"
+                    @click="element !== '...' && goToPage(element, $event)"
                 >
                     <span class="fi-pagination-item-label">{{ element }}</span>
                 </button>
@@ -328,7 +330,7 @@ const overview = computed(() => formatPaginationOverview(props.strings.paginatio
                     class="fi-pagination-item-btn"
                     :class="{ 'fi-disabled': busy }"
                     :aria-disabled="busy ? 'true' : undefined"
-                    @click="goToPage(page + 1)"
+                    @click="goToPage(page + 1, $event)"
                 >
                     <TrustedIcon :html="icons.next" />
                 </button>

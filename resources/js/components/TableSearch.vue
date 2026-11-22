@@ -48,7 +48,7 @@ function onInput(event) {
         return
     }
 
-    emit('update:modelValue', event.target.value)
+    emit('update:modelValue', event.target.value, event.target)
 }
 
 /**
@@ -60,7 +60,7 @@ function onCommit(event) {
         return
     }
 
-    emit('update:modelValue', event.target.value)
+    emit('update:modelValue', event.target.value, event.target)
 }
 </script>
 
