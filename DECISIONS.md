@@ -698,6 +698,45 @@ Closed here:
 - **The sort control is a native `<button type="button">`**, as in stock (5.10+). It becomes a `<span role="button" tabindex="0">` only when the label is HTML (`labelHtml`), because interactive content is invalid inside a `<button>`. Only the span handles Enter and Space itself; the button activates natively, so its keys are no longer prevented.
 - **`data-group`** on record checkboxes: the record's group key, empty when ungrouped, as in stock.
 
+## 2026-11-22 — Filament 5.12: stock renders its table from PHP; the island needed two fixes, and its lead narrowed
+
+Checked per the 2026-07-26 rule. The setup isolates the Filament version. Two copies of the same tree had identical non-Filament packages, and only `filament/*` differed: v5.11.4 vs v5.12.0. 5.12 requires livewire v4.4.9 and laravel/framework v12.73.0, so both copies were moved to those first.
+
+**Stock no longer has a table Blade view.** `tables/resources/views/index.blade.php` is gone. The table is generated in PHP (`Table\Concerns\CanBeRendered::toEmbeddedHtml()` → `generateTableHtml()`, plus `CanGenerate*Html` traits in support). Villament never renders that view: the reordering hand-off uses `EmbeddedTable`. Nothing referenced it, and the full suite stays green: Pest 697, Vitest, and the browser suite 21/21.
+
+**The markup barely moved.** The same fixture table (`/admin/users`, every column type, actions, filters, column manager) was captured in a browser on both versions and normalized: tags, classes, `aria-*`, `data-*`, text, visibility, with random ids masked. Every row and cell matched. What changed:
+
+| Change in stock 5.12 | Island |
+|---|---|
+| Loading indicators are an empty `<svg class="… fi-loading-indicator-default">` drawn with a CSS mask, and the controls' CSS hides any indicator without `fi-loading` (`:not(.fi-loading) > .fi-loading-indicator:not(.fi-loading)`) | **Fixed.** The island's indicator rendered but stayed `display:none`. `schema.icons.loadingIndicator` now carries `fi-loading`: the island only renders it while it shows, which keeps the swap kept on 2026-11-19. Checked visible, with a size, on 5.11.4 and 5.12.0 |
+| `autocomplete="off"` on the page, group and record checkboxes | **Fixed**, on all three |
+| The indicator now comes before the icon inside a control | No change: the island renders one or the other |
+| `aria-label="Bulk actions"` on the bulk group's icon button | Already there |
+| The filter `Select` is an async component (`fi-async-component`) | Native Filament inside the island too: it changed by itself |
+| `disabled-button.js` also swallows clicks on `button.fi-btn:is(.fi-processing, .fi-disabled)` | No change: every island `fi-btn` that gets `fi-disabled` also gets `aria-disabled` |
+| `ValidatePanelOrigin` checks the panel and tenant context of every Livewire request | Bridge calls pass, browser suite included. The endpoint's harness never dehydrates |
+
+- **New and not supported yet:** `Column::lazyLoadedState()`. The island evaluates such state eagerly: it is correct, just not lazy. Recorded in BACKLOG.
+- **Tests:** the only failure on 5.12 was a ClientRepeater test regex that did not allow Livewire's `<!--[if BLOCK]>` markers between the add wrapper and its button. The markup itself was right.
+
+**Re-benchmark** (`DataChannelBenchmarkTest`, interleaved, 25 iterations, page 2 @ 50/page, sorted; A-B-B-A blocks 5.11.4 → 5.12.0 ×2 → 5.11.4). 2k rows, 6 runs per version, means of the per-run medians:
+
+| | filament **v5.11.4** | filament **v5.12.0** | change |
+|---|---|---|---|
+| A stock (commit + render) | 136.1 ms | 100.5 ms | **−26%** |
+| B Villament endpoint | 65.7 ms | 63.2 ms | −4% (within drift) |
+| **time ratio A/B** | **2.08x** | **1.61x** | −0.47 |
+| stock response | ~1,403 KB | ~935 KB | **−33%** |
+| **payload ratio** | **7.97x** | **5.22x** | |
+
+| rows | ratio v5.11.4 | ratio v5.12.0 |
+|---|---|---|
+| 500 | 2.11x | 1.55x |
+| 2,000 | 2.08x | 1.61x |
+| 10,000 | 2.00x | 1.53x |
+
+Verdict: **5.12's PHP renderer is a real win for stock**, the largest since 5.7. It is about a quarter faster and sends a third fewer bytes. The endpoint does not render, so it gains nothing from it. Villament stays ahead: ~1.6x on server time and ~5.2x on payload. But the lead is smaller than on any version measured before, and the payload lead is no longer "structural ~8x". Per-run spread was ±0.05 on the time ratio. Absolute times on this container run higher than in earlier entries; compare within this table only.
+
 ## Verified Filament v5 internal API map (§4.1, §4.8)
 
 Verified against **filament/filament v5.6.8** + **livewire/livewire v4.3.3** by reading installed vendor source on 2026-07-15. Paths relative to `vendor/filament/`.
