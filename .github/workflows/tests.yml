@@ -1,0 +1,95 @@
+name: tests
+
+# One run per push, on any branch. A pull request from this repository is
+# already covered by the push to its branch; only a fork's runs here.
+on:
+    push:
+    pull_request:
+    workflow_dispatch:
+
+concurrency:
+    group: tests-${{ github.event_name }}-${{ github.ref }}
+    cancel-in-progress: true
+
+permissions:
+    contents: read
+
+jobs:
+    php:
+        name: Filament ${{ matrix.filament }} · PHP ${{ matrix.php }}
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+
+        strategy:
+            fail-fast: false
+            matrix:
+                # Every minor `^5.10` allows (AGENTS.md §6). Add a line for
+                # each new Filament minor.
+                filament: ['5.10.*', '5.11.*', '5.12.*']
+                php: ['8.3']
+                include:
+                    - filament: '5.12.*'
+                      php: '8.4'
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: shivammathur/setup-php@v2
+              with:
+                  php-version: ${{ matrix.php }}
+                  extensions: mbstring, pdo_sqlite, sqlite3, intl, fileinfo
+                  coverage: none
+
+            - name: Cache Composer downloads
+              uses: actions/cache@v4
+              with:
+                  path: ~/.cache/composer/files
+                  key: composer-${{ matrix.php }}-${{ matrix.filament }}-${{ hashFiles('composer.json') }}
+                  restore-keys: composer-${{ matrix.php }}-${{ matrix.filament }}-
+
+            # No lock file is committed: resolve the newest set that fits the
+            # pinned minor, Livewire and Laravel included (5.12 needs newer ones).
+            - name: Install PHP dependencies (Filament ${{ matrix.filament }})
+              run: |
+                  composer require "filament/filament:${{ matrix.filament }}" --no-update --no-interaction
+                  composer update --with-all-dependencies --prefer-dist --no-interaction --no-progress
+
+            - name: Installed versions
+              run: composer show filament/filament filament/tables livewire/livewire laravel/framework | grep -E '^(name|versions)'
+
+            - name: Pest
+              run: vendor/bin/pest --exclude-group=benchmark
+
+            - name: PHPStan
+              run: composer analyse -- --no-progress
+
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+
+            # The browser suite drives the real fixture app with the committed
+            # dist, against this job's Filament, in Chromium.
+            - name: Browser suite
+              run: |
+                  npm install --no-audit --no-fund
+                  npm install --no-save --no-audit --no-fund playwright@1
+                  npx playwright install --with-deps chromium
+                  npm run test:browser
+
+    js:
+        name: Vitest + build
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+
+            - run: npm install --no-audit --no-fund
+            - run: npx vitest run
+            - run: npm run build
