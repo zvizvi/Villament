@@ -747,6 +747,14 @@ Verdict: **5.12's PHP renderer is a real win for stock**, the largest since 5.7.
 - **Verified locally before adding**, on 5.10.3, 5.11.4 and 5.12.0: Pest 697/697, the browser suite 21/21, and PHPStan level 6 clean on 5.10.3 and 5.12.0. PHPStan had not run in this environment before, because its dist is not reachable through the proxy. It was installed from a git clone for the check.
 - **A new Filament minor gets a matrix line.** That is the per-minor re-check the 2026-07-26 rule asks for, now automatic for correctness. The benchmark is still a manual run.
 
+## 2026-11-22 — A replaced island hands its native slots back (Filament 5.11.4, Livewire 4)
+
+Since 0.0.26 the island is keyed by its schema version, so a tab whose table differs makes the morph put a NEW island where the old one stood. Livewire adds the new island before it removes the old one and reports the swap as an add only (no `morph.removed`, so Alpine never destroys the old subtree). The old island was still holding the native slots it had adopted - the filters UI and the column manager, with their Alpine teleport clones - so the new island found the holders empty and drew neither, and the slots left the document with the old island.
+
+There they kept running. Livewire still morphs a teleport clone through its template, which strips the trigger's client-applied ARIA; Filament 5.11's `filamentDropdown` re-applies it from a `MutationObserver`, and `getTrigger()` treats a trigger that is not `isConnected` as replaced - it removes `aria-controls` / `aria-expanded` / `aria-haspopup`, `syncAria()` writes them back, the observer fires again. A microtask loop that never yields: the whole tab froze on the first such tab change (reported from a Filament page whose greetings tab hides two columns and two filters).
+
+So `scan()` now asks every mounted island of the SAME `.villament` wrapper - or one already out of the document - to hand its slots back to the wrapper's `[data-villament-slots]` holder before the new island mounts (`releaseNativeSlots()`, the routine `clearStaleRender()` already used). The wrapper is remembered at mount time, because a detached island no longer finds it by walking up. `teardownOrphans()` releases whatever is still inside, then calls `Alpine.destroyTree()` on the orphan, since nothing else will. The loop itself is Filament's (a detached dropdown is never expected to stay alive); nothing in Villament now leaves one detached.
+
 ## Verified Filament v5 internal API map (§4.1, §4.8)
 
 Verified against **filament/filament v5.6.8** + **livewire/livewire v4.3.3** by reading installed vendor source on 2026-07-15. Paths relative to `vendor/filament/`.

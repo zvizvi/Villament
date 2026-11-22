@@ -90,6 +90,96 @@ describe('island bootstrap on Livewire morphs', () => {
         expect(unmounted).toEqual([])
     })
 
+    /**
+     * A tab whose table differs re-keys the island, so the morph puts a new
+     * island where the old one stood. The old one holds the native slots it
+     * adopted (the filters UI, the column manager) - left there, they leave the
+     * document with it, the new island finds the holders empty, and Filament's
+     * dropdown inside the detached copy loops on its own mutation observer.
+     */
+    function replaceableIsland(id) {
+        const wrapper = document.createElement('div')
+        wrapper.className = 'villament'
+        wrapper.innerHTML = `
+            <div data-villament><script type="application/json" data-villament-config>${JSON.stringify({ livewireId: id })}</script></div>
+            <div data-villament-slots style="display: none"></div>`
+
+        document.body.appendChild(wrapper)
+
+        return wrapper
+    }
+
+    function adoptSlot(island) {
+        const slot = document.createElement('div')
+        slot.setAttribute('data-villament-filters-slot', 'toolbar')
+        slot.innerHTML = '<div class="fi-dropdown"></div>'
+        island.querySelector('[data-villament-mount]').appendChild(slot)
+
+        return slot
+    }
+
+    function newIslandBefore(old, id) {
+        const added = document.createElement('div')
+        added.setAttribute('data-villament', '')
+        added.innerHTML = `<script type="application/json" data-villament-config>${JSON.stringify({ livewireId: id })}</script>`
+        old.before(added)
+
+        return added
+    }
+
+    it('hands the adopted slots back when a morph puts a new island in the old one\'s place', async () => {
+        window.Alpine = { destroyTree: vi.fn() }
+        await import('../../resources/js/index.js')
+
+        const wrapper = replaceableIsland('page')
+        const old = wrapper.querySelector('[data-villament]')
+        hooks['morph.added']({ el: old })
+        const slot = adoptSlot(old)
+
+        // Livewire adds the new island before it removes the old one.
+        const added = newIslandBefore(old, 'page')
+        hooks['morph.added']({ el: added })
+
+        expect(slot.parentElement).toBe(wrapper.querySelector('[data-villament-slots]'))
+
+        old.remove()
+        await Promise.resolve()
+
+        expect(unmounted).toEqual(['page'])
+        expect(window.Alpine.destroyTree).toHaveBeenCalledWith(old)
+        expect(document.querySelectorAll('[data-test-table="page"]')).toHaveLength(1)
+
+        delete window.Alpine
+    })
+
+    it('hands the adopted slots back when the old island already left the document', async () => {
+        await import('../../resources/js/index.js')
+
+        const wrapper = replaceableIsland('page')
+        const old = wrapper.querySelector('[data-villament]')
+        hooks['morph.added']({ el: old })
+        const slot = adoptSlot(old)
+
+        const added = newIslandBefore(old, 'page')
+        old.remove()
+        hooks['morph.added']({ el: added })
+
+        expect(slot.parentElement).toBe(wrapper.querySelector('[data-villament-slots]'))
+    })
+
+    it('never takes the slots of an island in another wrapper', async () => {
+        await import('../../resources/js/index.js')
+
+        const first = replaceableIsland('page')
+        hooks['morph.added']({ el: first.querySelector('[data-villament]') })
+        const slot = adoptSlot(first.querySelector('[data-villament]'))
+
+        const second = replaceableIsland('relation-manager')
+        hooks['morph.added']({ el: second.querySelector('[data-villament]') })
+
+        expect(first.querySelector('[data-villament]').contains(slot)).toBe(true)
+    })
+
     it('hooks Livewire on livewire:init when it loads later', async () => {
         delete window.Livewire
         await import('../../resources/js/index.js')
