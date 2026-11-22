@@ -188,8 +188,10 @@ it('rewires only the actions the browser can replay, and leaves their markup oth
     $html = livewire(RepeaterFormPage::class)->html();
 
     // The client add button: no wire:click, the operation marker instead.
-    preg_match('/<div[^>]*id="form\.client_flat"[\s\S]*?<div\s+class="fi-fo-repeater-add(?: [^"]*)?"\s*>\s*(<button[^>]*>)/', $html, $client);
-    preg_match('/<div[^>]*id="form\.stock_flat"[\s\S]*?<div\s+class="fi-fo-repeater-add(?: [^"]*)?"\s*>\s*(<button[^>]*>)/', $html, $stock);
+    // Livewire's `<!--[if BLOCK]>` markers may sit between the wrapper and
+    // the button (Filament 5.12+), so comments are skipped.
+    preg_match('/<div[^>]*id="form\.client_flat"[\s\S]*?<div\s+class="fi-fo-repeater-add(?: [^"]*)?"\s*>\s*(?:<!--[\s\S]*?-->\s*)*(<button[^>]*>)/', $html, $client);
+    preg_match('/<div[^>]*id="form\.stock_flat"[\s\S]*?<div\s+class="fi-fo-repeater-add(?: [^"]*)?"\s*>\s*(?:<!--[\s\S]*?-->\s*)*(<button[^>]*>)/', $html, $stock);
 
     expect($client[1])->toContain('data-villament-repeater-action="add"')
         ->not->toContain('wire:click')
