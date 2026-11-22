@@ -34,18 +34,38 @@ export function clearStaleRender(element) {
 
     for (const node of stale) {
         if (holder) {
-            for (const slot of node.querySelectorAll(SLOT_SELECTOR)) {
-                // A slot inside another slot travels with its outer one.
-                if (slot.parentElement?.closest(SLOT_SELECTOR) && node.contains(slot.parentElement.closest(SLOT_SELECTOR))) {
-                    continue
-                }
-
-                holder.appendChild(slot)
-            }
+            releaseNativeSlots(node, holder)
         }
 
         node.remove()
     }
 
     return true
+}
+
+/**
+ * Moves every native slot an island (or a copy of one) holds back into a
+ * hidden holder, so the next island to mount there can adopt it again.
+ *
+ * A slot is a live node - the Alpine teleport clone of the filters UI, the
+ * column manager, a render hook... - and it travels with whatever it was
+ * adopted into. Left inside an island that leaves the document, it is lost to
+ * the island that replaces it, and it keeps running detached: Livewire still
+ * morphs the clone through its template, and Filament's dropdown, finding its
+ * trigger out of the document, rewrites the trigger's ARIA from its own
+ * mutation observer for ever.
+ *
+ * @param {Element} node The island, or a node inside one.
+ * @param {Element} holder A `[data-villament-slots]` holder.
+ * @returns {void}
+ */
+export function releaseNativeSlots(node, holder) {
+    for (const slot of node.querySelectorAll(SLOT_SELECTOR)) {
+        // A slot inside another slot travels with its outer one.
+        if (slot.parentElement?.closest(SLOT_SELECTOR) && node.contains(slot.parentElement.closest(SLOT_SELECTOR))) {
+            continue
+        }
+
+        holder.appendChild(slot)
+    }
 }

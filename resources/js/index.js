@@ -19,11 +19,20 @@
 import { createApp } from 'vue'
 import VueTable from './components/VueTable.vue'
 import { registerCellComponent } from './support/cellRegistry.js'
-import { clearStaleRender } from './support/staleRender.js'
+import { clearStaleRender, releaseNativeSlots } from './support/staleRender.js'
 import tableStyles from './styles/table.css?inline'
 
 /** @type {Map<Element, import('vue').App>} */
 const mountedIslands = new Map()
+
+/**
+ * The `.villament` wrapper each mounted island was mounted in - kept apart
+ * from the element, because an island a morph replaced is out of the document
+ * and no longer finds its wrapper by walking up.
+ *
+ * @type {WeakMap<Element, ?Element>}
+ */
+const islandWrappers = new WeakMap()
 
 /**
  * Injects the package stylesheet once, so the bundle stays a single IIFE
@@ -79,6 +88,12 @@ function scan() {
         // back inside a Livewire navigate snapshot.
         clearStaleRender(element)
 
+        // A new island in the place of one still mounted (a tab whose table
+        // differs: the morph keys the island by its schema) - the old one
+        // hands back the native slots it adopted, or this one finds the
+        // holders empty and draws no filters, no column manager.
+        releaseSlotsOfReplacedIslands(element)
+
         const config = parseConfig(element)
 
         if (! config) {
@@ -95,14 +110,55 @@ function scan() {
         app.mount(mountPoint)
 
         mountedIslands.set(element, app)
+        islandWrappers.set(element, element.closest('.villament'))
     })
+}
+
+/**
+ * Hands the native slots of every island the given one replaces back to the
+ * wrapper's holder: an island of the same wrapper (a morph adds the new one
+ * before it removes the old), or one already out of the document.
+ *
+ * @param {Element} element The island about to mount.
+ * @returns {void}
+ */
+function releaseSlotsOfReplacedIslands(element) {
+    const wrapper = element.closest('.villament')
+
+    for (const other of mountedIslands.keys()) {
+        if (other === element) {
+            continue
+        }
+
+        const otherWrapper = islandWrappers.get(other) ?? null
+
+        if (other.isConnected && (wrapper === null || otherWrapper !== wrapper)) {
+            continue
+        }
+
+        const holder = (otherWrapper ?? wrapper)?.querySelector('[data-villament-slots]') ?? null
+
+        if (holder?.isConnected) {
+            releaseNativeSlots(other, holder)
+        }
+    }
 }
 
 /** @returns {void} */
 function teardownOrphans() {
     for (const [element, app] of mountedIslands) {
         if (! element.isConnected) {
+            // Whatever adopted slot is still inside goes home first, then the
+            // Alpine components the morph never destroyed (it reported the
+            // replacement as an add only) are destroyed with the app.
+            const holder = islandWrappers.get(element)?.querySelector('[data-villament-slots]') ?? null
+
+            if (holder?.isConnected) {
+                releaseNativeSlots(element, holder)
+            }
+
             app.unmount()
+            window.Alpine?.destroyTree?.(element)
             mountedIslands.delete(element)
         }
     }
