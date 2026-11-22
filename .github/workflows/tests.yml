@@ -72,13 +72,13 @@ jobs:
             # dist, against this job's Filament, in Chromium.
             - name: Browser suite
               run: |
-                  npm install --no-audit --no-fund
+                  npm ci --no-audit --no-fund
                   npm install --no-save --no-audit --no-fund playwright@1
                   npx playwright install --with-deps chromium
                   npm run test:browser
 
     js:
-        name: Vitest + build
+        name: Vitest + build + dist check
         if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
         runs-on: ubuntu-latest
         timeout-minutes: 15
@@ -90,6 +90,18 @@ jobs:
               with:
                   node-version: 22
 
-            - run: npm install --no-audit --no-fund
+            - run: npm ci --no-audit --no-fund
             - run: npx vitest run
             - run: npm run build
+
+            # `dist` is committed: Composer users get it without a build step.
+            # Built from the locked dependencies it must come out byte for
+            # byte as committed, or the source changed without a rebuild.
+            - name: The committed dist matches its source
+              run: |
+                  if [ -n "$(git status --porcelain -- dist)" ]; then
+                      git status --short -- dist
+                      git diff --stat -- dist
+                      echo "::error::dist/ is out of date with resources/js. Run 'npm ci && npm run build' and commit dist/."
+                      exit 1
+                  fi
