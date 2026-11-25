@@ -43,6 +43,9 @@ describe('loadingSkeleton()', () => {
     /** @type {?import('@vue/test-utils').VueWrapper} */
     let wrapper = null
 
+    /** @type {Array<(payload: object) => void>} */
+    let commitHandlers = []
+
     beforeEach(() => {
         vi.useFakeTimers()
         window.history.replaceState(null, '', '/admin/users')
@@ -53,8 +56,15 @@ describe('loadingSkeleton()', () => {
         })))
 
         const $wire = { get: () => undefined, set: () => {}, $on: () => {} }
+        commitHandlers = []
         globalThis.Livewire = {
-            hook: () => () => {},
+            hook: (name, handler) => {
+                if (name === 'commit') {
+                    commitHandlers.push(handler)
+                }
+
+                return () => {}
+            },
             find: (id) => (id === 'lw-users' ? makeWireProxy($wire, () => {}) : null),
         }
     })
@@ -101,6 +111,31 @@ describe('loadingSkeleton()', () => {
         })
 
         await vi.runAllTimersAsync()
+        await nextTick()
+    }
+
+    /**
+     * A Livewire commit on the host component lands, as after an action.
+     *
+     * @param {string[]} methods Methods the commit called.
+     * @returns {Promise<void>}
+     */
+    async function landCommit(methods) {
+        const $wire = { get: () => undefined }
+
+        for (const handler of [...commitHandlers]) {
+            /** @type {Array<() => void>} */
+            const respondCallbacks = []
+
+            handler({
+                component: { id: 'lw-users', $wire },
+                commit: { calls: methods.map((method) => ({ method, params: [], metadata: {} })) },
+                respond: (callback) => respondCallbacks.push(callback),
+            })
+
+            respondCallbacks.forEach((callback) => callback())
+        }
+
         await nextTick()
     }
 
@@ -205,5 +240,70 @@ describe('loadingSkeleton()', () => {
         expect(wrapper.get('.fi-ta-records').attributes('inert')).toBeUndefined()
         expect(wrapper.get('.fi-ta-ctn').classes()).toContain('fi-loading')
         expect(wrapper.get('.fi-ta-content-ctn').attributes('aria-busy')).toBe('true')
+    })
+
+    it.each([
+        ['mountAction'],
+        ['callMountedAction'],
+        ['unmountAction'],
+        ['applyTableColumnManager'],
+    ])('refetches quietly after %s: no skeleton, no busy state, as stock outside LOADING_TARGETS', async (method) => {
+        mountTable({ loadingSkeleton: true, loadingDelayMs: 200 })
+
+        await landCommit([method])
+        expect(fetch).toHaveBeenCalledTimes(1)
+
+        await vi.advanceTimersByTimeAsync(1000)
+
+        const container = wrapper.get('.fi-ta-content-ctn')
+        expect(container.classes()).not.toContain('fi-ta-content-loading')
+        expect(container.attributes('aria-busy')).toBeUndefined()
+        expect(wrapper.get('.fi-ta-records').attributes('inert')).toBeUndefined()
+        expect(wrapper.get('.fi-ta-header-cell-sort-btn').attributes('aria-disabled')).toBeUndefined()
+
+        resolveFetch({
+            ok: true,
+            json: async () => ({
+                records: [{ key: '1', cells: { name: { type: 'text', formatted: 'Renamed' } }, can: {} }],
+                meta: { currentPage: 1, perPage: 10, total: 1, lastPage: 1, from: 1, to: 1 },
+                indicators: [],
+                schemaVersion: 'v1',
+            }),
+        })
+        await vi.runAllTimersAsync()
+        await nextTick()
+
+        expect(wrapper.get('.fi-ta-records').text()).toContain('Renamed')
+    })
+
+    it('does not pulse the table for an action refetch when it has no skeleton', async () => {
+        mountTable({ loadingSkeleton: false, loadingDelayMs: 200 })
+
+        await landCommit(['unmountAction'])
+        await vi.advanceTimersByTimeAsync(1000)
+
+        expect(wrapper.get('.fi-ta-ctn').classes()).not.toContain('fi-loading')
+    })
+
+    it('still shows the skeleton for the reorder toggle, which is a stock loading target', async () => {
+        mountTable({ loadingSkeleton: true, loadingDelayMs: 0 })
+
+        await landCommit(['toggleTableReordering'])
+
+        expect(wrapper.get('.fi-ta-content-ctn').classes()).toContain('fi-ta-content-loading')
+    })
+
+    it('keeps the loading state when an action refetch replaces a fetch already shown', async () => {
+        mountTable({ loadingSkeleton: true, loadingDelayMs: 0 })
+
+        await startFetch()
+        await landCommit(['unmountAction'])
+
+        expect(fetch).toHaveBeenCalledTimes(2)
+        expect(wrapper.get('.fi-ta-content-ctn').classes()).toContain('fi-ta-content-loading')
+
+        await finishFetch()
+
+        expect(wrapper.get('.fi-ta-content-ctn').classes()).not.toContain('fi-ta-content-loading')
     })
 })

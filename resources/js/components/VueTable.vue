@@ -315,7 +315,7 @@ function groupAriaLabel(group) {
     return group.label ? `${group.label}: ${group.title}` : String(group.title ?? '')
 }
 
-const { records, actionDefaults, meta, indicators, summaries, isLoading, fetchCount, error, retry, fetchNow, destroy: destroyData } = useTableData(
+const { records, actionDefaults, meta, indicators, summaries, isLoading, isQuietFetch, fetchCount, error, retry, fetchNow, destroy: destroyData } = useTableData(
     props.config.endpoint,
     state,
     {
@@ -324,6 +324,13 @@ const { records, actionDefaults, meta, indicators, summaries, isLoading, fetchCo
         debounceMs: schema.debounceMs ?? 300,
     },
 )
+
+/**
+ * The table shows that it is fetching. Not every fetch does: the refetch
+ * after an action is quiet, as stock is for a request outside
+ * `Table::LOADING_TARGETS`.
+ */
+const isBusy = computed(() => isLoading.value && ! isQuietFetch.value)
 
 /**
  * `loadingSkeleton()`: stock puts `fi-ta-content-loading` on the content
@@ -336,7 +343,7 @@ const isLoadingSkeletonVisible = ref(false)
 /** @type {?ReturnType<typeof setTimeout>} */
 let loadingSkeletonTimer = null
 
-watch(isLoading, (loading) => {
+watch(isBusy, (loading) => {
     clearTimeout(loadingSkeletonTimer)
     loadingSkeletonTimer = null
 
@@ -389,6 +396,11 @@ const bridge = useLivewireBridge({
         // records+meta+indicators exactly once. The bridge already skips this
         // callback when the same commit changed `tableFilters` (the filters
         // watcher refetches then).
+        //
+        // The refetch is quiet: stock shows its loading state only for
+        // `Table::LOADING_TARGETS`, and opening, running or closing an action
+        // is not among them - the table there is re-rendered in place. The
+        // reorder toggle is the one method here that is a stock target.
         if (methods.includes('applyTableColumnManager') || methods.includes('resetTableColumnManager')) {
             const authoritativeColumns = bridge.getTableColumns()
 
@@ -397,7 +409,7 @@ const bridge = useLivewireBridge({
             }
         }
 
-        fetchNow()
+        fetchNow({ quiet: ! methods.includes('toggleTableReordering') })
     },
     onDeselectAll: () => selection.deselectAll(),
     // Stock pushes the selection before EVERY action mount (table.js's
@@ -787,7 +799,7 @@ const hasBulkActionsBar = computed(
  */
 function isRecordCheckboxDisabled(key) {
     return Boolean(selectionConfig.value.disabled)
-        || isLoading.value
+        || isBusy.value
         || ! selection.areRecordsToggleable([key])
 }
 
@@ -1394,7 +1406,7 @@ function recordCellClasses(column, cellValue = null) {
             :class="{
                 'fi-ta-ctn-with-header': hasHeaderContainer,
                 // The skeleton replaces the whole-table pulse, as in stock.
-                'fi-loading': isLoading && ! schema.loadingSkeleton,
+                'fi-loading': isBusy && ! schema.loadingSkeleton,
             }"
         >
             <!-- BeforeContent filters teleport here (stock: sibling before .fi-ta-main). -->
@@ -1634,7 +1646,7 @@ function recordCellClasses(column, cellValue = null) {
                         no hits — with the empty state below as a sibling.
                     -->
                     <div
-                        :aria-busy="isLoading ? 'true' : undefined"
+                        :aria-busy="isBusy ? 'true' : undefined"
                         class="fi-ta-content-ctn fi-fixed-positioning-context"
                         :class="{ 'fi-ta-content-loading': isLoadingSkeletonVisible }"
                     >
@@ -1643,14 +1655,14 @@ function recordCellClasses(column, cellValue = null) {
                                 :columns="visibleColumns"
                                 :column-groups="columnGroupRow"
                                 :sort="state.sort.value"
-                                :busy="isLoading"
+                                :busy="isBusy"
                                 :icons="icons"
                                 :selectable="isSelectionEnabled"
                                 :has-selectable-records="hasRecords"
                                 :all-selected="areAllPageRecordsSelected"
                                 :show-page-checkbox="! isSingleSelect && ! selectionConfig.groupsOnly"
                                 :page-indeterminate="isPagePartiallySelected"
-                                :page-checkbox-disabled="isPageCheckboxDisabled || isLoading"
+                                :page-checkbox-disabled="isPageCheckboxDisabled || isBusy"
                                 :has-actions-column="hasRecordActions"
                                 :actions-position="recordActionsPosition"
                                 :actions-column-label="recordActionsConfig.columnLabel ?? null"
@@ -1794,7 +1806,7 @@ function recordCellClasses(column, cellValue = null) {
                                                 class="fi-ta-group-checkbox fi-checkbox-input"
                                                 :checked="selection.areRecordsSelected(item.keys)"
                                                 :indeterminate="selection.areRecordsPartiallySelected(item.keys)"
-                                                :disabled="Boolean(selectionConfig.disabled) || isLoading"
+                                                :disabled="Boolean(selectionConfig.disabled) || isBusy"
                                                 @change="selection.toggleSelectPage(item.keys)"
                                             >
                                         </td>
@@ -2094,7 +2106,7 @@ function recordCellClasses(column, cellValue = null) {
                         :mode="schema.pagination?.mode ?? 'offset'"
                         :strings="strings"
                         :icons="icons"
-                        :busy="isLoading"
+                        :busy="isBusy"
                         @update:page="(page, element) => withFetchOrigin(element, () => { state.page.value = page })"
                         @update:per-page="(perPage, element) => withFetchOrigin(element, () => { state.perPage.value = perPage })"
                         @update:cursor="(cursor, element) => withFetchOrigin(element, () => { state.cursor.value = cursor })"

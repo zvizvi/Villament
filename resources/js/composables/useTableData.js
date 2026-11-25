@@ -33,10 +33,11 @@ import { appendFilterParams } from '../support/filterParams.js'
  * @property {import('vue').Ref<FilterIndicator[]>} indicators Active-filter chips, always from the latest server response.
  * @property {import('vue').Ref<Object<string, object>>} actionDefaults Per-response action fields that came out identical across every record; each record carries only its differences.
  * @property {import('vue').Ref<boolean>} isLoading
+ * @property {import('vue').Ref<boolean>} isQuietFetch The fetch in flight was asked to stay quiet: the rows are replaced when it lands and nothing shows it meanwhile.
  * @property {import('vue').Ref<number>} fetchCount Increments as each fetch starts, a replacing one included.
  * @property {import('vue').Ref<?Error>} error
  * @property {() => Promise<void>} retry Re-runs the last request immediately.
- * @property {() => Promise<void>} fetchNow Fetches immediately, cancelling any pending debounce.
+ * @property {(options?: { quiet?: boolean }) => Promise<void>} fetchNow Fetches immediately, cancelling any pending debounce.
  * @property {() => void} destroy Stops watchers, clears timers, aborts any in-flight request.
  */
 
@@ -109,6 +110,7 @@ export function useTableData(endpoint, state, options = {}) {
     const actionDefaults = ref(options.initialData?.actionDefaults ?? {})
     const summaries = ref(options.initialData?.summaries ?? null)
     const isLoading = ref(false)
+    const isQuietFetch = ref(false)
     const fetchCount = ref(0)
     const error = ref(null)
 
@@ -180,8 +182,17 @@ export function useTableData(endpoint, state, options = {}) {
         return url.toString()
     }
 
-    /** @returns {Promise<void>} */
-    async function fetchNow() {
+    /**
+     * A quiet fetch replaces the rows when it lands and shows nothing while
+     * it runs. One that replaces a fetch the table is already showing stays
+     * shown: the person is waiting on that one.
+     *
+     * @param {{ quiet?: boolean }} [fetchOptions]
+     * @returns {Promise<void>}
+     */
+    async function fetchNow(fetchOptions = {}) {
+        const isQuiet = fetchOptions?.quiet === true && (! isLoading.value || isQuietFetch.value)
+
         if (debounceTimer !== null) {
             clearTimeout(debounceTimer)
             debounceTimer = null
@@ -194,6 +205,7 @@ export function useTableData(endpoint, state, options = {}) {
 
         const requestId = ++latestRequestId
         fetchCount.value++
+        isQuietFetch.value = isQuiet
         isLoading.value = true
 
         try {
@@ -244,6 +256,7 @@ export function useTableData(endpoint, state, options = {}) {
         } finally {
             if (requestId === latestRequestId) {
                 isLoading.value = false
+                isQuietFetch.value = false
             }
         }
     }
@@ -378,9 +391,10 @@ export function useTableData(endpoint, state, options = {}) {
         indicators,
         summaries,
         isLoading,
+        isQuietFetch,
         fetchCount,
         error,
-        retry: fetchNow,
+        retry: () => fetchNow(),
         fetchNow,
         destroy,
     }
