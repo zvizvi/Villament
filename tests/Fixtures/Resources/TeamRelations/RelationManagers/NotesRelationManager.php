@@ -12,7 +12,8 @@ use Zvizvi\Villament\Tests\Fixtures\Resources\TeamRelations\NotesTable;
 
 /**
  * Inside a relation group, and opted in through the trait rather than the
- * base class.
+ * base class. Lazy, and keeping its table state in the URL by its own
+ * override, whatever `villament.relation_manager_url_state` says.
  */
 class NotesRelationManager extends RelationManager
 {
@@ -25,6 +26,11 @@ class NotesRelationManager extends RelationManager
      * registered twice, each with its own slice of the notes.
      */
     public ?string $kind = null;
+
+    protected function shouldSyncVillamentStateWithUrl(): bool
+    {
+        return true;
+    }
 
     public function table(Table $table): Table
     {

@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Encryption\Encrypter;
 use Illuminate\Support\Facades\Gate;
 use Livewire\Features\SupportTesting\Testable;
+use Livewire\Livewire;
 use Zvizvi\Villament\Support\RelationTableToken;
 use Zvizvi\Villament\Tests\Fixtures\Models\Team;
 use Zvizvi\Villament\Tests\Fixtures\Models\TeamNote;
@@ -143,7 +144,8 @@ describe('a relation manager', function (): void {
             ->toContain('/admin/villament/relation-data?token=')
             ->not->toContain('MembersRelationManager')
             ->and($config['livewireId'])->toBe($livewire->id())
-            ->and($config['urlSync'])->toBeFalse();
+            ->and($config['urlSync'])->toBeFalse()
+            ->and($config['urlNamespace'])->toBeNull();
     });
 
     it('inlines the same first page the endpoint serves', function (): void {
@@ -445,3 +447,95 @@ class TeamRelationsTestPolicy
         return true;
     }
 }
+
+describe('a relation manager that keeps its state in the URL', function (): void {
+    beforeEach(function (): void {
+        config()->set('villament.relation_manager_url_state', true);
+    });
+
+    /**
+     * @param  array<string, mixed>  $query
+     */
+    function membersManagerAt(Team $team, array $query): Testable
+    {
+        return Livewire::withQueryParams($query)
+            ->test(MembersRelationManager::class, ['ownerRecord' => $team, 'pageClass' => EditTeamRelation::class]);
+    }
+
+    it('is off unless the config turns it on', function (): void {
+        config()->set('villament.relation_manager_url_state', false);
+
+        $config = membersManagerAt($this->team, ['users' => ['sort' => 'name:desc']])->instance()->getVillamentTableConfig();
+
+        expect($config['urlSync'])->toBeFalse()
+            ->and($config['urlNamespace'])->toBeNull()
+            ->and($config['state']['sort'])->toBeNull();
+    });
+
+    it('syncs under the relationship name', function (): void {
+        $config = membersManager($this->team)->instance()->getVillamentTableConfig();
+
+        expect($config['urlSync'])->toBeTrue()
+            ->and($config['urlNamespace'])->toBe('users');
+    });
+
+    it('applies the state under its own key as it mounts, and inlines the page the endpoint serves for it', function (): void {
+        $config = membersManagerAt($this->team, ['users' => [
+            'sort' => 'name:desc',
+            'page' => '2',
+            'perPage' => '10',
+            'filters' => ['status' => ['value' => 'active']],
+            'columnSearches' => ['email' => '@'],
+        ]])->instance()->getVillamentTableConfig();
+
+        expect($config['state']['sort'])->toBe('name:desc')
+            ->and($config['state']['page'])->toBe(2)
+            ->and($config['state']['perPage'])->toBe(10)
+            ->and($config['state']['filters']['status']['value'])->toBe('active')
+            ->and($config['state']['columnSearches'])->toBe(['email' => '@']);
+
+        $inlined = array_map('strval', array_column($config['initialData']['records'], 'key'));
+
+        expect($inlined)->toBe(relationEndpointKeys(membersEndpoint(
+            $this->team,
+            'sort=name:desc&page=2&perPage=10&filters[status][value]=active&columnSearches[email]=@',
+        )));
+    });
+
+    it('ignores the host page\'s own parameters and another table\'s key', function (): void {
+        $config = membersManagerAt($this->team, [
+            'sort' => 'name:desc',
+            'page' => '3',
+            'notes' => ['sort' => 'status:asc', 'page' => '2'],
+        ])->instance()->getVillamentTableConfig();
+
+        expect($config['state']['sort'])->toBeNull()
+            ->and($config['state']['page'])->toBe(1);
+    });
+
+    it('renders with its defaults when its key holds something the table refuses', function (): void {
+        $config = membersManagerAt($this->team, ['users' => ['sort' => 'email:asc', 'page' => '2']])
+            ->instance()->getVillamentTableConfig();
+
+        expect($config['state']['sort'])->toBeNull()
+            ->and($config['state']['page'])->toBe(1);
+    });
+
+    it('reads the page\'s query string off the referer when it mounts in a Livewire request', function (): void {
+        $referer = 'http://localhost/admin/team-relations/1/edit?relation=0&'.http_build_query(['users' => ['sort' => 'status:desc', 'page' => '2']]);
+
+        $config = Livewire::withHeaders(['X-Livewire' => 'true', 'Referer' => $referer])
+            ->test(MembersRelationManager::class, ['ownerRecord' => $this->team, 'pageClass' => EditTeamRelation::class])
+            ->instance()->getVillamentTableConfig();
+
+        expect($config['state']['sort'])->toBe('status:desc')
+            ->and($config['state']['page'])->toBe(2);
+    });
+
+    it('leaves a ManageRelatedRecords page on the plain parameter names', function (): void {
+        $config = livewire(ManageTeamNotes::class, ['record' => $this->team->getKey()])->instance()->getVillamentTableConfig();
+
+        expect($config['urlSync'])->toBeTrue()
+            ->and($config['urlNamespace'])->toBeNull();
+    });
+});

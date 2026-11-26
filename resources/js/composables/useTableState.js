@@ -27,12 +27,79 @@ import { appendFilterParams, deleteFilterParams, readFilterParams } from '../sup
 const COLUMN_SEARCH_PARAM_PATTERN = /^columnSearches\[(.+)\]$/
 
 /**
- * Reads table state out of the current URL's query string.
+ * How many live states write under each URL namespace. A morph that replaces
+ * an island mounts the new one before it unmounts the old, so the old one must
+ * not take away parameters the new one now owns.
  *
+ * @type {Map<string, number>}
+ */
+const namespaceOwners = new Map()
+
+/**
+ * A parameter's name under a namespace: `sort` becomes `products[sort]`,
+ * `filters[status][value]` becomes `products[filters][status][value]`.
+ *
+ * @param {string} namespace
+ * @param {string} name
+ * @returns {string}
+ */
+function namespacedName(namespace, name) {
+    const bracket = name.indexOf('[')
+
+    return bracket === -1
+        ? `${namespace}[${name}]`
+        : `${namespace}[${name.slice(0, bracket)}]${name.slice(bracket)}`
+}
+
+/**
+ * Removes every parameter of a namespace from a `URLSearchParams` instance.
+ *
+ * @param {URLSearchParams} params
+ * @param {string} namespace
+ * @returns {void}
+ */
+function deleteNamespacedParams(params, namespace) {
+    for (const key of [...params.keys()]) {
+        if (key.startsWith(`${namespace}[`)) {
+            params.delete(key)
+        }
+    }
+}
+
+/**
+ * The parameters of a namespace, under their plain names: `products[sort]`
+ * comes back as `sort`, `products[filters][status][value]` as
+ * `filters[status][value]`.
+ *
+ * @param {string} namespace
+ * @returns {URLSearchParams}
+ */
+function namespacedParams(namespace) {
+    const own = new URLSearchParams()
+    const prefix = `${namespace}[`
+
+    for (const [key, value] of new URLSearchParams(window.location.search).entries()) {
+        if (! key.startsWith(prefix)) {
+            continue
+        }
+
+        const close = key.indexOf(']', prefix.length)
+
+        if (close !== -1) {
+            own.append(key.slice(prefix.length, close) + key.slice(close + 1), value)
+        }
+    }
+
+    return own
+}
+
+/**
+ * Reads table state out of a query string - the current URL's by default.
+ *
+ * @param {URLSearchParams} [params]
  * @returns {TableStateInit} Only the keys present in the URL are set.
  */
-function readStateFromUrl() {
-    const params = new URLSearchParams(window.location.search)
+function readStateFromUrl(params = new URLSearchParams(window.location.search)) {
 
     /** @type {TableStateInit} */
     const state = {}
@@ -101,14 +168,48 @@ function readStateFromUrl() {
  * `history.replaceState()` on every change, and re-read on `popstate` so
  * back/forward navigation restores it.
  *
+ *
+ * With a `urlNamespace` (a relation manager, which shares its URL with the
+ * host page and its other tables) the parameters are nested under that key
+ * and the URL is WRITE-ONLY here: the server already applied what the URL
+ * held when it mounted the component and inlined the result, and Livewire
+ * owns the filters, which it does not restore on `popstate` for a component
+ * without `#[Url]` properties. The URL is brought in line with that state once
+ * at start (dropping what the server refused), and the namespace is taken out
+ * of the URL when the state is destroyed on the page it was created on - the
+ * manager's tab was left.
+ *
+ * The one time a namespaced state READS the URL is `isRestored`: the page came
+ * back from a `wire:navigate` snapshot, no server mounted anything, and the
+ * inlined state is the first render's. What the URL does not name is then the
+ * table's default, not the inlined value - the first render may itself have
+ * been served for a URL that has since been cleared.
+ *
  * @param {TableStateInit} [initialState] Server-provided state from the island config.
- * @param {{ urlSync?: boolean }} [options] Set `urlSync: false` to disable URL reads/writes entirely.
+ * @param {{ urlSync?: boolean, urlNamespace?: ?string, defaultPerPage?: ?(number|'all'), isRestored?: boolean }} [options] Set `urlSync: false` to disable URL reads/writes entirely. `defaultPerPage` is the size a namespaced URL leaves unsaid.
  * @returns {TableState}
  */
 export function useTableState(initialState = {}, options = {}) {
     const urlSync = options.urlSync ?? true
+    const urlNamespace = urlSync && options.urlNamespace ? String(options.urlNamespace) : null
+    const defaultPerPage = options.defaultPerPage ?? null
 
-    const urlState = urlSync ? readStateFromUrl() : {}
+    const wasRestoredFromUrl = urlNamespace !== null && options.isRestored === true
+
+    let urlState = urlSync && urlNamespace === null ? readStateFromUrl() : {}
+
+    if (wasRestoredFromUrl) {
+        const restored = readStateFromUrl(namespacedParams(urlNamespace))
+
+        urlState = {
+            sort: restored.sort ?? null,
+            search: restored.search ?? '',
+            columnSearches: restored.columnSearches ?? {},
+            filters: restored.filters ?? {},
+            page: restored.page ?? 1,
+            perPage: restored.perPage ?? defaultPerPage ?? undefined,
+        }
+    }
 
     const sort = ref(urlState.sort !== undefined ? urlState.sort : (initialState.sort ?? null))
     // Grouping is the ONE key where the SERVER wins over the URL, because it is
@@ -151,8 +252,62 @@ export function useTableState(initialState = {}, options = {}) {
 
     let isApplyingUrlState = false
 
+    const mountedPathname = window.location.pathname
+
+    /** @returns {void} */
+    function writeNamespacedStateToUrl() {
+        const own = new URLSearchParams()
+
+        if (sort.value) {
+            own.set('sort', sort.value)
+        }
+
+        if (search.value) {
+            own.set('search', search.value)
+        }
+
+        for (const [key, value] of Object.entries(columnSearches.value ?? {})) {
+            if (value !== '' && value !== null && value !== undefined) {
+                own.set(`columnSearches[${key}]`, value)
+            }
+        }
+
+        appendFilterParams(own, filters.value, { includeBlank: false })
+
+        if (page.value && page.value !== 1) {
+            own.set('page', String(page.value))
+        }
+
+        // Only a size somebody chose: the manager's tab is one of several on
+        // the page, and opening it should not write to the URL by itself.
+        if (perPage.value && String(perPage.value) !== String(defaultPerPage ?? '')) {
+            own.set('perPage', String(perPage.value))
+        }
+
+        // No grouping and no cursor: the server reads this state as it mounts
+        // the component, and neither is among what it applies there.
+
+        const url = new URL(window.location.href)
+
+        deleteNamespacedParams(url.searchParams, urlNamespace)
+
+        for (const [name, value] of own.entries()) {
+            url.searchParams.append(namespacedName(urlNamespace, name), value)
+        }
+
+        if (url.toString() !== window.location.href) {
+            window.history.replaceState(window.history.state, '', url.toString())
+        }
+    }
+
     /** @returns {void} */
     function writeStateToUrl() {
+        if (urlNamespace !== null) {
+            writeNamespacedStateToUrl()
+
+            return
+        }
+
         const url = new URL(window.location.href)
         const params = url.searchParams
 
@@ -247,13 +402,57 @@ export function useTableState(initialState = {}, options = {}) {
             { deep: true, flush: 'sync' },
         )
 
-        popStateListener = () => applyUrlState()
-        window.addEventListener('popstate', popStateListener)
+        if (urlNamespace === null) {
+            popStateListener = () => applyUrlState()
+            window.addEventListener('popstate', popStateListener)
+        } else {
+            namespaceOwners.set(urlNamespace, (namespaceOwners.get(urlNamespace) ?? 0) + 1)
+            writeStateToUrl()
+        }
     }
+
+    /**
+     * Takes this state's parameters out of the URL: the manager's tab was
+     * left. Not when another state now writes under the same key (a morph
+     * replaced the island), and not on another page - a navigation changed
+     * the URL before this ran, and the parameters there are that page's.
+     *
+     * @returns {void}
+     */
+    function releaseNamespace() {
+        const owners = (namespaceOwners.get(urlNamespace) ?? 1) - 1
+
+        if (owners > 0) {
+            namespaceOwners.set(urlNamespace, owners)
+
+            return
+        }
+
+        namespaceOwners.delete(urlNamespace)
+
+        if (window.location.pathname !== mountedPathname) {
+            return
+        }
+
+        const url = new URL(window.location.href)
+
+        deleteNamespacedParams(url.searchParams, urlNamespace)
+
+        if (url.toString() !== window.location.href) {
+            window.history.replaceState(window.history.state, '', url.toString())
+        }
+    }
+
+    let isDestroyed = false
 
     /** @returns {void} */
     function destroy() {
         stopUrlWatcher?.()
+
+        if (urlNamespace !== null && ! isDestroyed) {
+            isDestroyed = true
+            releaseNamespace()
+        }
 
         if (popStateListener) {
             window.removeEventListener('popstate', popStateListener)
@@ -272,6 +471,7 @@ export function useTableState(initialState = {}, options = {}) {
         cursor,
         tab,
         properties,
+        wasRestoredFromUrl,
         destroy,
     }
 }
