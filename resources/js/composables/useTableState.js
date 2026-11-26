@@ -189,7 +189,7 @@ function readStateFromUrl(params = new URLSearchParams(window.location.search)) 
  * from the cached component as it re-initializes it.
  *
  * @param {TableStateInit} [initialState] Server-provided state from the island config.
- * @param {{ urlSync?: boolean, urlNamespace?: ?string, defaultPerPage?: ?(number|'all'), isRestored?: boolean }} [options] Set `urlSync: false` to disable URL reads/writes entirely. `defaultPerPage` is the size a namespaced URL leaves unsaid.
+ * @param {{ urlSync?: boolean, urlNamespace?: ?string, defaultPerPage?: ?(number|'all'), isRestored?: boolean, hasLivewireFilters?: boolean }} [options] Set `urlSync: false` to disable URL reads/writes entirely. `defaultPerPage` is the size a namespaced URL leaves unsaid.
  * @returns {TableState}
  */
 export function useTableState(initialState = {}, options = {}) {
@@ -210,7 +210,12 @@ export function useTableState(initialState = {}, options = {}) {
             sort: restored.sort ?? null,
             search: restored.search ?? '',
             columnSearches: restored.columnSearches ?? {},
-            filters: restored.filters ?? {},
+            // Livewire owns the filters and its cached component holds them
+            // as they were left (`hasLivewireFilters`: the caller read them
+            // into `initialState`). A filter that came from a default or the
+            // session was never in the URL, so an absent parameter says
+            // nothing. Without that read, the URL, then the inlined state.
+            filters: options.hasLivewireFilters ? undefined : (restored.filters ?? undefined),
             page: restored.page ?? 1,
             perPage: restored.perPage ?? (urlNamespace === null ? undefined : defaultPerPage ?? undefined),
             cursor: urlNamespace === null ? restored.cursor : undefined,

@@ -113,6 +113,50 @@ function wireFor(livewireId) {
 }
 
 /**
+ * What the host component holds right now of the state Livewire owns - the
+ * filters, the active tab and the page's own query-shaping properties - or
+ * null when the component cannot be read.
+ *
+ * An island restored from a `wire:navigate` snapshot needs it: its inlined
+ * state is the first render's, while Livewire keeps `wire:snapshot` current,
+ * so the cached component holds these as they were left.
+ *
+ * @param {string} livewireId
+ * @param {string[]} [propertyNames]
+ * @returns {?{ filters: Object<string, *>, tab: ?string, properties: Object<string, *> }}
+ */
+export function readLivewireOwnedState(livewireId, propertyNames = []) {
+    const wire = wireFor(livewireId)
+
+    if (! wire || typeof wire.get !== 'function') {
+        return null
+    }
+
+    try {
+        const filters = wire.get('tableFilters')
+
+        if (filters === undefined) {
+            return null
+        }
+
+        const tab = wire.get('activeTab')
+        const properties = {}
+
+        for (const name of propertyNames) {
+            properties[name] = wire.get(name) ?? null
+        }
+
+        return {
+            filters: JSON.parse(JSON.stringify(filters ?? {})),
+            tab: tab === null || tab === undefined || tab === '' ? null : String(tab),
+            properties: JSON.parse(JSON.stringify(properties)),
+        }
+    } catch {
+        return null
+    }
+}
+
+/**
  * @typedef {{ isTracking: boolean, selected: Iterable<string>, deselected: Iterable<string> }} TableSelection
  */
 

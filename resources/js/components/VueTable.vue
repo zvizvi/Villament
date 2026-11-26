@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
 import { getCoreRowModel, useVueTable } from '@tanstack/vue-table'
 import { useTableState } from '../composables/useTableState.js'
+import { readLivewireOwnedState } from '../composables/useLivewireBridge.js'
 import { pendingIds, usePendingCalls } from '../composables/usePendingCalls.js'
 import { LOADING_INDICATORS_KEY, PENDING_CALLS_KEY } from '../support/injectionKeys.js'
 import { useTableData } from '../composables/useTableData.js'
@@ -282,11 +283,23 @@ const isSingleSelect = computed(() => selectionConfig.value.maxRecords === 1)
 // `urlSync: false` for a relation manager, whose stock table keeps its state
 // out of the URL — which it shares with its host page and that page's other
 // managers. Absent (older configs) means on.
-const state = useTableState(props.config.state ?? {}, {
+//
+// A restored island (the back button after `wire:navigate`) starts from what
+// the cached Livewire component holds of the state Livewire owns - filters,
+// tab, the page's own properties - not from the inlined state, which is the
+// first render's.
+const livewireOwnedState = props.isRestored
+    ? readLivewireOwnedState(props.config.livewireId, Object.keys(props.config.state?.properties ?? {}))
+    : null
+
+const initialState = { ...(props.config.state ?? {}), ...(livewireOwnedState ?? {}) }
+
+const state = useTableState(initialState, {
     urlSync: props.config.urlSync ?? true,
     urlNamespace: props.config.urlNamespace ?? null,
     defaultPerPage: props.config.schema?.pagination?.defaultPerPage ?? null,
     isRestored: props.isRestored,
+    hasLivewireFilters: livewireOwnedState !== null,
 })
 
 /**
@@ -383,9 +396,11 @@ watch(isBusy, (loading) => {
 const bridge = useLivewireBridge({
     livewireId: props.config.livewireId,
     isConnected: () => props.rootElement?.isConnected ?? true,
-    initialFilters: props.config.state?.filters ?? {},
-    initialTab: props.config.state?.tab ?? null,
-    initialProperties: props.config.state?.properties ?? {},
+    // What the island starts from, so the first commit is not read as a
+    // change: the restored filters where it was restored.
+    initialFilters: props.isRestored ? JSON.parse(JSON.stringify(state.filters.value ?? {})) : (initialState.filters ?? {}),
+    initialTab: initialState.tab ?? null,
+    initialProperties: initialState.properties ?? {},
     onPropertiesChanged: (properties) => {
         // Livewire owns these; the properties watcher in useTableData resets
         // the page and refetches.
