@@ -346,6 +346,38 @@ describe('useTableState', () => {
             expect(params().get('products[page]')).toBe('5')
         })
 
+        it('reads its key when the page came back from a navigate snapshot, the inlined state being the first render\'s', () => {
+            setUrl('/admin/sales/1?relation=products&products[sort]=name:desc&products[page]=3&products[filters][status][value]=active&sort=host')
+
+            const state = makeNamespaced({ sort: null, page: 1, perPage: 10, filters: {} }, { isRestored: true })
+
+            expect(state.wasRestoredFromUrl).toBe(true)
+            expect(state.sort.value).toBe('name:desc')
+            expect(state.page.value).toBe(3)
+            expect(state.filters.value).toEqual({ status: { value: 'active' } })
+            expect(params().get('products[page]')).toBe('3')
+            expect(params().get('sort')).toBe('host')
+        })
+
+        it('falls back to the table\'s defaults, not the inlined state, for what a restored URL does not name', () => {
+            // First served for page 2 sorted; the person then went back to the
+            // defaults, left, and pressed back.
+            setUrl('/admin/sales/1?relation=products')
+
+            const state = makeNamespaced({ sort: 'name:desc', page: 2, perPage: 25, search: 'jane' }, { isRestored: true })
+
+            expect(state.sort.value).toBeNull()
+            expect(state.page.value).toBe(1)
+            expect(state.perPage.value).toBe(10)
+            expect(state.search.value).toBe('')
+        })
+
+        it('is not restored from the URL on an ordinary mount', () => {
+            setUrl('/admin/sales/1?products[page]=3')
+
+            expect(makeNamespaced({ page: 1, perPage: 10 }).wasRestoredFromUrl).toBe(false)
+        })
+
         it('does not follow popstate', () => {
             setUrl('/admin/sales/1')
 

@@ -43,6 +43,15 @@ const props = defineProps({
         type: Object,
         default: null,
     },
+    /**
+     * The island came back inside a `wire:navigate` snapshot (the back
+     * button): no request was made, so its config is the one the page was
+     * first served with.
+     */
+    isRestored: {
+        type: Boolean,
+        default: false,
+    },
 })
 
 const schema = props.config.schema
@@ -277,6 +286,7 @@ const state = useTableState(props.config.state ?? {}, {
     urlSync: props.config.urlSync ?? true,
     urlNamespace: props.config.urlNamespace ?? null,
     defaultPerPage: props.config.schema?.pagination?.defaultPerPage ?? null,
+    isRestored: props.isRestored,
 })
 
 /**
@@ -462,6 +472,15 @@ function adoptNativeSlots() {
 }
 
 onMounted(adoptNativeSlots)
+
+// A restored island that keeps its state under a URL key took that state from
+// the URL (the server never saw this visit), while the rows inlined in its
+// config are the first render's: fetch the rows the state names.
+onMounted(() => {
+    if (state.wasRestoredFromUrl) {
+        fetchNow()
+    }
+})
 
 onBeforeUnmount(() => {
     clearTimeout(loadingSkeletonTimer)

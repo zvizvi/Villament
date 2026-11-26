@@ -855,6 +855,38 @@ test('relation manager with URL state: a sort survives a reload under its own ke
     assert.deepEqual(await notes(), ['alpha', 'charlie', 'delta'], 'and the tab starts over when it comes back')
 })
 
+test('relation manager with URL state: the back button after wire:navigate returns to the sorted rows', async (page) => {
+    const firstRow = (text) => page.waitForFunction((expected) => document.querySelector('[data-villament] tbody tr.fi-ta-row:not(.fi-ta-row-not-reorderable)')?.innerText.includes(expected), text)
+
+    await page.goto(`${baseUrl}/admin/team-relations/1/edit`)
+    await settle(page)
+    await page.getByRole('tab', { name: 'Notes' }).click()
+    await settle(page)
+    await firstRow('alpha')
+
+    const sortButton = () => page.locator('[data-villament] .fi-ta-header-cell-sort-btn').first()
+
+    await press(sortButton())
+    await page.waitForFunction(() => new URL(window.location.href).searchParams.get('notes[sort]') === 'body:asc')
+    await islandTexts(page)
+    await press(sortButton())
+    await firstRow('delta')
+
+    // Away without a page load, and back: Livewire paints its snapshot of
+    // the page, whose island config is the first render's.
+    await page.evaluate((url) => window.Livewire.navigate(url), `${baseUrl}/admin/team-relations`)
+    await page.waitForURL(/team-relations$/)
+    await settle(page)
+    await page.goBack()
+    await page.waitForURL(/edit/)
+    await settle(page)
+    await firstRow('delta')
+
+    assert.equal(new URL(page.url()).searchParams.get('notes[sort]'), 'body:desc', 'the key is still in the URL')
+    assert.deepEqual((await islandTexts(page)).map((text) => text.split('\t')[0].trim()), ['delta', 'charlie', 'alpha'])
+    assert.equal(await page.locator('[data-villament] [data-villament-mount]').count(), 1, 'one island, no stale copy')
+})
+
 test('ManageRelatedRecords: the island lists the owner\'s notes and keeps its state in the URL', async (page) => {
     await page.goto(`${baseUrl}/admin/team-relations/1/notes`)
     await settle(page)

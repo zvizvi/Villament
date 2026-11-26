@@ -67,12 +67,39 @@ function deleteNamespacedParams(params, namespace) {
 }
 
 /**
- * Reads table state out of the current URL's query string.
+ * The parameters of a namespace, under their plain names: `products[sort]`
+ * comes back as `sort`, `products[filters][status][value]` as
+ * `filters[status][value]`.
  *
+ * @param {string} namespace
+ * @returns {URLSearchParams}
+ */
+function namespacedParams(namespace) {
+    const own = new URLSearchParams()
+    const prefix = `${namespace}[`
+
+    for (const [key, value] of new URLSearchParams(window.location.search).entries()) {
+        if (! key.startsWith(prefix)) {
+            continue
+        }
+
+        const close = key.indexOf(']', prefix.length)
+
+        if (close !== -1) {
+            own.append(key.slice(prefix.length, close) + key.slice(close + 1), value)
+        }
+    }
+
+    return own
+}
+
+/**
+ * Reads table state out of a query string - the current URL's by default.
+ *
+ * @param {URLSearchParams} [params]
  * @returns {TableStateInit} Only the keys present in the URL are set.
  */
-function readStateFromUrl() {
-    const params = new URLSearchParams(window.location.search)
+function readStateFromUrl(params = new URLSearchParams(window.location.search)) {
 
     /** @type {TableStateInit} */
     const state = {}
@@ -152,8 +179,14 @@ function readStateFromUrl() {
  * of the URL when the state is destroyed on the page it was created on - the
  * manager's tab was left.
  *
+ * The one time a namespaced state READS the URL is `isRestored`: the page came
+ * back from a `wire:navigate` snapshot, no server mounted anything, and the
+ * inlined state is the first render's. What the URL does not name is then the
+ * table's default, not the inlined value - the first render may itself have
+ * been served for a URL that has since been cleared.
+ *
  * @param {TableStateInit} [initialState] Server-provided state from the island config.
- * @param {{ urlSync?: boolean, urlNamespace?: ?string, defaultPerPage?: ?(number|'all') }} [options] Set `urlSync: false` to disable URL reads/writes entirely. `defaultPerPage` is the size a namespaced URL leaves unsaid.
+ * @param {{ urlSync?: boolean, urlNamespace?: ?string, defaultPerPage?: ?(number|'all'), isRestored?: boolean }} [options] Set `urlSync: false` to disable URL reads/writes entirely. `defaultPerPage` is the size a namespaced URL leaves unsaid.
  * @returns {TableState}
  */
 export function useTableState(initialState = {}, options = {}) {
@@ -161,7 +194,22 @@ export function useTableState(initialState = {}, options = {}) {
     const urlNamespace = urlSync && options.urlNamespace ? String(options.urlNamespace) : null
     const defaultPerPage = options.defaultPerPage ?? null
 
-    const urlState = urlSync && urlNamespace === null ? readStateFromUrl() : {}
+    const wasRestoredFromUrl = urlNamespace !== null && options.isRestored === true
+
+    let urlState = urlSync && urlNamespace === null ? readStateFromUrl() : {}
+
+    if (wasRestoredFromUrl) {
+        const restored = readStateFromUrl(namespacedParams(urlNamespace))
+
+        urlState = {
+            sort: restored.sort ?? null,
+            search: restored.search ?? '',
+            columnSearches: restored.columnSearches ?? {},
+            filters: restored.filters ?? {},
+            page: restored.page ?? 1,
+            perPage: restored.perPage ?? defaultPerPage ?? undefined,
+        }
+    }
 
     const sort = ref(urlState.sort !== undefined ? urlState.sort : (initialState.sort ?? null))
     // Grouping is the ONE key where the SERVER wins over the URL, because it is
@@ -423,6 +471,7 @@ export function useTableState(initialState = {}, options = {}) {
         cursor,
         tab,
         properties,
+        wasRestoredFromUrl,
         destroy,
     }
 }

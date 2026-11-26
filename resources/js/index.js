@@ -85,8 +85,9 @@ function scan() {
         }
 
         // Never mounted here, yet already holding a render: a copy that came
-        // back inside a Livewire navigate snapshot.
-        clearStaleRender(element)
+        // back inside a Livewire navigate snapshot. Its config is the one the
+        // page was first served with, older than whatever was done since.
+        const isRestored = clearStaleRender(element)
 
         // A new island in the place of one still mounted (a tab whose table
         // differs: the morph keys the island by its schema) - the old one
@@ -106,7 +107,7 @@ function scan() {
         mountPoint.setAttribute('data-villament-mount', '')
         element.appendChild(mountPoint)
 
-        const app = createApp(VueTable, { config, rootElement: element })
+        const app = createApp(VueTable, { config, rootElement: element, isRestored })
         app.mount(mountPoint)
 
         mountedIslands.set(element, app)
