@@ -473,9 +473,9 @@ function adoptNativeSlots() {
 
 onMounted(adoptNativeSlots)
 
-// A restored island that keeps its state under a URL key took that state from
-// the URL (the server never saw this visit), while the rows inlined in its
-// config are the first render's: fetch the rows the state names.
+// A restored island took its state from the URL (the server never saw this
+// visit), while the rows inlined in its config are the first render's: fetch
+// the rows the state names.
 onMounted(() => {
     if (state.wasRestoredFromUrl) {
         fetchNow()
