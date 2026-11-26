@@ -15,6 +15,7 @@ use Filament\Schemas\Components\RenderHook;
 use Filament\Schemas\Schema;
 use Filament\View\PanelsRenderHook;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Http\Request;
 use LogicException;
 use Zvizvi\Villament\Schemas\VillamentIsland;
 use Zvizvi\Villament\Support\RelationTableToken;
@@ -35,6 +36,18 @@ use Zvizvi\Villament\Support\RelationTableToken;
 trait HasVillamentRelationTable
 {
     use InteractsWithVillamentIsland;
+
+    /**
+     * True only in the request that mounted the component (a protected
+     * property is not carried between requests): the one moment the URL's
+     * state is applied to a relation manager.
+     */
+    protected bool $isVillamentMounting = false;
+
+    public function mountHasVillamentRelationTable(): void
+    {
+        $this->isVillamentMounting = true;
+    }
 
     public function content(Schema $schema): Schema
     {
@@ -65,12 +78,62 @@ trait HasVillamentRelationTable
 
     /**
      * A ManageRelatedRecords page keeps its table state in the URL (`#[Url]`,
-     * as a List page does). A relation manager does not: it shares the URL
-     * with its host page and that page's other managers.
+     * as a List page does). A relation manager does not, as in stock, unless
+     * `villament.relation_manager_url_state` turns it on - and then under a
+     * key of its own ({@see getVillamentUrlNamespace()}), since it shares the
+     * URL with its host page and that page's other managers.
      */
     protected function shouldSyncVillamentStateWithUrl(): bool
     {
-        return $this instanceof ManageRelatedRecords;
+        return $this instanceof ManageRelatedRecords
+            || (bool) config('villament.relation_manager_url_state', false);
+    }
+
+    /**
+     * A relation manager's parameters are nested under its relationship's
+     * name (`products[sort]`, `products[page]`). Two managers of one
+     * relationship drawn on the same page at once need a name each.
+     */
+    protected function getVillamentUrlNamespace(): ?string
+    {
+        return $this instanceof ManageRelatedRecords ? null : static::getRelationshipName();
+    }
+
+    /**
+     * A relation manager reads its state once, as it mounts, from under its
+     * own key. It usually mounts in a Livewire request (a lazy load, or the
+     * request that opened its tab), where the page's query string is the
+     * referer's - the place Livewire itself reads `#[Url]` properties from
+     * there.
+     */
+    protected function getVillamentUrlStateRequest(): ?Request
+    {
+        $namespace = $this->getVillamentUrlNamespace();
+
+        if ($namespace === null) {
+            $request = request();
+
+            return ($request->isMethod('GET') && $request->query() !== []) ? $request : null;
+        }
+
+        if (! $this->isVillamentMounting) {
+            return null;
+        }
+
+        $query = request()->query();
+
+        if (app('livewire')->isLivewireRequest()) {
+            $query = [];
+            parse_str((string) parse_url((string) request()->header('Referer'), PHP_URL_QUERY), $query);
+        }
+
+        $state = $query[$namespace] ?? null;
+
+        if (! is_array($state) || $state === []) {
+            return null;
+        }
+
+        return Request::create('/', 'GET', $state);
     }
 
     /**

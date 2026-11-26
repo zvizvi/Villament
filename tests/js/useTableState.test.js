@@ -236,4 +236,125 @@ describe('useTableState', () => {
         fresh.destroy()
         state.destroy()
     })
+
+    describe('with a URL namespace (a relation manager)', () => {
+        /**
+         * @param {object} [initialState]
+         * @param {object} [options]
+         * @returns {ReturnType<typeof useTableState>}
+         */
+        function makeNamespaced(initialState = {}, options = {}) {
+            const state = useTableState(initialState, { urlNamespace: 'products', defaultPerPage: 10, ...options })
+            instances.push(state)
+
+            return state
+        }
+
+        /** @returns {URLSearchParams} */
+        function params() {
+            return new URLSearchParams(window.location.search)
+        }
+
+        it('nests every parameter under the namespace and leaves the host page\'s alone', () => {
+            setUrl('/admin/sales/1?relation=products&sort=host')
+
+            const state = makeNamespaced({ perPage: 10, page: 1 })
+
+            state.sort.value = 'name:desc'
+            state.search.value = 'jane'
+            state.columnSearches.value = { name: 'co' }
+            state.filters.value = { status: { values: ['a', 'b'] } }
+            state.page.value = 3
+            state.perPage.value = 25
+
+            expect(params().get('products[sort]')).toBe('name:desc')
+            expect(params().get('products[search]')).toBe('jane')
+            expect(params().get('products[columnSearches][name]')).toBe('co')
+            expect(params().get('products[filters][status][values][1]')).toBe('b')
+            expect(params().get('products[page]')).toBe('3')
+            expect(params().get('products[perPage]')).toBe('25')
+            expect(params().get('relation')).toBe('products')
+            expect(params().get('sort')).toBe('host')
+        })
+
+        it('never reads the URL: the state the server inlined stands', () => {
+            setUrl('/admin/sales/1?products[sort]=name:desc&products[page]=4&sort=host&page=9')
+
+            const state = makeNamespaced({ sort: 'price:asc', page: 2, perPage: 10 })
+
+            expect(state.sort.value).toBe('price:asc')
+            expect(state.page.value).toBe(2)
+        })
+
+        it('brings the URL in line with the inlined state at start', () => {
+            // A stale link: the server refused the sort and applied page 2.
+            setUrl('/admin/sales/1?relation=products&products[sort]=gone:asc&products[page]=2')
+
+            makeNamespaced({ sort: null, page: 2, perPage: 10 })
+
+            expect(params().has('products[sort]')).toBe(false)
+            expect(params().get('products[page]')).toBe('2')
+            expect(params().get('relation')).toBe('products')
+        })
+
+        it('writes nothing for an untouched table, and keeps a chosen page size across a reload', () => {
+            setUrl('/admin/sales/1?relation=products')
+
+            makeNamespaced({ sort: null, page: 1, perPage: 10, grouping: 'status:asc' })
+
+            expect(window.location.search).toBe('?relation=products')
+
+            // After a reload the server inlines the size it applied from the URL.
+            setUrl('/admin/sales/1?products[perPage]=25')
+            makeNamespaced({ perPage: 25 })
+
+            expect(params().get('products[perPage]')).toBe('25')
+        })
+
+        it('takes its parameters out of the URL when it is destroyed on the same page', () => {
+            setUrl('/admin/sales/1?relation=orders')
+
+            const state = makeNamespaced({ sort: 'name:asc', page: 3, perPage: 10 })
+            expect(params().get('products[page]')).toBe('3')
+
+            state.destroy()
+            state.destroy()
+
+            expect(window.location.search).toBe('?relation=orders')
+        })
+
+        it('keeps them when a replacing state of the same namespace is already mounted', () => {
+            setUrl('/admin/sales/1')
+
+            const replaced = makeNamespaced({ page: 3, perPage: 10 })
+            makeNamespaced({ page: 3, perPage: 10 })
+
+            replaced.destroy()
+
+            expect(params().get('products[page]')).toBe('3')
+        })
+
+        it('leaves the URL of another page alone', () => {
+            setUrl('/admin/sales/1')
+
+            const state = makeNamespaced({ page: 3, perPage: 10 })
+
+            // A navigation changed the URL before the island was torn down.
+            setUrl('/admin/sales/2?products[page]=5')
+            state.destroy()
+
+            expect(params().get('products[page]')).toBe('5')
+        })
+
+        it('does not follow popstate', () => {
+            setUrl('/admin/sales/1')
+
+            const state = makeNamespaced({ page: 1, perPage: 10 })
+
+            setUrl('/admin/sales/1?products[page]=7')
+            window.dispatchEvent(new PopStateEvent('popstate'))
+
+            expect(state.page.value).toBe(1)
+        })
+    })
 })

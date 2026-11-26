@@ -19,6 +19,17 @@ return [
     'cache_ttl' => 0,
 
     /*
+     * Keep a relation manager's table state (sort, search, filters, page,
+     * per page) in the query string, as a List page does. Off by default,
+     * as in stock Filament. The parameters are nested under the
+     * relationship's name (`products[sort]`), so the managers of one page
+     * do not collide, and are taken out of the URL when the manager's tab
+     * is left. A single manager can decide for itself by overriding
+     * `shouldSyncVillamentStateWithUrl()`.
+     */
+    'relation_manager_url_state' => false,
+
+    /*
      * Custom column serializers, PREPENDED to the built-in chain
      * (text/badge, icon, image, html fallback). Each class must implement
      * \Zvizvi\Villament\Support\ColumnSerializers\ColumnSerializer.

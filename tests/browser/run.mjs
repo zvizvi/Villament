@@ -806,6 +806,55 @@ test('relation manager: an island mounts when its tab opens (lazily loaded) and 
     assert.equal(await page.locator('[data-villament] [data-villament-mount]').count(), 1, 'one island: the closed tab\'s app was torn down')
 })
 
+test('relation manager with URL state: a sort survives a reload under its own key, and leaves the URL with its tab', async (page) => {
+    const notes = async () => (await islandTexts(page)).map((text) => text.split('\t')[0].trim())
+    const ownParams = () => [...new URL(page.url()).searchParams.keys()].filter((key) => key.startsWith('notes['))
+    const openNotes = async () => {
+        await settle(page)
+        await page.waitForFunction(() => [...document.querySelectorAll('[data-villament] tbody tr.fi-ta-row:not(.fi-ta-row-not-reorderable)')].some((row) => row.innerText.includes('charlie')))
+    }
+
+    await page.goto(`${baseUrl}/admin/team-relations/1/edit`)
+    await settle(page)
+    await page.getByRole('tab', { name: 'Notes' }).click()
+    await openNotes()
+
+    assert.deepEqual(ownParams(), [], 'opening the tab writes nothing')
+
+    const sortButton = () => page.locator('[data-villament] .fi-ta-header-cell-sort-btn').first()
+
+    // The default sort is body ascending; two clicks make it descending.
+    await press(sortButton())
+    await page.waitForFunction(() => new URL(window.location.href).searchParams.get('notes[sort]') === 'body:asc')
+    await islandTexts(page)
+    await press(sortButton())
+    await page.waitForFunction(() => new URL(window.location.href).searchParams.get('notes[sort]') === 'body:desc')
+
+    await page.waitForFunction(() => document.querySelector('[data-villament] tbody tr.fi-ta-row:not(.fi-ta-row-not-reorderable)')?.innerText.includes('delta'))
+
+    assert.deepEqual(await notes(), ['delta', 'charlie', 'alpha'], 'sorted descending')
+    assert.ok(new URL(page.url()).searchParams.has('relation'), 'the host page\'s own tab parameter is still there')
+
+    // The manager is lazy: it mounts in a Livewire request and reads the
+    // page's query string off the referer.
+    await page.reload()
+    await openNotes()
+
+    assert.deepEqual(await notes(), ['delta', 'charlie', 'alpha'], 'the reload paints the sorted page')
+    assert.equal(new URL(page.url()).searchParams.get('notes[sort]'), 'body:desc')
+
+    await page.getByRole('tab', { name: 'Members', exact: true }).click()
+    await settle(page)
+    await page.waitForFunction(() => [...document.querySelectorAll('[data-villament] tbody tr.fi-ta-row:not(.fi-ta-row-not-reorderable)')].some((row) => row.innerText.includes('Member')))
+
+    assert.deepEqual(ownParams(), [], 'leaving the tab takes its parameters out of the URL')
+
+    await page.getByRole('tab', { name: 'Notes' }).click()
+    await openNotes()
+
+    assert.deepEqual(await notes(), ['alpha', 'charlie', 'delta'], 'and the tab starts over when it comes back')
+})
+
 test('ManageRelatedRecords: the island lists the owner\'s notes and keeps its state in the URL', async (page) => {
     await page.goto(`${baseUrl}/admin/team-relations/1/notes`)
     await settle(page)

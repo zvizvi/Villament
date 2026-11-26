@@ -7,6 +7,7 @@ namespace Zvizvi\Villament\Concerns;
 use Closure;
 use Filament\Resources\Resource;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Zvizvi\Villament\Support\ActionPayloadCompactor;
 use Zvizvi\Villament\Support\FilterIndicatorSerializer;
@@ -46,6 +47,34 @@ trait InteractsWithVillamentIsland
     protected function shouldSyncVillamentStateWithUrl(): bool
     {
         return true;
+    }
+
+    /**
+     * The key the island's query-string parameters are nested under, or null
+     * for the plain names stock's `#[Url]` aliases use (`sort`, `page`, ...).
+     *
+     * A host that shares its URL with other tables names one, and its state
+     * is then written as `{namespace}[sort]`, `{namespace}[page]`, and so on.
+     */
+    protected function getVillamentUrlNamespace(): ?string
+    {
+        return null;
+    }
+
+    /**
+     * The request whose query string holds this island's state on the way in,
+     * or null when there is none to apply: a full page load carrying a query
+     * string.
+     */
+    protected function getVillamentUrlStateRequest(): ?Request
+    {
+        $request = request();
+
+        if (! $request->isMethod('GET') || $request->query() === []) {
+            return null;
+        }
+
+        return $request;
     }
 
     /**
@@ -112,9 +141,9 @@ trait InteractsWithVillamentIsland
      */
     protected function applyVillamentTableUrlState(): void
     {
-        $request = request();
+        $request = $this->getVillamentUrlStateRequest();
 
-        if (! $request->isMethod('GET') || $request->query() === []) {
+        if ($request === null) {
             return;
         }
 
@@ -174,6 +203,11 @@ trait InteractsWithVillamentIsland
             // (a relation manager has no `#[Url]` properties): there the URL
             // would also be shared with the host page and its other tables.
             'urlSync' => $syncsWithUrl,
+            // Set where the URL is shared with other tables: the island then
+            // nests its parameters under this key, never reads them (the
+            // state inlined below is what the server made of them), and takes
+            // them out of the URL when it leaves the page.
+            'urlNamespace' => $syncsWithUrl ? $this->getVillamentUrlNamespace() : null,
             'livewireId' => $this->getId(),
             'schemaVersion' => $schemaSerializer->version($schema),
             // Not part of `schema`: this is a page-level rendering opt-in, not

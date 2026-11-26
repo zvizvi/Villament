@@ -273,7 +273,11 @@ const isSingleSelect = computed(() => selectionConfig.value.maxRecords === 1)
 // `urlSync: false` for a relation manager, whose stock table keeps its state
 // out of the URL — which it shares with its host page and that page's other
 // managers. Absent (older configs) means on.
-const state = useTableState(props.config.state ?? {}, { urlSync: props.config.urlSync ?? true })
+const state = useTableState(props.config.state ?? {}, {
+    urlSync: props.config.urlSync ?? true,
+    urlNamespace: props.config.urlNamespace ?? null,
+    defaultPerPage: props.config.schema?.pagination?.defaultPerPage ?? null,
+})
 
 /**
  * Filament column manager state (`state.columns`, session-hydrated
