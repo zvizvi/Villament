@@ -179,14 +179,17 @@ function readStateFromUrl(params = new URLSearchParams(window.location.search)) 
  * of the URL when the state is destroyed on the page it was created on - the
  * manager's tab was left.
  *
- * The one time a namespaced state READS the URL is `isRestored`: the page came
- * back from a `wire:navigate` snapshot, no server mounted anything, and the
- * inlined state is the first render's. What the URL does not name is then the
- * table's default, not the inlined value - the first render may itself have
- * been served for a URL that has since been cleared.
+ * `isRestored`: the page came back from a `wire:navigate` snapshot (the back
+ * button), no server mounted anything, and the inlined state is the first
+ * render's. The state is then read from the URL in both modes - the one time
+ * a namespaced state reads it - and what the URL does not name is the table's
+ * default, not the inlined value: the first render may itself have been
+ * served for a URL that has since been cleared. Without a namespace the URL
+ * is also written back, since Livewire rewrites its own `#[Url]` parameters
+ * from the cached component as it re-initializes it.
  *
  * @param {TableStateInit} [initialState] Server-provided state from the island config.
- * @param {{ urlSync?: boolean, urlNamespace?: ?string, defaultPerPage?: ?(number|'all'), isRestored?: boolean }} [options] Set `urlSync: false` to disable URL reads/writes entirely. `defaultPerPage` is the size a namespaced URL leaves unsaid.
+ * @param {{ urlSync?: boolean, urlNamespace?: ?string, defaultPerPage?: ?(number|'all'), isRestored?: boolean, hasLivewireFilters?: boolean }} [options] Set `urlSync: false` to disable URL reads/writes entirely. `defaultPerPage` is the size a namespaced URL leaves unsaid.
  * @returns {TableState}
  */
 export function useTableState(initialState = {}, options = {}) {
@@ -194,20 +197,28 @@ export function useTableState(initialState = {}, options = {}) {
     const urlNamespace = urlSync && options.urlNamespace ? String(options.urlNamespace) : null
     const defaultPerPage = options.defaultPerPage ?? null
 
-    const wasRestoredFromUrl = urlNamespace !== null && options.isRestored === true
+    const wasRestoredFromUrl = urlSync && options.isRestored === true
 
     let urlState = urlSync && urlNamespace === null ? readStateFromUrl() : {}
 
     if (wasRestoredFromUrl) {
-        const restored = readStateFromUrl(namespacedParams(urlNamespace))
+        const restored = urlNamespace === null ? urlState : readStateFromUrl(namespacedParams(urlNamespace))
 
+        // What the URL does not name is the table's default, as on
+        // `popstate` - not the inlined value, which is the first render's.
         urlState = {
             sort: restored.sort ?? null,
             search: restored.search ?? '',
             columnSearches: restored.columnSearches ?? {},
-            filters: restored.filters ?? {},
+            // Livewire owns the filters and its cached component holds them
+            // as they were left (`hasLivewireFilters`: the caller read them
+            // into `initialState`). A filter that came from a default or the
+            // session was never in the URL, so an absent parameter says
+            // nothing. Without that read, the URL, then the inlined state.
+            filters: options.hasLivewireFilters ? undefined : (restored.filters ?? undefined),
             page: restored.page ?? 1,
-            perPage: restored.perPage ?? defaultPerPage ?? undefined,
+            perPage: restored.perPage ?? (urlNamespace === null ? undefined : defaultPerPage ?? undefined),
+            cursor: urlNamespace === null ? restored.cursor : undefined,
         }
     }
 
@@ -251,6 +262,7 @@ export function useTableState(initialState = {}, options = {}) {
     const properties = ref(JSON.parse(JSON.stringify(initialState.properties ?? {})))
 
     let isApplyingUrlState = false
+    let isDestroyed = false
 
     const mountedPathname = window.location.pathname
 
@@ -409,6 +421,24 @@ export function useTableState(initialState = {}, options = {}) {
             namespaceOwners.set(urlNamespace, (namespaceOwners.get(urlNamespace) ?? 0) + 1)
             writeStateToUrl()
         }
+
+        if (wasRestoredFromUrl && urlNamespace === null) {
+            // Livewire re-initializes the restored page's component from its
+            // cached snapshot, where the `#[Url]` properties the island moved
+            // by itself (sort, search, the page) still hold the first
+            // render's values - and writes THOSE to the URL, taking out what
+            // the island had put there. Its write is batched into a
+            // microtask, queued before the island mounts or right after, so
+            // the island's state is written back once after each.
+            const reassert = () => {
+                if (! isDestroyed) {
+                    writeStateToUrl()
+                }
+            }
+
+            queueMicrotask(reassert)
+            setTimeout(reassert, 0)
+        }
     }
 
     /**
@@ -443,16 +473,16 @@ export function useTableState(initialState = {}, options = {}) {
         }
     }
 
-    let isDestroyed = false
 
     /** @returns {void} */
     function destroy() {
         stopUrlWatcher?.()
 
         if (urlNamespace !== null && ! isDestroyed) {
-            isDestroyed = true
             releaseNamespace()
         }
+
+        isDestroyed = true
 
         if (popStateListener) {
             window.removeEventListener('popstate', popStateListener)

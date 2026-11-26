@@ -237,6 +237,46 @@ describe('useTableState', () => {
         state.destroy()
     })
 
+    describe('restored from a wire:navigate snapshot', () => {
+        it('takes the table\'s defaults, not the inlined state, for what the URL does not name', () => {
+            setUrl('/admin/users?sort=name:desc')
+
+            const state = useTableState({ sort: null, page: 2, search: 'jane', perPage: 25 }, { isRestored: true })
+            instances.push(state)
+
+            expect(state.wasRestoredFromUrl).toBe(true)
+            expect(state.sort.value).toBe('name:desc')
+            expect(state.page.value).toBe(1)
+            expect(state.search.value).toBe('')
+            expect(state.perPage.value).toBe(25)
+        })
+
+        it('writes its state back after Livewire rewrote the URL from the cached component', async () => {
+            setUrl('/admin/users?sort=name:desc&page=3')
+
+            const state = useTableState({ sort: null, page: 1, perPage: 10 }, { isRestored: true })
+            instances.push(state)
+
+            // Livewire's batched write, taking out what its stale component does not hold.
+            setUrl('/admin/users?perPage=10')
+
+            await new Promise((resolve) => setTimeout(resolve, 5))
+
+            const params = new URLSearchParams(window.location.search)
+            expect(params.get('sort')).toBe('name:desc')
+            expect(params.get('page')).toBe('3')
+        })
+
+        it('is an ordinary mount otherwise: the inlined state stands where the URL is silent', () => {
+            setUrl('/admin/users?sort=name:desc')
+
+            const state = makeState({ sort: null, page: 2, perPage: 25 })
+
+            expect(state.wasRestoredFromUrl).toBe(false)
+            expect(state.page.value).toBe(2)
+        })
+    })
+
     describe('with a URL namespace (a relation manager)', () => {
         /**
          * @param {object} [initialState]

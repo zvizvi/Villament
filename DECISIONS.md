@@ -783,6 +783,19 @@ It is opt-in (`villament.relation_manager_url_state`, or `shouldSyncVillamentSta
 
 Tests: `RelationManagersTest` (off by default, the key, state applied on mount and matching the endpoint's page, other keys ignored, a refused value, the referer path, ManageRelatedRecords unchanged), `tests/js/useTableState.test.js` (nesting, write-only, the rewrite at start, nothing written untouched, the three destroy cases, no popstate), and two browser scenarios on the lazy notes manager: sort, reload, leave the tab, come back; and sort, `Livewire.navigate()` away, back button.
 
+## 2026-11-26 — A restored List page keeps what the island did
+
+Found while checking the relation manager work above, and older than it: on a panel in SPA mode, sort a List page (or search it, or page it), open a record, press back - the rows are the first render's and `sort` is gone from the URL. Traced in the browser:
+
+1. `wire:navigate` paints its snapshot of the page. The island mounts on `livewire:navigated` from the config in that HTML, which is the first render's: state read from the URL (correct), rows inlined (stale), and nothing fetched.
+2. Livewire re-initializes the page's component from its cached snapshot. `tableSort`, `tableSearch` and the paginator there never moved - the island sorts through its own endpoint - and each `#[Url]` property's effect writes its value to the URL, which takes `sort` out (`track()` in Livewire's `supportQueryString`; the write is batched into a microtask by its history coordinator).
+
+So a restored island (`isRestored`, which `index.js` passes since the entry above) now, with or without a URL namespace: reads its state from the URL, taking the table's defaults rather than the inlined values for what the URL does not name (as `popstate` already does); fetches once on mount; and, without a namespace, writes its state back after Livewire's write - once in a microtask and once in a task, since Livewire's batch is queued either just before the island mounts or just after. Grouping is left as it was: there the server's value wins by design.
+
+**What Livewire owns is read from Livewire** (review finding on the PR). The first pass treated a restored URL with no `filters[...]` as "no filters", which dropped a filter that came from a default or the session and was therefore never in the URL - and the restoring fetch then returned unfiltered rows. Livewire owns the filters, the active tab and the page's own properties, and keeps `wire:snapshot` current, so the cached component holds all three as they were left, while the inlined ones are the first render's (a tab that does not change the table leaves the island's config untouched). `readLivewireOwnedState()` reads them off the component as the island mounts - checked in the browser: the component is readable at that moment - and they become the state the island starts from and what the bridge compares the first commit against. Unreadable (no Livewire on the page), the filters fall back to the URL's, then to the inlined ones.
+
+Tests: `tests/js/useTableState.test.js` (defaults for what the URL is silent on, the write-back after a foreign rewrite, an ordinary mount unchanged), `tests/js/restoredIsland.test.js` (the fetch on mount, a filter that was never in the URL, filters / tab / properties from the cached component over the inlined ones, the fallback, no fetch on an ordinary mount) and a browser scenario on the tabbed users list: sort, `Livewire.navigate()` away, back button, rows and URL.
+
 ## Verified Filament v5 internal API map (§4.1, §4.8)
 
 Verified against **filament/filament v5.6.8** + **livewire/livewire v4.3.3** by reading installed vendor source on 2026-07-15. Paths relative to `vendor/filament/`.

@@ -887,6 +887,42 @@ test('relation manager with URL state: the back button after wire:navigate retur
     assert.equal(await page.locator('[data-villament] [data-villament-mount]').count(), 1, 'one island, no stale copy')
 })
 
+test('a List page: the back button after wire:navigate returns to the sorted rows and keeps the sort in the URL', async (page) => {
+    const names = async () => (await islandTexts(page)).map((text) => text.split('\t')[0].trim())
+
+    await page.goto(`${baseUrl}/admin/tabbed-users`)
+    await settle(page)
+
+    const ascending = await names()
+    const sortButton = () => page.locator('[data-villament] .fi-ta-header-cell-sort-btn').first()
+
+    await press(sortButton())
+    await page.waitForFunction(() => new URL(window.location.href).searchParams.get('sort') === 'name:asc')
+    await islandTexts(page)
+    await press(sortButton())
+    await page.waitForFunction(() => new URL(window.location.href).searchParams.get('sort') === 'name:desc')
+    await page.waitForFunction((first) => ! document.querySelector('[data-villament] tbody tr.fi-ta-row:not(.fi-ta-row-not-reorderable)')?.innerText.startsWith(first), ascending[0])
+
+    const descending = await names()
+
+    assert.deepEqual(descending, [...ascending].reverse())
+
+    // Away without a page load, and back: Livewire paints its snapshot of the
+    // page and re-initializes its component, whose `tableSort` never moved.
+    await page.evaluate((url) => window.Livewire.navigate(url), `${baseUrl}/admin/team-relations`)
+    await page.waitForURL(/team-relations$/)
+    await settle(page)
+    await page.goBack()
+    await page.waitForURL(/tabbed-users/)
+    await settle(page)
+    await page.waitForFunction((first) => document.querySelector('[data-villament] tbody tr.fi-ta-row:not(.fi-ta-row-not-reorderable)')?.innerText.startsWith(first), descending[0])
+    await page.waitForTimeout(300)
+
+    assert.deepEqual(await names(), descending, 'the sorted rows, not the first render\'s')
+    assert.equal(new URL(page.url()).searchParams.get('sort'), 'name:desc', 'the sort is still in the URL')
+    assert.equal(await page.locator('[data-villament] [data-villament-mount]').count(), 1, 'one island, no stale copy')
+})
+
 test('ManageRelatedRecords: the island lists the owner\'s notes and keeps its state in the URL', async (page) => {
     await page.goto(`${baseUrl}/admin/team-relations/1/notes`)
     await settle(page)
